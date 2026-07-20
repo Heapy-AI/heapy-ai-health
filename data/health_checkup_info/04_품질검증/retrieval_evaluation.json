@@ -1,0 +1,287 @@
+{
+  "case_count": 18,
+  "metrics": {
+    "hit_at_1": 1.0,
+    "hit_at_3": 1.0,
+    "mean_reciprocal_rank": 1.0
+  },
+  "results": [
+    {
+      "expected_keys": [
+        "SCREENING_RESULT_CATEGORY"
+      ],
+      "expected_rank": 1,
+      "id": "result-category",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "검진 결과 정상B는 병이 있다는 뜻인가요",
+      "returned_keys": [
+        "SCREENING_RESULT_CATEGORY",
+        "ORAL_HEALTH",
+        "HEARING"
+      ]
+    },
+    {
+      "expected_keys": [
+        "BLOOD_PRESSURE"
+      ],
+      "expected_rank": 1,
+      "id": "blood-pressure",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "수축기 혈압과 이완기 혈압 차이가 뭐예요",
+      "returned_keys": [
+        "BLOOD_PRESSURE",
+        "AST",
+        "PHYSICAL_ACTIVITY"
+      ]
+    },
+    {
+      "expected_keys": [
+        "BMI"
+      ],
+      "expected_rank": 1,
+      "id": "bmi",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "BMI가 체지방률과 같은 건가요",
+      "returned_keys": [
+        "BMI",
+        "WAIST_CIRCUMFERENCE",
+        "ALCOHOL"
+      ]
+    },
+    {
+      "expected_keys": [
+        "WAIST_CIRCUMFERENCE"
+      ],
+      "expected_rank": 1,
+      "id": "waist",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "복부비만 허리둘레 기준이 궁금해요",
+      "returned_keys": [
+        "WAIST_CIRCUMFERENCE",
+        "BMI",
+        "ALCOHOL"
+      ]
+    },
+    {
+      "expected_keys": [
+        "HEMOGLOBIN"
+      ],
+      "expected_rank": 1,
+      "id": "hemoglobin",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "헤모글로빈 수치가 낮게 나왔어요",
+      "returned_keys": [
+        "HEMOGLOBIN",
+        "HDL_CHOLESTEROL",
+        "ORAL_HEALTH"
+      ]
+    },
+    {
+      "expected_keys": [
+        "FASTING_GLUCOSE"
+      ],
+      "expected_rank": 1,
+      "id": "fasting-glucose",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "공복혈당이 높으면 당뇨인가요",
+      "returned_keys": [
+        "FASTING_GLUCOSE",
+        "PHQ9",
+        "WAIST_CIRCUMFERENCE"
+      ]
+    },
+    {
+      "expected_keys": [
+        "HDL_CHOLESTEROL"
+      ],
+      "expected_rank": 1,
+      "id": "hdl",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "좋은 콜레스테롤 HDL이 뭔가요",
+      "returned_keys": [
+        "HDL_CHOLESTEROL",
+        "LDL_CHOLESTEROL",
+        "TOTAL_CHOLESTEROL"
+      ]
+    },
+    {
+      "expected_keys": [
+        "LDL_CHOLESTEROL"
+      ],
+      "expected_rank": 1,
+      "id": "ldl",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "나쁜 콜레스테롤 LDL이 뭔가요",
+      "returned_keys": [
+        "LDL_CHOLESTEROL",
+        "HDL_CHOLESTEROL",
+        "TOTAL_CHOLESTEROL"
+      ]
+    },
+    {
+      "expected_keys": [
+        "TRIGLYCERIDES"
+      ],
+      "expected_rank": 1,
+      "id": "triglycerides",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "중성지방 수치 의미를 알려줘",
+      "returned_keys": [
+        "TRIGLYCERIDES",
+        "NUTRITION",
+        "LDL_CHOLESTEROL"
+      ]
+    },
+    {
+      "expected_keys": [
+        "GAMMA_GTP"
+      ],
+      "expected_rank": 1,
+      "id": "gamma-gtp",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "감마 GTP GGT가 높게 나왔어요",
+      "returned_keys": [
+        "GAMMA_GTP",
+        "URINE_PROTEIN",
+        "REFERENCE_RANGE_LIMITS"
+      ]
+    },
+    {
+      "expected_keys": [
+        "URINE_PROTEIN"
+      ],
+      "expected_rank": 1,
+      "id": "urine-protein",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "소변검사에서 단백뇨 양성이래요",
+      "returned_keys": [
+        "URINE_PROTEIN",
+        "HEMOGLOBIN",
+        "FASTING_GLUCOSE"
+      ]
+    },
+    {
+      "expected_keys": [
+        "EGFR"
+      ],
+      "expected_rank": 1,
+      "id": "egfr",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "eGFR 신장 기능 수치가 무엇인가요",
+      "returned_keys": [
+        "EGFR",
+        "URINE_PROTEIN",
+        "HDL_CHOLESTEROL"
+      ]
+    },
+    {
+      "expected_keys": [
+        "PHQ9"
+      ],
+      "expected_rank": 1,
+      "id": "phq9",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "PHQ9 우울증 선별검사가 진단인가요",
+      "returned_keys": [
+        "PHQ9",
+        "CAPE15",
+        "HEARING"
+      ]
+    },
+    {
+      "expected_keys": [
+        "HEPATITIS_B"
+      ],
+      "expected_rank": 1,
+      "id": "hepatitis-b",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "B형간염 항원과 항체 차이",
+      "returned_keys": [
+        "HEPATITIS_B",
+        "HEPATITIS_C",
+        "REFERENCE_RANGE_LIMITS"
+      ]
+    },
+    {
+      "expected_keys": [
+        "SMOKING"
+      ],
+      "expected_rank": 1,
+      "id": "smoking",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "담배를 끊기 위한 금연 기록",
+      "returned_keys": [
+        "SMOKING",
+        "NUTRITION",
+        "PHYSICAL_ACTIVITY"
+      ]
+    },
+    {
+      "expected_keys": [
+        "ALCOHOL"
+      ],
+      "expected_rank": 1,
+      "id": "alcohol",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "술 음주 습관을 줄이고 싶어요",
+      "returned_keys": [
+        "ALCOHOL",
+        "AST",
+        "PHYSICAL_ACTIVITY"
+      ]
+    },
+    {
+      "expected_keys": [
+        "PHYSICAL_ACTIVITY"
+      ],
+      "expected_rank": 1,
+      "id": "activity",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "유산소와 근력운동을 기록하고 싶어요",
+      "returned_keys": [
+        "PHYSICAL_ACTIVITY",
+        "ALCOHOL",
+        "NUTRITION"
+      ]
+    },
+    {
+      "expected_keys": [
+        "REFERENCE_RANGE_LIMITS"
+      ],
+      "expected_rank": 1,
+      "id": "reference-range",
+      "passed_at_1": true,
+      "passed_at_3": true,
+      "query": "정상범위와 판정기준이 왜 다른가요",
+      "returned_keys": [
+        "REFERENCE_RANGE_LIMITS",
+        "BONE_DENSITY",
+        "SERUM_CREATININE"
+      ]
+    }
+  ],
+  "status": "PASS",
+  "suite_version": "2026.1",
+  "thresholds": {
+    "hit_at_1": 0.9,
+    "hit_at_3": 1.0
+  },
+  "top_k": 3
+}

@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 629656,
+    "domain": 13,
+    "q_type": 1,
+    "question": "T-cell lymphoma invasion and metastasis-inducing protein 1 (TIAM1)은 다양한 종양 세포주에서 발현되는 단백질로, Rho GTP-binding proteins의 활성에 관여합니다. TIAM1은 GDP-dissociation stimulator protein으로 작용하여 특정 GTPases를 활성화시킵니다. 다음 중 TIAM1이 주로 활성화시키는 GTPase는 무엇인가요?  \n1) RAC1  \n2) RHOA  \n3) CDC42  \n4) KRAS  \n5) HRAS",
+    "answer": "1) RAC1"
+}

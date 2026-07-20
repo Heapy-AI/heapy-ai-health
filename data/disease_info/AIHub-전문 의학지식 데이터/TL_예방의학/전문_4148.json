@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 4148,
+    "domain": 2,
+    "q_type": 1,
+    "question": "지역사회 보건사업을 기획할 때 시간과 비용 측면에서 경제적이며 질병의 규모를 파악하는 데 유용하게 사용될 수 있는 연구 설계 방법이다. 하지만, 인과관계를 밝히기 어렵고 유병률이 낮거나 치명률이 높은 질병 연구에는 적합하지 않은 연구 설계 방법은 무엇인가?  \n1) 생태학적 연구 (Ecological study) \n2) 환자-대조군 연구 (Case-control study) \n3) 임상 시험 (Clinical trial) \n4) 코호트 연구 (Cohort study) \n5) 단면 연구 (Cross-sectional study)",
+    "answer": "5) 단면 연구 (Cross-sectional study)"
+}

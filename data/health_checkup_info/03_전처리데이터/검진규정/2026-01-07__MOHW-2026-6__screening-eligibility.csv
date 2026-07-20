@@ -1,0 +1,17 @@
+component_code,display_name_ko,eligibility,interval,source_locator
+GENERAL_BASE,문진·진찰·신체계측·혈압·시력·청력,"{""all_screening_subjects"":true}",검진 대상 주기,별표1 1쪽
+CHEST_XRAY,흉부방사선 촬영,"{""all_screening_subjects"":true}",검진 대상 주기,별표1 1쪽
+URINE_PROTEIN,요단백,"{""all_screening_subjects"":true}",검진 대상 주기,별표1 2쪽
+CORE_BLOOD_TESTS,혈색소·공복혈당·간·신장 검사,"{""all_screening_subjects"":true}",검진 대상 주기,별표1 2쪽
+LIPID_PANEL,콜레스테롤 4종,"{""any"":[{""all"":[{""sex"":""MALE""},{""age_gte"":24}]},{""all"":[{""sex"":""FEMALE""},{""age_gte"":40}]}]}",4년마다,별표1 2쪽
+HEPATITIS_B,B형간염 표면항원·항체,"{""age_eq"":40,""exclusions"":[""기존 표면항원 양성"",""자동·피동면역 항체형성""]}",해당 연령,별표1 3쪽
+HEPATITIS_C,C형간염 항체,"{""age_eq"":56}",해당 연령,별표1 3쪽
+BONE_DENSITY,골밀도 검사,"{""sex"":""FEMALE"",""age_in"":[54,60,66]}",해당 연령,별표1 3쪽
+PULMONARY_FUNCTION,폐기능 검사,"{""age_in"":[56,66]}",해당 연령,별표1 3-4쪽
+KDSQC,인지기능장애 KDSQ-C,"{""age_gte"":66}",2년마다,별표1 4쪽
+LIFESTYLE_ASSESSMENT,생활습관평가,"{""age_in"":[40,50,60,70]}",해당 연령,별표1 4쪽
+PHQ9,정신건강검사 PHQ-9,"{""age_rules"":[{""age_range"":[20,34],""interval"":""2년마다""},{""age_range"":[35,39],""interval"":""1회""},{""age_range"":[40,49],""interval"":""1회""},{""age_range"":[50,59],""interval"":""1회""},{""age_range"":[60,69],""interval"":""1회""},{""age_range"":[70,79],""interval"":""1회""}]}",연령별,별표1 5쪽
+CAPE15,정신건강검사 CAPE-15,"{""age_range"":[20,34]}",2년마다,별표1 5쪽
+OLDER_ADULT_FUNCTION,노인신체기능검사,"{""age_in"":[66,70,80]}",해당 연령,별표1 5-6쪽
+ORAL_SCREENING,구강검진,"{""all_screening_subjects"":true}",검진 대상 주기,별표1 6쪽
+PLAQUE_TEST,치면세균막검사,"{""age_eq"":40}",해당 연령,별표1 6쪽

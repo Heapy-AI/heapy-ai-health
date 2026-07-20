@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 3259,
+    "domain": 11,
+    "q_type": 1,
+    "question": "GDFT(Goal-Directed Fluid Therapy)에 대한 설명으로 옳지 않은 것은?  \n1) 심박수, 혈압, 일회박출량 등의 혈역학적 지표를 최적화하는 것을 목표로 한다.  \n2) 저혈량증과 과도한 수액 투여를 모두 피하는 것을 목표로 한다.  \n3) 고위험 수술 환자에게 최적의 수액 투여 방법으로 여겨진다.  \n4) 세포외액 손실은 등장성 균형 정질액(isotonic balanced crystalloid)으로 대체한다.  \n5) 출혈 상황에서는 항상 정질액(crystalloid)만을 사용하여 대체해야 한다.",
+    "answer": "5) 출혈 상황에서는 항상 정질액(crystalloid)만을 사용하여 대체해야 한다."
+}

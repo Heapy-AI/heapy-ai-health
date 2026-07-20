@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 285,
+    "domain": 8,
+    "q_type": 1,
+    "question": "요관 손상을 진단하는 데 가장 유용한 검사는 무엇인가?  \n1) 조영제를 사용하지 않고 얻은 복부 CT 영상  \n2) 조영제 투여 후 즉시 얻은 복부 CT 영상  \n3) 조영제 투여 10~15분 후 얻은 복부 CT 영상  \n4) 경정맥 신우조영술 (intravenous pyelography) \n5) 이뇨제 투여 후 얻은 신스캔 (diuretic renal scan)",
+    "answer": "3) 조영제 투여 10~15분 후 얻은 복부 CT 영상"
+}

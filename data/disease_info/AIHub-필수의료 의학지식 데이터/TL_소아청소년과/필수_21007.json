@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 21007,
+    "domain": 15,
+    "q_type": 1,
+    "question": "생후 8개월 된 영아가 2일간의 설사, 발열, 소변량 감소로 응급실에 내원하였다.  \n응급실에서 시행한 검사 결과는 다음과 같았다.  \nSerum Na: 130 mmol/L, K: 5.0 mmol/L, Cl: 105 mmol/L, BUN: 20 mg/dL, Cr: 0.7 mg/dL  \nABGA: pH: 7.33, PCO2: 30 mmHg, PO2: 95 mmHg, HCO3: 15 mmol/L  \n상기 환자에서 Anion gap은 얼마인가?  \n\n1) 7  \n2) 11  \n3) 15  \n4) 22  \n5) 25",
+    "answer": "3) 15"
+}

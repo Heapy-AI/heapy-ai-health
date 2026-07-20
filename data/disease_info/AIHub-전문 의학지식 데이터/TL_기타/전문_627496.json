@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 627496,
+    "domain": 13,
+    "q_type": 1,
+    "question": "35세 남성이 말라리아 예방을 위해 Atovaquone-proguanil을 복용 중이며, 동시에 결핵 치료를 위해 Rifampin을 복용하기 시작했다. Rifampin이 Atovaquone의 약물 농도에 미치는 영향과 이에 따른 적절한 조치는 무엇인가?\n\n1) Rifampin은 Atovaquone의 대사를 억제하여 농도를 상승시키므로, Rifampin 복용을 중단한다.  \n2) Rifampin은 Atovaquone의 대사를 유도하여 농도를 감소시키므로, Rifampin 복용을 중단한다.  \n3) Rifampin은 Atovaquone의 대사를 억제하여 농도를 상승시키므로, Atovaquone-proguanil 복용량을 줄인다.  \n4) Rifampin은 Atovaquone의 대사를 유도하여 농도를 감소시키므로, Atovaquone-proguanil 복용량을 늘린다.  \n5) Rifampin은 Atovaquone의 대사에 영향을 미치지 않으므로, 두 약물을 계속 복용한다.",
+    "answer": "2) Rifampin은 Atovaquone의 대사를 유도하여 농도를 감소시키므로, Rifampin 복용을 중단한다."
+}

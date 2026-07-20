@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 628498,
+    "domain": 4,
+    "q_type": 1,
+    "question": "65세 남성이 파킨슨병 진단을 받고 Carbidopa와 Levodopa 병용 요법을 시작하였다. 이 약물 병용 요법의 주요한 작용 기전은 무엇인가?  \n1) Carbidopa가 Levodopa의 중추신경계 내 도파민 합성을 직접 촉진한다.  \n2) Levodopa의 말초 대사를 억제하여 더 많은 Levodopa가 뇌로 도달하도록 한다.  \n3) Levodopa의 혈장 반감기를 단축시켜 더 빠른 약효 발현을 돕는다.  \n4) Carbidopa가 직접적으로 도파민 수용체에 작용하여 증상을 억제한다.  \n5) Levodopa와 Carbidopa가 각각 독립적으로 파킨슨병 증상을 완화한다.",
+    "answer": "2) Levodopa의 말초 대사를 억제하여 더 많은 Levodopa가 뇌로 도달하도록 한다."
+}

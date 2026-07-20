@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 68924,
+    "domain": 2,
+    "q_type": 1,
+    "question": "ECMO 치료의 효과를 분석할 때 출판 비뚤림(publication bias)을 확인하기 위한 통계적 방법으로 적절한 것은?  \n1) Begg and Mazumdar test  \n2) Egger test  \n3) Cochran's Q test  \n4) I² statistic  \n5) T-test",
+    "answer": "2) Egger test"
+}

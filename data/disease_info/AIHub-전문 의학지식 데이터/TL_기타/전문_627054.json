@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 627054,
+    "domain": 13,
+    "q_type": 1,
+    "question": "65세 남성 환자가 요로 감염이 의심되는 증상으로 내원하였다. 환자는 최근 3개월 내에 여러 차례의 항생제 치료를 받았으며, 배양 검사에서 다제내성 Pseudomonas aeruginosa가 검출되었다. 감수성 검사 결과, doripenem에 대한 최소 억제 농도(MIC)가 2 µg/mL로 확인되었다. 이 환자에게 doripenem을 사용하는 것이 적절한 이유는 무엇인가?\n\n1) doripenem은 Pseudomonas aeruginosa에 대해 우수한 항균 활성을 보이며, MIC 2 µg/mL는 감수성 범위에 해당하기 때문이다.  \n2) doripenem은 다른 항생제에 비해 신속한 세포벽 파괴를 유도하기 때문이다.  \n3) doripenem은 carbapenem-hydrolyzing beta-lactamases에 의해 쉽게 분해되지 않기 때문이다.  \n4) doripenem은 5) coli와 같은 그람 양성균에도 우수한 효과를 보이기 때문이다.  \n5) doripenem은 가장 저렴한 치료 옵션이기 때문이다.",
+    "answer": "1) doripenem은 Pseudomonas aeruginosa에 대해 우수한 항균 활성을 보이며, MIC 2 µg/mL는 감수성 범위에 해당하기 때문이다."
+}

@@ -1,0 +1,137 @@
+{
+  "status": "PASS_WITH_WARNINGS",
+  "preprocessing_version": "2026-07-16.user-centered-v1",
+  "dataset": {
+    "claim_history_rows": 3777,
+    "claim_current_rows": 243,
+    "claim_distinct_codes": 525,
+    "claim_years": [
+      2001,
+      2002,
+      2003,
+      2004,
+      2005,
+      2006,
+      2007,
+      2008,
+      2009,
+      2010,
+      2011,
+      2012,
+      2013,
+      2014,
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024
+    ],
+    "cohort_rows": 180,
+    "metric_dictionary_rows": 30,
+    "metric_long_rows": 5400,
+    "result_form_field_rows": 56,
+    "source_blank_cells": 428,
+    "status_overlap_rows": 180
+  },
+  "checks": {
+    "claim_source_checksum": true,
+    "statistics_source_checksum": true,
+    "result_form_source_checksum": true,
+    "claim_expected_headers": true,
+    "claim_composite_key_unique": true,
+    "claim_latest_year_row_count_243": true,
+    "statistics_expected_180_cohorts": true,
+    "statistics_full_cartesian_grain": true,
+    "statistics_screened_not_above_eligible": true,
+    "statistics_reported_counts_within_screened": true,
+    "statistics_blanks_preserved_as_null": true,
+    "statistics_status_overlap_detected": true,
+    "result_form_page_count_4": true,
+    "result_form_text_anchors": true,
+    "result_form_field_codes_unique": true
+  },
+  "findings": [
+    {
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "finding": "집계 판정 인원은 상호배타적이지 않음",
+      "evidence": "180/180개 코호트에서 주요 판정 실인원 합계가 수검인원을 초과",
+      "risk": "판정 비율을 합산해 100% 구성비로 표시하면 사용자를 오도함",
+      "remediation": "각 지표를 독립 참고율로 표시하고 stacked/pie 시각화를 금지"
+    },
+    {
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "finding": "청구코드 CSV의 유형코드 헤더와 값이 어긋남",
+      "evidence": "유형구분코드 필드가 3776/3777행에서 코드명이랑 동일하고, 마지막 필드는 전 행에서 코드 첫 글자와 동일",
+      "risk": "헤더를 그대로 신뢰하면 유형코드와 상세코드를 잘못 적재함",
+      "remediation": "원문 필드를 보존하고 마지막 필드만 추론된 유형코드로 별도 저장; 상세코드는 null로 유지"
+    },
+    {
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "finding": "집계 CSV 공란은 0이 아님",
+      "evidence": "428개 수치 셀이 공란이며 공식 API 설명은 공란을 데이터 없음으로 정의",
+      "risk": "0 대체 시 비해당·미집계 집단을 발생 없음으로 오해",
+      "remediation": "null과 0을 구분하고 공란 비율은 계산하지 않음"
+    },
+    {
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "finding": "청구항목코드는 연도별 이력 데이터",
+      "evidence": "3777행이지만 고유 코드는 525개",
+      "risk": "코드 단독 기본키 사용 시 과거 정의가 덮어써짐",
+      "remediation": "적용연도+청구항목코드를 복합키로 사용"
+    },
+    {
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "finding": "결과통보서에 직접식별정보와 민감건강정보가 함께 있음",
+      "evidence": "1·4쪽에 성명과 주민등록번호, 전 페이지에 검진결과 및 생활습관 정보 포함",
+      "risk": "분석 로그나 VDB에 원문을 적재하면 불필요한 개인정보 노출",
+      "remediation": "주민등록번호 원문 미저장, 개인 결과 암호화, 개인 값을 VDB에 임베딩하지 않음"
+    },
+    {
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "finding": "질병관리청 안내문은 2021년 설명 자료",
+      "evidence": "게시 시점 2021-11; 현행 법령은 보건복지부고시 제2026-6호",
+      "risk": "과거 설명 문구를 최신 판정 규칙으로 사용하면 기준 불일치 가능",
+      "remediation": "사용자 설명에만 사용하고 규칙은 현행 법령/PDF 버전으로 적용"
+    }
+  ],
+  "known_limitations": [
+    "공개 집계는 개인별 검사수치가 없어 개인화 위험 예측이나 진단 모델 학습에 사용할 수 없음",
+    "직역은 보험 자격 집계 범주이며 사용자의 직업·건강 상태를 설명하는 인과변수가 아님",
+    "청구코드 첨부파일에서 공식 상세구분코드가 손실되어 코드 앞 3자리는 참고용 family prefix로만 제공",
+    "결과통보서 3쪽은 이미지 기반이라 자동 텍스트 추출 대신 시각 검수된 필드 사양을 사용",
+    "모든 판정은 국가건강검진 분류이며 질병 확정 진단 또는 치료 지시가 아님"
+  ],
+  "sources": [
+    {
+      "source_id": "NHIS_CLAIM_CODES_2024_07_31",
+      "sha256": "f346a5609972edc994a1379a0745950a7e4120d62648490594d734ceb916c1d4",
+      "encoding": "CP949",
+      "rows": 3777,
+      "url": "https://www.data.go.kr/data/15132486/fileData.do"
+    },
+    {
+      "source_id": "NHIS_COHORT_STATS_2023_12_31",
+      "sha256": "c3499e23b515c5e8ca7a449927977ec5dd05cdd2d1050b6b3e5364910c68ddf9",
+      "encoding": "CP949",
+      "rows": 180,
+      "url": "https://www.data.go.kr/data/15144521/fileData.do"
+    },
+    {
+      "source_id": "MOHW_RESULT_NOTICE_2026_6",
+      "sha256": "3ab6006ad6a25b5d294dc65f323b669e285b7987d3061755b06fec079d4cab6b",
+      "pages": 4,
+      "url": "https://law.go.kr/LSW/flDownload.do?bylClsCd=200203&flNm=%5B%EB%B3%84%EC%A7%80+6%5D+%EC%9D%BC%EB%B0%98%EA%B1%B4%EA%B0%95%EA%B2%80%EC%A7%84+%EA%B2%B0%EA%B3%BC%ED%86%B5%EB%B3%B4%EC%84%9C&flSeq=160922671"
+    }
+  ]
+}

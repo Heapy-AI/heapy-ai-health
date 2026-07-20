@@ -1,0 +1,84 @@
+{
+  "audience": "product stakeholders",
+  "delivery_mode": "html",
+  "required_structure_mapping": {
+    "title": "title",
+    "executive_summary": "technical_summary",
+    "key_findings_with_visual_evidence": [
+      "key_findings",
+      "metrics",
+      "missing_explanation",
+      "missing_chart",
+      "role_explanation",
+      "roles"
+    ],
+    "interpretation_scope_and_evidence": [
+      "interpretation_scope",
+      "threshold_intro",
+      "thresholds",
+      "institution_priority",
+      "ldl_exception",
+      "status_meaning",
+      "interpretation_output"
+    ],
+    "recommended_next_steps": "next_steps",
+    "further_questions": "further_questions",
+    "caveats_and_assumptions": [
+      "scope_definitions",
+      "methodology",
+      "limitations",
+      "findings",
+      "official_sources"
+    ]
+  },
+  "chart_map": [
+    {
+      "segment": "공란 428개는 특정 지표에 집중",
+      "analytical_question": "어떤 지표에 공란이 집중되어 있으며 0 대체가 왜 위험한가?",
+      "takeaway": "골다공증 관련 두 지표는 각각 93.3%의 코호트가 공란이다.",
+      "family": "Comparison & Ranking",
+      "type": "bar",
+      "fields": [
+        "chart_label",
+        "metric_label",
+        "null_rate",
+        "null_count",
+        "reported_count",
+        "total_cohorts"
+      ],
+      "palette_policy": "single-root preferred",
+      "non_color_distinction": "직접 축 라벨과 정확한 툴팁 값",
+      "data_sufficiency": "공란이 있는 17개 지표 중 상위 8개, 동일한 180개 코호트 분모",
+      "fallback": "정확값 표"
+    }
+  ],
+  "omitted_visuals": [
+    {
+      "topic": "판정 분포",
+      "reason": "판정 인원은 상호배타적이지 않아 pie/stacked chart가 오도함"
+    },
+    {
+      "topic": "연도 추세",
+      "reason": "집계 연도가 2022~2023 두 시점뿐이라 추세선이 과도한 해석을 유도함"
+    },
+    {
+      "topic": "검사항목별 판정구간",
+      "reason": "경계값·단위·성별 조건의 정확한 조회가 목적이므로 차트보다 표가 적합함"
+    }
+  ],
+  "interpretation_validation": {
+    "official_rule_version": "보건복지부고시 제2026-6호, 2026-01-07 시행",
+    "visual_pdf_review": [
+      "별표 4 및 별첨 4쪽",
+      "별지 제6호서식 결과통보서 4쪽"
+    ],
+    "normalized_rule_count": 104,
+    "user_lookup_item_count": 15,
+    "required_caveats": [
+      "검진기관 최종판정과 참고치 우선",
+      "당뇨병 동반 LDL-C 100 mg/dL 미만 예외는 현재 기본 규칙에 미구현이며 배포 전 보강 필요",
+      "고시 미분류 구간 임의 판정 금지",
+      "국가건강검진 판정은 질병 확정 진단이 아님"
+    ]
+  }
+}

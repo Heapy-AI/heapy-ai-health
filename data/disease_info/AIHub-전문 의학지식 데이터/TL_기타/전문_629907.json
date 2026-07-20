@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 629907,
+    "domain": 13,
+    "q_type": 1,
+    "question": "항생제 내성 발달과 관련된 주요 요인 중, 항생제 사용이 미생물 군집에 미치는 영향을 설명하는 개념은 무엇인가?\n\n1) 표적 선택 (targeted selection) \n2) 항생제의 장기 사용 (prolonged use of antibiotics) \n3) 부수적 선택 (collateral selection) \n4) 항생제 치료의 불완전한 완료 (incomplete antibiotic course) \n5) 감염 바이오마커의 사용 (use of infection biomarkers)",
+    "answer": "3) 부수적 선택 (collateral selection)"
+}

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XML>
+	<HEAD>
+		<CODE>S001</CODE>
+		<MESSAGE>OK</MESSAGE>
+	</HEAD>
+	<svc>
+	<CNTNTSSJ><![CDATA[갑상선 양성 종양]]></CNTNTSSJ>
+	<CNTNTS_SN><![CDATA[5241]]></CNTNTS_SN>
+	<LCLASSN><![CDATA[1]]></LCLASSN>
+	<cntntsClList>
+	</cntntsClList>
+	<relateCntntsSnLIst>
+	</relateCntntsSnLIst>
+	</svc>
+</XML>

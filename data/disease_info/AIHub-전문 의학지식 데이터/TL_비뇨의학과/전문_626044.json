@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 626044,
+    "domain": 8,
+    "q_type": 1,
+    "question": "45세 남자가 발열, 배뇨통, 빈뇨 등의 요로감염 증상으로 병원에 방문하였습니다. 환자는 최근 다른 병원에서 요로감염으로 진단받고 경구 항생제를 복용하였으나 증상이 호전되지 않았습니다. 소변 배양검사 결과, Pseudomonas aeruginosa가 검출되었고, 감수성 검사에서 gentamicin과 tobramycin에 내성을 보였으며, amikacin과 ciprofloxacin에는 감수성을 보였습니다. 이 환자에게 적합한 항생제 선택은 무엇인가요?  \n1) Ceftriaxone  \n2) Amoxicillin  \n3) Amikacin  \n4) Doxycycline  \n5) Ciprofloxacin",
+    "answer": "3) Amikacin"
+}
