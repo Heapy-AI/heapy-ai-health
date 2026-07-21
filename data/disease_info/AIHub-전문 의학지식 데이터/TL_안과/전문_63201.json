@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 63201,
+    "domain": 6,
+    "q_type": 1,
+    "question": "60세 남성이 시력 저하로 안과를 방문하였다. 검사 결과, 양안에 노인성 백내장이 진단되었고 수술적 치료가 권장되었다. 다음 중 현재 가장 널리 사용되며 표준으로 인정되는 백내장 수술 방법은 무엇인가?\n\n1) 수정체초음파유화술(Phacoemulsification) \n2) 수정체낭외적출술(ECCE) 후 후방 인공수정체 삽입  \n3) 수정체낭내적출술(ICCE) 후 전방 인공수정체 삽입  \n4) 수정체낭외적출술(ECCE) 후 무수정체 안경 사용  \n5) 수동 소절개 백내장 수술(Manual small incision cataract surgery)",
+    "answer": "1) 수정체초음파유화술(Phacoemulsification)"
+}

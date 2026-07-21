@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 3277,
+    "domain": 11,
+    "q_type": 1,
+    "question": "다음 중 수혈 후 6시간 이내에 발생하며, 급성 호흡곤란, 저산소혈증, 그리고 양측성 폐 침윤을 특징으로 하는 중증 수혈 부작용은 무엇입니까?  \n\n1) 급성 용혈성 수혈 반응 (Acute Hemolytic Transfusion Reaction) \n2) 지연성 용혈성 수혈 반응 (Delayed Hemolytic Transfusion Reaction) \n3) TRALI (Transfusion-Related Acute Lung Injury) \n4) 수혈 관련 순환 과부하 (Transfusion-Associated Circulatory Overload) \n5) 알레르기성 수혈 반응 (Allergic Transfusion Reaction)",
+    "answer": "3) TRALI (Transfusion-Related Acute Lung Injury)"
+}

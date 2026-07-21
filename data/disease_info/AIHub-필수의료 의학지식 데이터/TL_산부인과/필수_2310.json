@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 2310,
+    "domain": 14,
+    "q_type": 1,
+    "question": "다음은 난소암으로 수술한 조직검사 결과이다. 병기는 무엇인가?  \n- 조직학적 진단: HIGH-GRADE SEROUS CARCINOMA, GRADE 3  \n- 위치: 왼쪽 난관  \n- 최대 크기: 6 cm  \n- 난관 표면 침범: 있음 (왼쪽) \n- 림프혈관 침범: 없음  \n- 난소 침범: 있음 (왼쪽) \n- 자궁 침범: 있음 (근층까지) \n- 골반 복막 전이: 있음  \n- 골반 외 복막 전이: 없음  \n- 대망 침범: 없음  \n- 더글라스와(Pouch of Douglas) 종괴: 있음  \n- 림프절 전이: 없음 (왼쪽 골반 0/3, 오른쪽 골반 0/3)  \n\n1) FIGO IB  \n2) FIGO IIA  \n3) FIGO IIB  \n4) FIGO IIIA1  \n5) FIGO IIIA2",
+    "answer": "3) FIGO IIB"
+}

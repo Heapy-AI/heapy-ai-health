@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 4143,
+    "domain": 2,
+    "q_type": 1,
+    "question": "Bradford-Hill Criteria는 인과관계를 평가하는 데 사용되는 기준입니다. 다음 중 단면연구(cross-sectional study)를 통해 확인하기 가장 어려운 조건은 무엇인가?  \n1) 설명 가능성 (plausibility) \n2) 연관성의 특이성 (specificity) \n3) 원인-결과의 선후관계 (temporality) \n4) 용량 반응 관계 (biological gradient) \n5) 연관성의 강도 (strength of association)",
+    "answer": "3) 원인-결과의 선후관계 (temporality)"
+}

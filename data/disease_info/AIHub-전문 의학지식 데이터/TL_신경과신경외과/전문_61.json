@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 61,
+    "domain": 4,
+    "q_type": 1,
+    "question": "75세 여성이 혈관성 치매(VaD)로 진단받고 치료를 받고 있다. 최근 하이퍼바릭 산소 치료(HBOT)를 보조 치료로 시작하였다. 현재까지의 연구에 따르면, HBOT와 donepezil을 병용했을 때의 효과는 무엇인가?  \n1) HBOT와 donepezil 병용 시 인지 기능에 유의미한 개선이 없었다.  \n2) HBOT 단독 사용 시 donepezil 단독 사용보다 인지 기능이 더 개선되었다.  \n3) HBOT와 donepezil 병용 시 donepezil 단독 사용보다 인지 기능이 유의미하게 개선되었다.  \n4) HBOT와 donepezil 병용 시 인지 기능 개선 효과가 감소하였다.  \n5) HBOT와 donepezil 병용 시 부작용 발생 빈도가 증가하였다.",
+    "answer": "3) HBOT와 donepezil 병용 시 donepezil 단독 사용보다 인지 기능이 유의미하게 개선되었다."
+}

@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 627284,
+    "domain": 2,
+    "q_type": 1,
+    "question": "35세 여성 환자가 아프리카 여행 후 발열, 발진, 두통, 근육통 증상을 보이며 내원하였습니다. 환자의 증상과 여행력을 바탕으로 감염병의 감별 진단을 돕고, 전 세계 205개국에서 발생한 전염병의 발병 이력을 확인할 수 있는 웹 기반 프로그램의 이름은 무엇입니까?  \n1) WHO Global Health Atlas  \n2) CDC Wonder  \n3) GIDEON (Global Infectious Diseases Epidemiology Network) \n4) ECDC Surveillance Atlas of Infectious Diseases  \n5) ProMED-mail",
+    "answer": "3) GIDEON (Global Infectious Diseases Epidemiology Network)"
+}

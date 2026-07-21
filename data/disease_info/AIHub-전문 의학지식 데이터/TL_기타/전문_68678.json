@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 68678,
+    "domain": 13,
+    "q_type": 1,
+    "question": "다음 중 JAK 억제제에 대한 설명으로 옳은 것은 무엇인가?  \n1) Baricitinib은 JAK1/3 선택적 억제제이다.  \n2) Ruxolitinib은 JAK1/2 억제제이다.  \n3) Tofacitinib은 JAK1/3 선택적 억제제이다.  \n4) Remdesivir는 JAK 억제제이다.  \n5) Tocilizumab은 JAK 억제제이다.",
+    "answer": "3) Tofacitinib은 JAK1/3 선택적 억제제이다."
+}

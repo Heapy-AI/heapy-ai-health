@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 629852,
+    "domain": 4,
+    "q_type": 1,
+    "question": "45세 남성이 최근 길 찾기 능력이 향상되었다고 보고하며 신경과를 방문하였습니다. 그의 뇌 MRI에서 voxel-based morphometry(VBM) 분석 결과 특정 뇌 구조의 부피가 대조군에 비해 유의미하게 증가한 것으로 나타났습니다. 길 찾기 능력과 가장 관련이 깊은 뇌 구조는 무엇인가요?  \n1) 전두엽(frontal lobe) \n2) 측두엽(temporal lobe) \n3) 두정엽(parietal lobe) \n4) 후두엽(occipital lobe) \n5) 해마(hippocampus)",
+    "answer": "5) 해마(hippocampus)"
+}

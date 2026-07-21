@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 629287,
+    "domain": 13,
+    "q_type": 1,
+    "question": "Candida glabrata의 Fluconazole 내성 기전 중 주요한 것은 무엇이며, 이에 따른 적절한 임상적 대응은 무엇인가?  \n1) ERG11 유전자 과발현, 낮은 용량의 fluconazole 사용  \n2) ERG11 유전자 돌연변이, 중간 용량의 fluconazole 사용  \n3) CDR 유전자 발현 증가, fluconazole 사용 중단 및 대체 항진균제 사용  \n4) MDR 유전자 발현 증가, fluconazole 사용 중단 및 대체 항진균제 사용  \n5) Lanosterol 14-α-demethylase의 활발한 활성화, 대체 항진균제 사용",
+    "answer": "4) MDR 유전자 발현 증가, fluconazole 사용 중단 및 대체 항진균제 사용"
+}

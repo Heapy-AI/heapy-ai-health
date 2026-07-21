@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 61235,
+    "domain": 15,
+    "q_type": 1,
+    "question": "10kg의 체중을 가진 1세 영아에게 Holliday-Segar 방정식을 사용하여 하루 유지 체액 요구량을 계산하시오. Holliday-Segar 방정식에 따르면 체중 10kg까지는 하루 1kg당 100mL의 체액이 필요합니다. 이 영아의 하루 유지 체액 요구량은 얼마입니까?\n\n1) 500 mL  \n2) 750 mL  \n3) 1000 mL  \n4) 1250 mL  \n5) 1500 mL",
+    "answer": "3) 1000 mL"
+}
