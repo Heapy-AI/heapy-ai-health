@@ -80,7 +80,7 @@ heapy-ai-health-main/
 │   ├── ui.py                 #   Gradio 웹 UI
 │   ├── core/{config,state}.py#   설정(COLLECTIONS·경로·모델)·전역 상태
 │   ├── routers/ask.py        #   /health /search /ask
-│   ├── schemas/cs.py         #   요청/응답 스키마
+│   ├── schemas/health_chatbot.py #   건강관리 챗봇 요청/응답 스키마
 │   └── services/rag.py       #   인덱싱·검색·RAG 체인·출처표기(cite)
 ├── data/                     # ① 원천(raw)
 │   ├── disease_info/         #   AIHub QA(.json) + KDCA API 목록(.xlsx)

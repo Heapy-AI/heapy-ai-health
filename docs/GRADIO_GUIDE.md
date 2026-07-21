@@ -189,7 +189,7 @@ heapy-ai-health-main/
 │   │   ├── config.py        # 설정(COLLECTIONS, PERSIST_DIR, 임베딩 모델)
 │   │   └── state.py         # 서버 상태
 │   ├── routers/ask.py       # /health /search /ask 엔드포인트
-│   ├── schemas/cs.py        # 요청/응답 스키마
+│   ├── schemas/health_chatbot.py # 건강관리 챗봇 요청/응답 스키마
 │   └── services/rag.py      # 인덱싱·검색·RAG 체인, 출처 표기(cite)
 ├── data/                    # ① 원천(raw)
 │   ├── disease_info/        #   AIHub QA + KDCA API xlsx
