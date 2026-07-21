@@ -1,5 +1,5 @@
-# app/schemas/cs.py
-"""요청/응답 Pydantic 모델 (FastAPI가 자동 검증·응답 형식 고정)"""
+# app/schemas/health_chatbot.py
+"""건강관리 챗봇 요청/응답 Pydantic 모델 (FastAPI가 자동 검증·응답 형식 고정)"""
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import COLLECTIONS

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.core.config import EMBED_MODEL, COLLECTIONS
 from app.core.state import state
 from app.services.rag import cite
-from app.schemas.cs import (AskRequest, SearchHit, SearchResponse, AskResponse)
+from app.schemas.health_chatbot import (AskRequest, SearchHit, SearchResponse, AskResponse)
 
 
 router = APIRouter()
