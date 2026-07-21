@@ -201,5 +201,5 @@ health-ai/
 #preprocessed/
 #vdb/chunk/
 
-# 벡터DB 인덱스 (100MB↑, vdb/chunk에서 ingest_vdb.py로 재생성 가능 → 커밋 제외)
-vdb/chroma/
+# 벡터DB 인덱스는 Git LFS로 추적합니다.
+# vdb/chroma/  # 일반 Git 추적에서 제외하지 않음

@@ -103,6 +103,31 @@ heapy-ai-health-main/
 
 가상환경은 **`health-ai/` (Python 3.11.9)** 를 사용합니다.
 
+### Git LFS 준비
+이 저장소는 큰 Chroma 인덱스 파일을 Git LFS로 관리합니다. 팀원이 저장소를 받는 절차는 아래와 같습니다.
+
+```bash
+# 1) Git LFS 설치 (macOS 예시)
+brew install git-lfs
+git lfs install
+
+# 2) 저장소 클론
+git clone https://github.com/Heapy-AI/heapy-ai-health.git
+cd heapy-ai-health
+
+# 3) LFS 파일 내려받기
+git lfs pull
+```
+
+이미 저장소를 이미 클론했다면, LFS가 설치된 뒤에 아래만 실행하면 됩니다.
+
+```bash
+git lfs install
+git lfs pull
+```
+
+### Python 의존성
+
 ```bash
 # 의존성
 pip install -r requirements.txt
