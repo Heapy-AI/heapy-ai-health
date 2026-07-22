@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 4144,
+    "domain": 2,
+    "q_type": 1,
+    "question": "계통 오차(systematic error)에 대한 설명으로 틀린 것은?  \n1) 계통 오차는 무작위 오차(random error)와는 다르게 샘플 수를 충분히 늘려도 제거되지 않는다.  \n2) 선택 바이어스(selection bias), 측정 바이어스(measurement bias), 교란 바이어스(confounding bias) 등이 계통 오차에 해당된다.  \n3) 연구대상의 선정 과정에서도 계통 오차가 발생할 수 있다.  \n4) 교란 바이어스는 연구 시작부터 고려하여 연구 설계를 해야 한다.  \n5) 회상 바이어스(recall bias)는 정보 바이어스(information bias)의 한 종류이다.",
+    "answer": "1) 계통 오차는 무작위 오차(random error)와는 다르게 샘플 수를 충분히 늘려도 제거되지 않는다."
+}

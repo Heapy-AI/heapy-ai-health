@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 627813,
+    "domain": 13,
+    "q_type": 1,
+    "question": "Ritonavir를 병용 투여할 때, indinavir의 약동학적 변화를 가장 잘 설명하는 것은 무엇인가?  \n1) Indinavir의 AUC가 2.7배 증가하고, Cmax가 1.6배 증가하며, Cmin이 11배 증가한다.  \n2) Indinavir의 AUC가 감소하고, Cmax가 변화 없으며, Cmin이 2배 감소한다.  \n3) Indinavir의 AUC가 변화 없고, Cmax가 2배 감소하며, Cmin이 변화 없다.  \n4) Indinavir의 AUC가 1.5배 감소하고, Cmax가 1.2배 증가하며, Cmin이 5배 증가한다.  \n5) Indinavir의 AUC가 3.6배 증가하고, Cmax가 1.8배 감소하며, Cmin이 변화 없다.",
+    "answer": "1) Indinavir의 AUC가 2.7배 증가하고, Cmax가 1.6배 증가하며, Cmin이 11배 증가한다."
+}

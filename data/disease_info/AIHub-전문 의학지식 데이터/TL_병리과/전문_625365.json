@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 625365,
+    "domain": 10,
+    "q_type": 3,
+    "question": "52세 여성 환자가 유방암 진단을 받고 항암 치료를 시작했으나, 암세포의 증식이 지속되고 있다. 종양세포의 대사 특성을 분석한 결과, Warburg 효과와 관련된 대사 경로가 활성화된 것으로 확인되었다. Warburg 효과와 관련된 주요 효소 중 하나를 제시하고, 이 효소의 기능과 암세포 성장에 미치는 영향을 설명하시오.",
+    "answer": "Warburg 효과와 관련된 주요 효소 중 하나는 PFKFB3이다. PFKFB3는 6-phosphofructo-2-kinase/fructose-2,6-bisphosphatase 3 효소를 암호화하며, fructose-6-phosphate를 fructose-2,6-bisphosphate(F2,6BP)로 전환하는 역할을 한다. F2,6BP는 해당과정의 속도 제한 효소인 6-phosphofructokinase-1(PFK-1)을 활성화하여 해당과정을 촉진한다. Warburg 효과는 암세포가 산소가 충분한 조건에서도 해당과정을 통해 에너지를 생성하는 대사 특성을 의미하며, PFKFB3의 활성 증가는 암세포가 빠르게 증식하고 생존할 수 있는 대사 환경을 조성한다. 따라서 PFKFB3는 암세포 성장에 중요한 역할을 한다."
+}

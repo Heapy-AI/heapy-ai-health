@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 627808,
+    "domain": 13,
+    "q_type": 1,
+    "question": "55세 여성이 유방암 진단을 받고 치료를 시작하였다. 치료의 일환으로 mTOR 억제제를 사용하기로 결정하였다. mTOR 억제제는 주로 mTORC1 복합체를 표적으로 하여 세포 성장과 단백질 합성을 억제한다. 이 환자의 치료에 사용된 mTOR 억제제가 주로 표적하는 mTORC1 복합체의 구성 단백질은 무엇인가?  \n1) mTORC2의 Rictor  \n2) mTORC1의 Raptor  \n3) mTORC1의 GβL  \n4) mTORC2의 mSIN1  \n5) mTORC1의 mLST8",
+    "answer": "2) mTORC1의 Raptor"
+}

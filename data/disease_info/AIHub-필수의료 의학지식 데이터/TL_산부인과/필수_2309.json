@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 2309,
+    "domain": 14,
+    "q_type": 1,
+    "question": "다음은 자궁경부암으로 수술한 조직검사 결과이다. 병기는 무엇인가?  \n- 조직검사 결과:  \n  1) 침윤 깊이: 0.9cm (자궁벽 두께 1.5cm 중) \n  2) 종양 크기: 1.0cm  \n  3) 자궁주위조직(parametrium) 침범 없음  \n  4) 자궁체부 침범 없음  \n  5) 질 절제면(vaginal resection margin) 음성  \n  6) 림프혈관 침범 있음  \n  7) 골반 림프절 6개 모두 전이 없음 (오른쪽 골반 림프절 0/3, 왼쪽 골반 림프절 0/3)  \n\n1) FIGO IA1  \n2) FIGO IA2  \n3) FIGO IB1  \n4) FIGO IB2  \n5) FIGO IB3",
+    "answer": "3) FIGO IB1"
+}

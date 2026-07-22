@@ -1,0 +1,29 @@
+{
+  "dataset": {
+    "chunk_count": 30,
+    "distinct_evidence_url_count": 21,
+    "grain": "one knowledge chunk per canonical health-screening topic",
+    "review_status_counts": {
+      "SOURCE_VERIFIED": 30
+    },
+    "title": "국가건강검진 핵심항목 설명 가이드 v1",
+    "unique_canonical_key_count": 30,
+    "version_label": "2026.1"
+  },
+  "index": {
+    "corpus_checksum_matches": true,
+    "embedding_model": "local-korean-feature-hashing-v1",
+    "format_version": 1,
+    "indexed_chunk_count": 30,
+    "invalid_vector_count": 0,
+    "vector_dimension": 1536
+  },
+  "issues": [],
+  "limitations": [
+    "The local feature-hashing index is for development and CI smoke tests.",
+    "Production semantic retrieval still requires approved 1536-dimensional embeddings in pgvector.",
+    "SOURCE_VERIFIED chunks are educational content and are not clinically approved for comprehensive analysis.",
+    "Personal screening observations must remain outside the knowledge vector index."
+  ],
+  "status": "PASS"
+}

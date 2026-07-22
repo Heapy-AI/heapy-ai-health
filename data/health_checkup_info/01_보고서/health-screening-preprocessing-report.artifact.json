@@ -1,0 +1,971 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "건강검진 데이터 전처리 및 결과 해석 기준",
+    "description": "NHIS 공개 데이터와 2026년 현행 일반건강검진 기준을 분리·정규화하고, 앱에서 개인 검진결과를 안전하게 해석하는 범위와 출처를 정리한 보고서입니다.",
+    "generatedAt": "2026-07-16T18:34:11+09:00",
+    "cards": [
+      {
+        "id": "cohorts",
+        "description": "연도·직역·5세 연령대·성별의 완전한 공개 비교 코호트입니다.",
+        "dataset": "summary",
+        "sourceId": "nhis_stats",
+        "metrics": [
+          {
+            "label": "비교 코호트",
+            "field": "cohort_rows",
+            "format": "number"
+          },
+          {
+            "label": "정규화 장기형 행",
+            "field": "metric_long_rows",
+            "format": "number"
+          }
+        ]
+      },
+      {
+        "id": "blank_cells",
+        "description": "공식 정의에 따라 0으로 채우지 않고 null로 보존한 수치 셀입니다.",
+        "dataset": "summary",
+        "sourceId": "nhis_stats",
+        "metrics": [
+          {
+            "label": "공란(null) 셀",
+            "field": "blank_cells",
+            "format": "number"
+          }
+        ]
+      },
+      {
+        "id": "overlap",
+        "description": "주요 판정 실인원 합계가 수검인원을 초과해 중복 집계를 입증한 코호트 비율입니다.",
+        "dataset": "summary",
+        "sourceId": "nhis_stats",
+        "metrics": [
+          {
+            "label": "판정 중복 검출 코호트",
+            "field": "overlap_rate",
+            "format": "percent"
+          },
+          {
+            "label": "검출 코호트 수",
+            "field": "overlap_cohorts",
+            "format": "number"
+          }
+        ]
+      },
+      {
+        "id": "claim_codes",
+        "description": "적용연도별 청구코드 이력과 최신 2024년 행입니다.",
+        "dataset": "summary",
+        "sourceId": "nhis_claims",
+        "metrics": [
+          {
+            "label": "청구코드 이력 행",
+            "field": "claim_history_rows",
+            "format": "number"
+          },
+          {
+            "label": "2024년 행",
+            "field": "claim_current_rows",
+            "format": "number"
+          }
+        ]
+      },
+      {
+        "id": "form_fields",
+        "description": "결과통보서에서 앱 입력·표시 정책까지 정의한 필드입니다.",
+        "dataset": "summary",
+        "sourceId": "mohw_form",
+        "metrics": [
+          {
+            "label": "결과통보서 앱 필드",
+            "field": "result_form_fields",
+            "format": "number"
+          },
+          {
+            "label": "검수한 PDF 쪽",
+            "field": "result_form_pages",
+            "format": "number"
+          }
+        ]
+      },
+      {
+        "id": "classification_rules",
+        "description": "2026년 현행 고시 별표 4에서 정규화한 기본 판정규칙과 예외를 보강한 사용자용 핵심 해석 항목입니다.",
+        "dataset": "summary",
+        "sourceId": "mohw_rules",
+        "metrics": [
+          {
+            "label": "정규화된 기본 판정규칙",
+            "field": "classification_rule_count",
+            "format": "number"
+          },
+          {
+            "label": "핵심 해석 항목",
+            "field": "interpretation_item_count",
+            "format": "number"
+          }
+        ]
+      }
+    ],
+    "charts": [
+      {
+        "id": "missing_metrics",
+        "title": "공개 코호트 지표별 공란 비율",
+        "subtitle": "공란이 있는 17개 지표 중 상위 8개, 전체 180개 코호트 기준",
+        "type": "bar",
+        "dataset": "missing_by_metric",
+        "sourceId": "nhis_stats",
+        "encodings": {
+          "x": {
+            "field": "chart_label",
+            "type": "nominal",
+            "label": "건강검진 집계 지표"
+          },
+          "y": {
+            "field": "null_rate",
+            "type": "quantitative",
+            "label": "공란 비율",
+            "format": "percent"
+          }
+        },
+        "yAxisTitle": "공란 비율",
+        "valueFormat": "percent",
+        "layout": "full"
+      }
+    ],
+    "tables": [
+      {
+        "id": "role_matrix",
+        "title": "자료별 앱 사용 경계",
+        "subtitle": "개인 결과·공개 벤치마크·내부 청구코드·규칙·설명 콘텐츠의 허용 범위",
+        "dataset": "source_roles",
+        "sourceId": "source_roles",
+        "defaultSort": {
+          "field": "source_name",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "source_name",
+            "label": "자료",
+            "type": "text"
+          },
+          {
+            "field": "data_role",
+            "label": "데이터 역할",
+            "type": "text"
+          },
+          {
+            "field": "grain",
+            "label": "행 단위",
+            "type": "text"
+          },
+          {
+            "field": "app_surfaces",
+            "label": "앱 화면",
+            "type": "text"
+          },
+          {
+            "field": "user_visible",
+            "label": "사용자 노출",
+            "type": "text"
+          },
+          {
+            "field": "allowed_use",
+            "label": "허용 용도",
+            "type": "text"
+          },
+          {
+            "field": "prohibited_use",
+            "label": "금지 용도",
+            "type": "text"
+          },
+          {
+            "field": "vdb_policy",
+            "label": "VDB 정책",
+            "type": "text"
+          }
+        ]
+      },
+      {
+        "id": "interpretation_thresholds",
+        "title": "일반건강검진 핵심 항목 판정 구간",
+        "subtitle": "2026년 1월 7일 시행 보건복지부고시 제2026-6호 별표 4의 별첨 기준; 검진기관 최종판정과 참고치를 우선",
+        "dataset": "interpretation_thresholds",
+        "sourceId": "mohw_rules",
+        "defaultSort": {
+          "field": "display_order",
+          "direction": "asc"
+        },
+        "density": "dense",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "display_order",
+            "label": "순서",
+            "format": "number"
+          },
+          {
+            "field": "domain",
+            "label": "영역",
+            "type": "text"
+          },
+          {
+            "field": "item",
+            "label": "검사항목",
+            "type": "text"
+          },
+          {
+            "field": "unit",
+            "label": "단위",
+            "type": "text"
+          },
+          {
+            "field": "normal_a",
+            "label": "정상A",
+            "type": "text"
+          },
+          {
+            "field": "normal_b",
+            "label": "정상B(경계)",
+            "type": "text"
+          },
+          {
+            "field": "disease_suspected",
+            "label": "질환의심",
+            "type": "text"
+          },
+          {
+            "field": "required_context",
+            "label": "해석 조건·예외",
+            "type": "text"
+          }
+        ]
+      },
+      {
+        "id": "quality_findings",
+        "title": "품질 이슈와 처리 결정",
+        "subtitle": "검증 근거, 앱 위험, 적용한 최소 조치",
+        "dataset": "findings",
+        "sourceId": "quality_report",
+        "defaultSort": {
+          "field": "finding_order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "finding_order",
+            "label": "순번",
+            "format": "number"
+          },
+          {
+            "field": "severity",
+            "label": "심각도",
+            "type": "text"
+          },
+          {
+            "field": "finding",
+            "label": "발견사항",
+            "type": "text"
+          },
+          {
+            "field": "evidence",
+            "label": "근거",
+            "type": "text"
+          },
+          {
+            "field": "risk",
+            "label": "앱 위험",
+            "type": "text"
+          },
+          {
+            "field": "remediation",
+            "label": "처리 결정",
+            "type": "text"
+          },
+          {
+            "field": "confidence",
+            "label": "신뢰도",
+            "type": "text"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "nhis_stats",
+        "label": "국민건강보험공단 직역별·성별·연령별 건강검진정보",
+        "path": "storage/source_document/nhis_screening/raw/2023-12-31__NHIS__screening-statistics-by-job-sex-age.csv"
+      },
+      {
+        "id": "nhis_claims",
+        "label": "국민건강보험공단 건강검진청구항목코드",
+        "path": "storage/source_document/nhis_screening/raw/2024-07-31__NHIS__screening-claim-item-codes.csv"
+      },
+      {
+        "id": "mohw_form",
+        "label": "보건복지부 일반건강검진 결과통보서",
+        "path": "storage/source_document/mohw_screening/raw/2026-01-07__MOHW-2026-6__appendix-6-result-notice.pdf"
+      },
+      {
+        "id": "mohw_rules",
+        "label": "보건복지부 건강검진 실시기준 제2026-6호 별표 4 판정기준",
+        "path": "storage/source_document/mohw_screening/normalized/2026-07-16__screening-interpretation-thresholds.csv"
+      },
+      {
+        "id": "kdca_guide",
+        "label": "질병관리청 알아두면 도움이 되는 건강검진",
+        "href": "https://health.kdca.go.kr/healthinfo/biz/health/ntcnInfo/healthSourc/thtimtCntnts/thtimtCntntsView.do?thtimt_cntnts_sn=7"
+      },
+      {
+        "id": "source_roles",
+        "label": "건강관리 앱 자료 역할 매트릭스",
+        "path": "storage/source_document/nhis_screening/normalized/2026-07-16__health-app-source-role-matrix.csv"
+      },
+      {
+        "id": "quality_report",
+        "label": "NHIS 사용자 관점 전처리 품질보고서",
+        "path": "storage/source_document/nhis_screening/normalized/2026-07-16__NHIS-user-centered-quality-report.json"
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# 건강검진 데이터 전처리 및 결과 해석 기준"
+      },
+      {
+        "id": "technical_summary",
+        "type": "markdown",
+        "body": "## Executive Summary\n\n- **현재 자료로 규칙 기반 검진결과 해석은 가능합니다.** 개인별 검사값·단위·검진일·성별·공복 여부·기존 진단과 약물치료 정보를 함께 받으면 2026년 국가건강검진 판정구간에 따라 정상A, 정상B(경계), 질환의심을 설명할 수 있습니다.\n- **앱 재계산은 검진기관의 공식 판정과 참고치를 대체하지 않습니다.** 결과통보서는 검사방법에 따라 기관별 기준 수치가 다를 수 있다고 명시하므로, 공식 판정을 원문 그대로 보존하고 앱 판정은 근거가 표시된 참고 해석으로 분리해야 합니다.\n- **공개 집계와 청구코드는 개인 판정 근거가 아닙니다.** NHIS 집계는 동연령·성별 집단 비교에만, 청구항목 코드는 내부 매핑에만 사용합니다. 질병관리청 안내는 쉬운 설명에 쓰되 판정 로직은 검진일에 유효한 보건복지부 고시를 적용합니다."
+      },
+      {
+        "id": "key_findings",
+        "type": "markdown",
+        "body": "## 전처리 결과는 사용자 화면과 내부 파이프라인의 경계를 명확히 했습니다\n\n아래 수치는 산출물의 범위와 품질 결정을 요약합니다. 판정 중복 검출은 오류가 아니라 원자료의 중복 가능한 집계 특성을 확인한 결과입니다."
+      },
+      {
+        "id": "metrics",
+        "type": "metric-strip",
+        "cardIds": [
+          "cohorts",
+          "blank_cells",
+          "overlap",
+          "claim_codes",
+          "form_fields",
+          "classification_rules"
+        ]
+      },
+      {
+        "id": "missing_explanation",
+        "type": "markdown",
+        "sourceId": "nhis_stats",
+        "body": "## 공란 428개는 무작위 결측이 아니라 특정 지표에 집중되어 있습니다\n\n골다공증 관련 두 지표는 각각 180개 코호트 중 168개가 공란이고 12개만 값이 있습니다. 이는 공란을 0으로 채우면 ‘데이터가 없는 집단’을 ‘발생이 없는 집단’으로 바꾸게 된다는 뜻입니다. 아래 그래프는 공란이 많은 상위 지표를 보여주며, 앱에서는 공란을 `NOT_AVAILABLE`로 표시하고 비율 계산에서 제외해야 합니다."
+      },
+      {
+        "id": "missing_chart",
+        "type": "chart",
+        "chartId": "missing_metrics",
+        "layout": "full"
+      },
+      {
+        "id": "role_explanation",
+        "type": "markdown",
+        "body": "## 같은 건강검진 자료라도 앱에서 맡는 역할은 서로 다릅니다\n\n사용자가 직접 보는 결과, 집단 비교, 내부 청구코드, 판정 규칙, 설명 콘텐츠를 한 모델에 섞으면 청구명칭이 검사결과로 노출되거나 집단 통계가 개인 위험으로 오인될 수 있습니다. 다음 표의 금지 용도를 데이터 계약과 화면 정책에 그대로 반영했습니다."
+      },
+      {
+        "id": "roles",
+        "type": "table",
+        "tableId": "role_matrix",
+        "layout": "full"
+      },
+      {
+        "id": "interpretation_scope",
+        "type": "markdown",
+        "body": "## 개인 결과는 기관 판정에서 시작해 앱 설명으로 확장합니다\n\n1. **원문 보존:** 검진기관 결과값, 단위, 참고치, 항목별 판정과 종합소견을 수정하지 않고 저장합니다.\n2. **입력 검증:** 검진일, 성별, 검사명, 수치, 단위, 공복 여부, 기존 진단·약물치료 여부를 확인합니다. 단위가 다르거나 필수 맥락이 없으면 `판정 불가`로 남깁니다.\n3. **버전 판정:** 검진일에 유효한 보건복지부 고시 버전을 선택하고 항목별 규칙을 적용합니다. 혈압처럼 복합 조건은 어느 하나라도 더 높은 단계면 그 단계를 사용합니다.\n4. **예외 적용:** 성별 기준, 공복 조건, 유질환자 상태와 당뇨병 동반 LDL-C 예외처럼 판정을 바꾸는 조건을 먼저 적용합니다.\n5. **사용자 설명:** 공식 판정, 앱 참고 판정, 쉬운 의미, 확인이 필요한 이유와 권장 후속 행동을 분리해 표시합니다. 집단 통계는 마지막에 참고 비교로만 덧붙입니다."
+      },
+      {
+        "id": "threshold_intro",
+        "type": "markdown",
+        "sourceId": "mohw_rules",
+        "body": "## 2026년 공식 판정구간을 핵심 검사 15개에 연결했습니다\n\n아래 표는 2026년 1월 7일 시행된 보건복지부고시 제2026-6호의 별표 4와 별첨을 원문 PDF 화면으로 재검수해 정리한 사용자 해석용 조회표입니다. 전체 규칙 104개 중 일반 결과통보서에서 자주 확인하는 혈압·비만·빈혈·혈당·지질·간·신장 항목 15개를 표시합니다. 경계 포함 여부와 단위를 그대로 유지했으며, 공식 결과통보서의 기관 판정이 있으면 그 판정을 우선합니다."
+      },
+      {
+        "id": "thresholds",
+        "type": "table",
+        "tableId": "interpretation_thresholds",
+        "layout": "full"
+      },
+      {
+        "id": "institution_priority",
+        "type": "markdown",
+        "sourceId": "mohw_form",
+        "body": "## 검진기관의 공식 판정과 참고치를 우선해야 합니다\n\n결과통보서는 혈액검사 결과가 검사방법 등에 따라 기관별로 다를 수 있음을 명시합니다. 따라서 앱은 수치만 보고 공식 판정을 덮어쓰지 않고, `기관 원문 판정`과 `앱 참고 판정`을 별도 필드로 저장해야 합니다. 특히 혈색소 상한 초과, 감마지티피 하한 미만처럼 고시 표가 분류하지 않은 영역은 임의로 정상 또는 질환의심으로 만들지 말고 기관 참고치 확인으로 돌립니다."
+      },
+      {
+        "id": "ldl_exception",
+        "type": "markdown",
+        "sourceId": "mohw_rules",
+        "body": "## 당뇨병 동반 LDL-C는 배포 전 조건부 규칙으로 보강해야 합니다\n\n별표 4의 별첨 주석은 당뇨병을 동반한 경우 LDL 콜레스테롤 100 mg/dL 미만 기준을 제시하고 의사 판단에 따라 수정할 수 있도록 합니다. 현재 104개 기본 규칙 CSV의 LDL 구간은 130·160 mg/dL 경계만 포함하므로, 당뇨병 상태를 입력받아 이 예외를 우선 적용하는 규칙이 추가되기 전에는 LDL 자동판정을 배포하면 안 됩니다. 당뇨병 상태가 없거나 기관 판정과 충돌하면 `판정 보류·기관 판정 우선`으로 처리합니다."
+      },
+      {
+        "id": "status_meaning",
+        "type": "markdown",
+        "sourceId": "mohw_rules",
+        "body": "## 판정명은 진단명이 아니라 다음 행동을 정하는 선별 결과입니다\n\n- **정상A:** 일반건강검진 결과 건강이 양호한 상태입니다.\n- **정상B(경계):** 현재 뚜렷한 이상은 없지만 생활습관·환경 개선과 예방적 관리가 필요한 상태입니다.\n- **일반 질환의심:** 질환으로 발전할 가능성이 있어 추적검사나 의료기관의 정확한 진단이 필요한 상태입니다.\n- **고혈압·당뇨병·이상지질혈증 질환의심:** 진료와 검사 등이 필요한 선별 결과이며, 질환 확정 진단과 동일하지 않습니다.\n- **유질환자:** 관련 질환을 이미 진단받고 현재 약물치료 중인 상태를 반영합니다.\n\n종합소견에는 여러 판정이 동시에 표시될 수 있으므로 하나의 건강점수나 단일 등급으로 축약하지 않습니다."
+      },
+      {
+        "id": "interpretation_output",
+        "type": "markdown",
+        "body": "## 사용자 화면은 수치보다 해석 근거와 다음 행동을 함께 보여줘야 합니다\n\n각 검사카드는 `검사값·단위`, `검진기관 판정`, `앱 참고 판정`, `적용한 기준 버전`, `예외·누락 정보`, `다음 행동`을 함께 표시합니다. 필수 정보가 없으면 억지로 정상·이상을 선택하지 않고 ‘해석에 성별/공복 여부/약물치료 정보가 더 필요합니다’처럼 부족한 조건을 구체적으로 안내합니다. 응급·긴급 진료 알림은 이번 국가건강검진 판정표만으로 만들지 말고 별도의 임상 검증 기준과 의료진 검토를 거쳐야 합니다."
+      },
+      {
+        "id": "scope_definitions",
+        "type": "markdown",
+        "body": "## 범위와 지표 정의\n\n- **코호트 행 단위:** 검진사업년도 × 직역 × 5세 연령대 × 성별입니다.\n- **수검률:** 수검인원 ÷ 대상인원입니다.\n- **판정·관리 참고율:** 해당 인원 ÷ 수검인원이며, 다른 판정·관리 지표와 중복될 수 있습니다.\n- **공란:** 공식 API 설명에 따른 데이터 없음이며 숫자 0과 구분합니다.\n- **개인 결과:** 결과통보서에서 추출·확인한 값만 사용하며, OCR 값은 사용자 확인 전 개인화에 사용하지 않습니다.\n- **판정:** 국가건강검진 분류이며 질병 확정 진단이나 치료 지시가 아닙니다."
+      },
+      {
+        "id": "methodology",
+        "type": "markdown",
+        "body": "## 전처리와 해석기준 검증은 원본 보존, 역할 분리, 경계값 검수 순서로 수행했습니다\n\n1. CP949 CSV와 공식 PDF의 SHA-256을 고정하고 원본을 별도 보존했습니다.\n2. 집계 자료의 공백 문자열을 null로 변환하고, 연도·직역·연령대·성별 코호트 키를 만들었습니다.\n3. 30개 집계 지표를 장기형으로 변환하면서 분모와 중복 가능성을 명시했습니다.\n4. 청구코드는 적용연도+코드를 복합키로 만들고, 헤더와 실제 값이 어긋난 필드는 원문 보존과 품질 플래그 방식으로 처리했습니다.\n5. 결과통보서는 페이지별 시각 검수로 개인정보·건강정보·추적관리·생활습관 필드를 분류했습니다.\n6. 별표 4와 별첨 PDF 4쪽을 다시 렌더링해 수치, 단위, 경계 포함 여부, 성별 조건과 주석을 정규화 규칙 104개 및 핵심 해석표 15개 항목과 대조했습니다.\n7. 키 유일성, 완전한 코호트 조합, 수치 범위, 공란 보존, 판정 중복, PDF 앵커와 경계값 테스트를 자동 검증했습니다."
+      },
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "body": "## 한계와 안전 경계\n\n공개 코호트 자료에는 개인별 혈압·혈당·콜레스테롤 수치가 없으므로 개인 위험 예측이나 진단 모델 학습에 사용할 수 없습니다. 현재 산출물은 판정규칙과 입력 스키마를 제공하지만 실제 사용자의 검사값·기관 참고치·증상·과거력은 포함하지 않습니다. 또한 104개 기본 규칙은 경계값 테스트를 통과했지만 당뇨병 동반 LDL-C 주석 예외는 아직 별도 조건부 규칙으로 구현되지 않았으므로 배포 전 보강이 필요합니다. 따라서 개별 사용자의 확정 진단, 치료 결정, 응급도 판단이나 예후 예측에는 사용할 수 없습니다. 직역은 보험 자격 집계 범주이지 건강 상태의 인과 설명 변수가 아닙니다. 청구코드 첨부파일은 공식 상세구분코드가 손실되어 코드 앞 3자를 참고용 family prefix로만 남겼습니다. 결과통보서 3쪽은 이미지 기반이므로 자동 텍스트 추출 대신 시각 검수된 필드 정의를 사용했습니다."
+      },
+      {
+        "id": "findings",
+        "type": "table",
+        "tableId": "quality_findings",
+        "layout": "full"
+      },
+      {
+        "id": "official_sources",
+        "type": "markdown",
+        "body": "## 공식 출처와 적용 범위\n\n- [보건복지부 건강검진 실시기준 제2026-6호](https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2100000272270&chrClsCd=010201): 2026년 1월 7일 시행. 별표 4 판정구간과 별지 제6호서식 결과통보서의 우선 근거입니다.\n- [질병관리청 ‘알아두면 도움이 되는 건강검진’](https://health.kdca.go.kr/healthinfo/biz/health/ntcnInfo/healthSourc/thtimtCntnts/thtimtCntntsView.do?thtimt_cntnts_sn=7): 검진 목적과 판정 용어를 쉽게 설명하는 2021년 자료이며 현행 수치 판정의 우선 근거로 사용하지 않습니다.\n- [국민건강보험공단 건강검진청구항목코드](https://www.data.go.kr/data/15132486/fileData.do): 검진기관의 청구·확인용 전산 항목으로, 개인 검사결과나 정상범위로 해석하지 않습니다.\n- [국민건강보험공단 직역별·성별·연령별 건강검진정보](https://www.data.go.kr/data/15144521/fileData.do): 2022~2023년 180개 집계 코호트의 비교 참고자료이며 개인 진단·위험 예측에 사용하지 않습니다."
+      },
+      {
+        "id": "next_steps",
+        "type": "markdown",
+        "body": "## 권장 다음 단계\n\n1. 개인 결과 API에 `검진일`, `검사값`, `단위`, `기관 참고치`, `기관 판정`, `성별`, `공복 여부`, `기존 진단`, `약물치료`, `사용자 확인 상태`를 필수 또는 조건부 필드로 추가합니다.\n2. 판정 엔진은 검진일 기준 규칙 버전을 고정하고, LDL-C 당뇨병 예외·성별 기준·복합 혈압 조건·고시 미분류 구간을 테스트합니다.\n3. 앱 화면에서 `기관 공식판정`과 `앱 참고 해석`을 분리하고 각 항목에 기준 버전과 출처 링크를 제공합니다.\n4. 앱 API에서 `PERSONAL_HEALTH_RECORD`, `PUBLIC_AGGREGATE_BENCHMARK`, `INTERNAL_BILLING_REFERENCE`를 서로 다른 엔드포인트와 권한으로 분리합니다.\n5. PDF/OCR 수집에는 필드별 신뢰도와 사용자 확인 상태를 저장하고 주민등록번호 원문이 로그·분석·VDB로 유입되지 않도록 자동 테스트합니다.\n6. 벤치마크 화면에는 ‘중복 가능·개인 진단 아님’ 문구를 고정하고 pie/100% stacked 시각화를 차단합니다.\n7. 응급·긴급 알림과 진료 우선순위는 국가건강검진 판정표와 분리해 별도의 임상근거, 의료진 검토, 안전성 검증 후 도입합니다."
+      },
+      {
+        "id": "further_questions",
+        "type": "markdown",
+        "body": "## 추가 확인 질문\n\n- 개인 결과 수집 방식이 PDF 업로드, 건강정보 고속도로, 수기 입력 중 무엇인지에 따라 확인 UX와 보관 정책이 달라집니다.\n- 기관 공식판정과 앱 재계산이 다를 때 어느 정보를 기본값으로 노출하고 의료진 확인으로 연결할지 운영정책이 필요합니다.\n- 앱에서 공개 벤치마크를 실제 사용자에게 보여줄지, 내부 QA에만 사용할지 제품 결정이 필요합니다.\n- 심뇌혈관 위험도와 심뇌혈관 나이는 검진기관 제공값만 표시할지, 별도 검증된 계산모형을 도입할지 결정해야 합니다."
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-07-16T18:34:11+09:00",
+    "status": "ready",
+    "datasets": {
+      "summary": [
+        {
+          "cohort_rows": 180,
+          "metric_long_rows": 5400,
+          "blank_cells": 428,
+          "overlap_rate": 1.0,
+          "overlap_cohorts": 180,
+          "claim_history_rows": 3777,
+          "claim_current_rows": 243,
+          "claim_distinct_codes": 525,
+          "result_form_fields": 56,
+          "result_form_pages": 4,
+          "classification_rule_count": 104,
+          "interpretation_item_count": 15
+        }
+      ],
+      "missing_by_metric": [
+        {
+          "metric_code": "NORMAL_B_OSTEOPOROSIS_MANAGEMENT_COUNT",
+          "metric_label": "정상B - 골다공증 관리",
+          "chart_label": "골다공증 관리",
+          "metric_group": "NORMAL_B_MANAGEMENT",
+          "null_count": 168,
+          "reported_count": 12,
+          "total_cohorts": 180,
+          "null_rate": 0.9333
+        },
+        {
+          "metric_code": "OSTEOPOROSIS_SUSPECTED_COUNT",
+          "metric_label": "골다공증 의심",
+          "chart_label": "골다공증 의심",
+          "metric_group": "GENERAL_DISEASE_SUSPECTED",
+          "null_count": 168,
+          "reported_count": 12,
+          "total_cohorts": 180,
+          "null_rate": 0.9333
+        },
+        {
+          "metric_code": "TB_SUSPECTED_COUNT",
+          "metric_label": "폐결핵 의심",
+          "chart_label": "폐결핵 의심",
+          "metric_group": "GENERAL_DISEASE_SUSPECTED",
+          "null_count": 11,
+          "reported_count": 169,
+          "total_cohorts": 180,
+          "null_rate": 0.0611
+        },
+        {
+          "metric_code": "KNOWN_DYSLIPIDEMIA_COUNT",
+          "metric_label": "유질환자 - 이상지질혈증",
+          "chart_label": "유질환-이상지질",
+          "metric_group": "KNOWN_CONDITION",
+          "null_count": 10,
+          "reported_count": 170,
+          "total_cohorts": 180,
+          "null_rate": 0.0556
+        },
+        {
+          "metric_code": "KNOWN_TB_COUNT",
+          "metric_label": "유질환자 - 폐결핵",
+          "chart_label": "유질환-폐결핵",
+          "metric_group": "KNOWN_CONDITION",
+          "null_count": 10,
+          "reported_count": 170,
+          "total_cohorts": 180,
+          "null_rate": 0.0556
+        },
+        {
+          "metric_code": "DYSLIPIDEMIA_SUSPECTED_COUNT",
+          "metric_label": "이상지질혈증 의심",
+          "chart_label": "이상지질 의심",
+          "metric_group": "GENERAL_DISEASE_SUSPECTED",
+          "null_count": 9,
+          "reported_count": 171,
+          "total_cohorts": 180,
+          "null_rate": 0.05
+        },
+        {
+          "metric_code": "KNOWN_DIABETES_COUNT",
+          "metric_label": "유질환자 - 당뇨병",
+          "chart_label": "유질환-당뇨",
+          "metric_group": "KNOWN_CONDITION",
+          "null_count": 8,
+          "reported_count": 172,
+          "total_cohorts": 180,
+          "null_rate": 0.0444
+        },
+        {
+          "metric_code": "NORMAL_B_DYSLIPIDEMIA_MANAGEMENT_COUNT",
+          "metric_label": "정상B - 이상지질혈증 관리",
+          "chart_label": "정상B-이상지질",
+          "metric_group": "NORMAL_B_MANAGEMENT",
+          "null_count": 7,
+          "reported_count": 173,
+          "total_cohorts": 180,
+          "null_rate": 0.0389
+        }
+      ],
+      "source_roles": [
+        {
+          "source_name": "일반건강검진 결과통보서",
+          "data_role": "PERSONAL_HEALTH_RECORD_SCHEMA",
+          "grain": "개인·검진일·검사항목",
+          "app_surfaces": "MY_RESULTS|FOLLOW_UP|CARE_PLAN",
+          "user_visible": "True",
+          "allowed_use": "사용자의 실제 검진 결과, 원문 판정, 추적 진료 일정과 생활습관 처방 표시",
+          "prohibited_use": "OCR 미확인 값을 확정값으로 표시; 주민등록번호 원문을 분석·로그·VDB에 저장",
+          "vdb_policy": "NEVER_EMBED_PERSONAL_VALUES"
+        },
+        {
+          "source_name": "직역별·성별·연령별 건강검진정보",
+          "data_role": "PUBLIC_AGGREGATE_BENCHMARK",
+          "grain": "연도·직역·5세 연령대·성별",
+          "app_surfaces": "BENCHMARK",
+          "user_visible": "True",
+          "allowed_use": "동일 집단의 수검률·판정 인원 비율을 참고용으로 표시",
+          "prohibited_use": "개인 진단·위험 예측; 중복 판정 인원을 합산해 100% 분포로 표시; 공란을 0으로 대체",
+          "vdb_policy": "STRUCTURED_LOOKUP_NOT_EMBEDDING"
+        },
+        {
+          "source_name": "건강검진청구항목코드",
+          "data_role": "INTERNAL_BILLING_REFERENCE",
+          "grain": "적용연도·청구항목코드",
+          "app_surfaces": "INTERNAL_ETL_ONLY",
+          "user_visible": "False",
+          "allowed_use": "청구·수집 파이프라인의 내부 코드 매핑 및 역사 버전 추적",
+          "prohibited_use": "청구항목 코드를 개인 검사결과 항목이나 판정 기준으로 표시",
+          "vdb_policy": "RELATIONAL_DICTIONARY_NOT_EMBEDDING"
+        },
+        {
+          "source_name": "건강검진 실시기준",
+          "data_role": "VERSIONED_CLASSIFICATION_RULE",
+          "grain": "규칙 버전·검사항목·성별/연령 조건",
+          "app_surfaces": "RESULT_CLASSIFICATION",
+          "user_visible": "True",
+          "allowed_use": "검진일에 유효한 국가건강검진 판정과 출처 표시",
+          "prohibited_use": "질병 확정 진단·치료 결정; 과거 결과를 최신 규칙으로 덮어쓰기",
+          "vdb_policy": "RELATIONAL_RULE_ENGINE_NOT_EMBEDDING"
+        },
+        {
+          "source_name": "알아두면 도움이 되는 건강검진",
+          "data_role": "USER_EDUCATION_CONTENT",
+          "grain": "건강정보 콘텐츠 문서",
+          "app_surfaces": "EXPLANATION",
+          "user_visible": "True",
+          "allowed_use": "검진 목적, 항목과 판정 용어를 쉬운 말로 설명",
+          "prohibited_use": "2026년 판정 규칙의 우선 근거로 사용; 원문 전체를 허가 없이 VDB에 복제",
+          "vdb_policy": "LINK_OR_LICENSE_APPROVED_SUMMARY_ONLY"
+        }
+      ],
+      "interpretation_thresholds": [
+        {
+          "display_order": 1,
+          "domain": "고혈압",
+          "item": "혈압",
+          "unit": "mmHg",
+          "normal_a": "수축기 120 미만 그리고 이완기 80 미만",
+          "normal_b": "수축기 120~139 또는 이완기 80~89",
+          "disease_suspected": "수축기 140 이상 또는 이완기 90 이상",
+          "required_context": "수축기·이완기 값을 함께 평가하고 둘 중 높은 단계를 적용",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 2,
+          "domain": "비만",
+          "item": "체질량지수(BMI)",
+          "unit": "kg/m²",
+          "normal_a": "18.5~24.9",
+          "normal_b": "18.5 미만(저체중) 또는 25.0~29.9(과체중)",
+          "disease_suspected": "30.0 이상",
+          "required_context": "키·체중 원값 또는 검진기관 BMI가 필요",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 3,
+          "domain": "복부비만",
+          "item": "허리둘레",
+          "unit": "cm",
+          "normal_a": "남 90 미만 / 여 85 미만",
+          "normal_b": "해당 구간 없음",
+          "disease_suspected": "남 90 이상 / 여 85 이상",
+          "required_context": "성별이 없으면 판정하지 않음",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 4,
+          "domain": "빈혈",
+          "item": "혈색소",
+          "unit": "g/dL",
+          "normal_a": "남 13.0~16.5 / 여 12.0~15.5",
+          "normal_b": "남 12.0~12.9 / 여 10.0~11.9",
+          "disease_suspected": "남 12.0 미만 / 여 10.0 미만",
+          "required_context": "성별이 필요하며 고시가 분류하지 않은 상한 초과는 기관 참고치 확인",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 5,
+          "domain": "당뇨병",
+          "item": "공복혈당",
+          "unit": "mg/dL",
+          "normal_a": "100 미만",
+          "normal_b": "100~125",
+          "disease_suspected": "126 이상",
+          "required_context": "공복 검사인지 확인하고 당뇨병 진단·약물치료 중이면 유질환자 맥락을 우선",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 6,
+          "domain": "이상지질혈증",
+          "item": "총콜레스테롤",
+          "unit": "mg/dL",
+          "normal_a": "200 미만",
+          "normal_b": "200~239",
+          "disease_suspected": "240 이상",
+          "required_context": "검진일과 검진기관 참고치 확인",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 7,
+          "domain": "이상지질혈증",
+          "item": "HDL 콜레스테롤",
+          "unit": "mg/dL",
+          "normal_a": "60 이상",
+          "normal_b": "40~59",
+          "disease_suspected": "40 미만",
+          "required_context": "값이 낮을수록 높은 판정 단계임",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 8,
+          "domain": "이상지질혈증",
+          "item": "중성지방",
+          "unit": "mg/dL",
+          "normal_a": "150 미만",
+          "normal_b": "150~199",
+          "disease_suspected": "200 이상",
+          "required_context": "검진일과 검진기관 참고치 확인",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 9,
+          "domain": "이상지질혈증",
+          "item": "LDL 콜레스테롤",
+          "unit": "mg/dL",
+          "normal_a": "130 미만",
+          "normal_b": "130~159",
+          "disease_suspected": "160 이상",
+          "required_context": "당뇨병 동반 시 LDL-C 100 미만 기준과 의사 수정 가능 예외를 적용하고 기관 판정을 우선",
+          "source_locator": "별표 4의 별첨 1쪽 주석"
+        },
+        {
+          "display_order": 10,
+          "domain": "간장질환",
+          "item": "AST",
+          "unit": "U/L",
+          "normal_a": "40 이하",
+          "normal_b": "41~50",
+          "disease_suspected": "51 이상",
+          "required_context": "단독 수치로 원인 질환을 확정하지 않음",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 11,
+          "domain": "간장질환",
+          "item": "ALT",
+          "unit": "U/L",
+          "normal_a": "35 이하",
+          "normal_b": "36~45",
+          "disease_suspected": "46 이상",
+          "required_context": "단독 수치로 원인 질환을 확정하지 않음",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 12,
+          "domain": "간장질환",
+          "item": "감마지티피(γ-GTP)",
+          "unit": "U/L",
+          "normal_a": "남 11~63 / 여 8~35",
+          "normal_b": "남 64~77 / 여 36~45",
+          "disease_suspected": "남 78 이상 / 여 46 이상",
+          "required_context": "성별이 필요하며 고시가 분류하지 않은 하한 미만은 기관 참고치 확인",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 13,
+          "domain": "신장질환",
+          "item": "요단백",
+          "unit": "정성",
+          "normal_a": "음성(-)",
+          "normal_b": "약양성(±)",
+          "disease_suspected": "양성(+1) 이상",
+          "required_context": "코드값과 원문 기호를 함께 보존",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 14,
+          "domain": "신장질환",
+          "item": "혈청크레아티닌",
+          "unit": "mg/dL",
+          "normal_a": "1.5 이하",
+          "normal_b": "해당 구간 없음",
+          "disease_suspected": "1.5 초과",
+          "required_context": "검진기관 참고치와 e-GFR를 함께 표시",
+          "source_locator": "별표 4의 별첨 1쪽"
+        },
+        {
+          "display_order": 15,
+          "domain": "신장질환",
+          "item": "신사구체여과율(e-GFR)",
+          "unit": "mL/min/1.73m²",
+          "normal_a": "60 이상",
+          "normal_b": "해당 구간 없음",
+          "disease_suspected": "60 미만",
+          "required_context": "검진기관 산출값과 계산식을 보존하고 크레아티닌과 함께 표시",
+          "source_locator": "별표 4의 별첨 1쪽"
+        }
+      ],
+      "findings": [
+        {
+          "finding_order": 1,
+          "severity": "HIGH",
+          "severity_rank": 3,
+          "finding": "집계 판정 인원은 상호배타적이지 않음",
+          "evidence": "180/180개 코호트에서 주요 판정 실인원 합계가 수검인원을 초과",
+          "risk": "판정 비율을 합산해 100% 구성비로 표시하면 사용자를 오도함",
+          "remediation": "각 지표를 독립 참고율로 표시하고 stacked/pie 시각화를 금지",
+          "confidence": "HIGH"
+        },
+        {
+          "finding_order": 2,
+          "severity": "HIGH",
+          "severity_rank": 3,
+          "finding": "청구코드 CSV의 유형코드 헤더와 값이 어긋남",
+          "evidence": "유형구분코드 필드가 3776/3777행에서 코드명이랑 동일하고, 마지막 필드는 전 행에서 코드 첫 글자와 동일",
+          "risk": "헤더를 그대로 신뢰하면 유형코드와 상세코드를 잘못 적재함",
+          "remediation": "원문 필드를 보존하고 마지막 필드만 추론된 유형코드로 별도 저장; 상세코드는 null로 유지",
+          "confidence": "HIGH"
+        },
+        {
+          "finding_order": 3,
+          "severity": "MEDIUM",
+          "severity_rank": 2,
+          "finding": "집계 CSV 공란은 0이 아님",
+          "evidence": "428개 수치 셀이 공란이며 공식 API 설명은 공란을 데이터 없음으로 정의",
+          "risk": "0 대체 시 비해당·미집계 집단을 발생 없음으로 오해",
+          "remediation": "null과 0을 구분하고 공란 비율은 계산하지 않음",
+          "confidence": "HIGH"
+        },
+        {
+          "finding_order": 4,
+          "severity": "MEDIUM",
+          "severity_rank": 2,
+          "finding": "청구항목코드는 연도별 이력 데이터",
+          "evidence": "3777행이지만 고유 코드는 525개",
+          "risk": "코드 단독 기본키 사용 시 과거 정의가 덮어써짐",
+          "remediation": "적용연도+청구항목코드를 복합키로 사용",
+          "confidence": "HIGH"
+        },
+        {
+          "finding_order": 5,
+          "severity": "HIGH",
+          "severity_rank": 3,
+          "finding": "결과통보서에 직접식별정보와 민감건강정보가 함께 있음",
+          "evidence": "1·4쪽에 성명과 주민등록번호, 전 페이지에 검진결과 및 생활습관 정보 포함",
+          "risk": "분석 로그나 VDB에 원문을 적재하면 불필요한 개인정보 노출",
+          "remediation": "주민등록번호 원문 미저장, 개인 결과 암호화, 개인 값을 VDB에 임베딩하지 않음",
+          "confidence": "HIGH"
+        },
+        {
+          "finding_order": 6,
+          "severity": "MEDIUM",
+          "severity_rank": 2,
+          "finding": "질병관리청 안내문은 2021년 설명 자료",
+          "evidence": "게시 시점 2021-11; 현행 법령은 보건복지부고시 제2026-6호",
+          "risk": "과거 설명 문구를 최신 판정 규칙으로 사용하면 기준 불일치 가능",
+          "remediation": "사용자 설명에만 사용하고 규칙은 현행 법령/PDF 버전으로 적용",
+          "confidence": "HIGH"
+        }
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "nhis_stats",
+      "label": "국민건강보험공단 직역별·성별·연령별 건강검진정보",
+      "path": "storage/source_document/nhis_screening/raw/2023-12-31__NHIS__screening-statistics-by-job-sex-age.csv",
+      "href": "https://www.data.go.kr/data/15144521/fileData.do",
+      "query": {
+        "engine": "duckdb",
+        "language": "sql",
+        "sql": "SELECT * FROM read_csv_auto('storage/source_document/nhis_screening/normalized/2023-12-31__NHIS__screening-metrics-long.csv')",
+        "description": "CP949 원본을 UTF-8로 정규화하고 공란을 null로 보존한 뒤 코호트별 독립 참고율을 계산했습니다.",
+        "executed_at": "2026-07-16T18:10:00+09:00",
+        "tables_used": [
+          "storage/source_document/nhis_screening/raw/2023-12-31__NHIS__screening-statistics-by-job-sex-age.csv"
+        ],
+        "filters": [
+          "검진사업년도 2022~2023",
+          "연도×직역×5세 연령대×성별 180개 코호트",
+          "빈칸은 데이터 없음으로 보존"
+        ],
+        "metric_definitions": {
+          "null_rate": "해당 지표가 공란인 코호트 수 / 전체 180개 코호트",
+          "screening_participation_rate": "수검인원 / 대상인원",
+          "outcome_reference_rate": "해당 판정 또는 관리 인원 / 수검인원; 지표 간 중복 가능"
+        }
+      }
+    },
+    {
+      "id": "nhis_claims",
+      "label": "국민건강보험공단 건강검진청구항목코드",
+      "path": "storage/source_document/nhis_screening/raw/2024-07-31__NHIS__screening-claim-item-codes.csv",
+      "href": "https://www.data.go.kr/data/15132486/fileData.do",
+      "query": {
+        "engine": "duckdb",
+        "language": "sql",
+        "sql": "SELECT * FROM read_csv_auto('storage/source_document/nhis_screening/normalized/2024-07-31__NHIS__screening-claim-item-code-history.csv')",
+        "description": "적용연도와 청구항목코드를 복합키로 보존하고 헤더/값 불일치 필드에 품질 플래그를 부여했습니다.",
+        "executed_at": "2026-07-16T18:10:00+09:00",
+        "tables_used": [
+          "storage/source_document/nhis_screening/raw/2024-07-31__NHIS__screening-claim-item-codes.csv"
+        ]
+      }
+    },
+    {
+      "id": "mohw_form",
+      "label": "보건복지부 일반건강검진 결과통보서",
+      "path": "storage/source_document/mohw_screening/raw/2026-01-07__MOHW-2026-6__appendix-6-result-notice.pdf",
+      "href": "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2100000272270&chrClsCd=010201",
+      "query": {
+        "engine": "duckdb",
+        "language": "sql",
+        "sql": "SELECT * FROM read_csv_auto('storage/source_document/nhis_screening/normalized/2026-01-07__MOHW-2026-6__result-form-field-dictionary.csv')",
+        "description": "4쪽 PDF의 텍스트 앵커와 화면을 검수해 개인 결과·추적관리·생활습관 필드 56개를 정의했습니다.",
+        "executed_at": "2026-07-16T18:05:00+09:00"
+      }
+    },
+    {
+      "id": "mohw_rules",
+      "label": "보건복지부 건강검진 실시기준 제2026-6호 별표 4 판정기준",
+      "path": "storage/source_document/mohw_screening/normalized/2026-07-16__screening-interpretation-thresholds.csv",
+      "href": "https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2100000272270&chrClsCd=010201",
+      "query": {
+        "engine": "duckdb",
+        "language": "sql",
+        "sql": "SELECT * FROM read_csv_auto('storage/source_document/mohw_screening/normalized/2026-07-16__screening-interpretation-thresholds.csv') ORDER BY display_order",
+        "description": "2026년 1월 7일 시행 별표 4와 별첨 PDF를 화면 검수해 104개 정규화 규칙 중 핵심 검사 15개의 경계값, 단위, 성별 조건과 예외를 사용자 조회표로 정리했습니다.",
+        "executed_at": "2026-07-16T18:34:11+09:00",
+        "tables_used": [
+          "storage/source_document/mohw_screening/raw/2026-01-07__MOHW-2026-6__appendix-4-judgement.pdf",
+          "storage/source_document/mohw_screening/normalized/2026-01-07__MOHW-2026-6__screening-rules.csv",
+          "storage/source_document/mohw_screening/normalized/2026-07-16__screening-interpretation-thresholds.csv"
+        ],
+        "filters": [
+          "일반 결과통보서 핵심 계측·혈액·요검사 15개 항목",
+          "2026년 1월 7일 시행 보건복지부고시 제2026-6호",
+          "국가건강검진 판정이며 질병 확정 진단이 아님"
+        ]
+      }
+    },
+    {
+      "id": "kdca_guide",
+      "label": "질병관리청 알아두면 도움이 되는 건강검진",
+      "href": "https://health.kdca.go.kr/healthinfo/biz/health/ntcnInfo/healthSourc/thtimtCntnts/thtimtCntntsView.do?thtimt_cntnts_sn=7",
+      "description": "2021년 게시된 국가건강정보포털 설명 자료로 검진 목적과 판정 용어의 쉬운 설명에만 사용하며, 2026년 판정규칙의 우선 근거로 사용하지 않습니다."
+    },
+    {
+      "id": "source_roles",
+      "label": "건강관리 앱 자료 역할 매트릭스",
+      "path": "storage/source_document/nhis_screening/normalized/2026-07-16__health-app-source-role-matrix.csv",
+      "query": {
+        "engine": "duckdb",
+        "language": "sql",
+        "sql": "SELECT * FROM read_csv_auto('storage/source_document/nhis_screening/normalized/2026-07-16__health-app-source-role-matrix.csv')",
+        "description": "공식 자료의 앱 역할, 허용·금지 용도, 개인정보와 VDB 정책을 정규화했습니다.",
+        "executed_at": "2026-07-16T18:10:00+09:00",
+        "tables_used": [
+          "storage/source_document/nhis_screening/normalized/2026-07-16__health-app-source-role-matrix.csv"
+        ]
+      }
+    },
+    {
+      "id": "quality_report",
+      "label": "NHIS 사용자 관점 전처리 품질보고서",
+      "path": "storage/source_document/nhis_screening/normalized/2026-07-16__NHIS-user-centered-quality-report.json",
+      "query": {
+        "engine": "duckdb",
+        "language": "sql",
+        "sql": "SELECT * FROM read_json_auto('storage/source_document/nhis_screening/normalized/2026-07-16__NHIS-user-centered-quality-report.json')",
+        "description": "원본 체크섬, 키, 범위, 공란, 중복 판정, PDF 앵커를 검증한 전처리 품질 결과입니다.",
+        "executed_at": "2026-07-16T18:10:00+09:00",
+        "tables_used": [
+          "storage/source_document/nhis_screening/normalized/2026-07-16__NHIS-user-centered-quality-report.json"
+        ]
+      }
+    }
+  ],
+  "package_info": {}
+}

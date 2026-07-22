@@ -1,0 +1,7 @@
+﻿{
+    "qa_id": 4321,
+    "domain": 1,
+    "q_type": 1,
+    "question": "유전자 발현 조절에 중추적인 역할을 하며, 19-20개의 뉴클레오타이드로 구성된 non-coding RNA로 면역반응과 염증반응 등에 관여하는 것은 무엇인가?  \n1) micro RNA  \n2) transfer RNA  \n3) ribosomal RNA  \n4) short hairpin RNA  \n5) small interfering RNA",
+    "answer": "1) micro RNA"
+}
