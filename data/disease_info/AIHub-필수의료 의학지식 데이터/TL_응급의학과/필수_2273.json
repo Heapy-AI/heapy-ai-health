@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 2273,
-    "domain": 16,
-    "q_type": 1,
-    "question": "22세 남자가 당뇨병성 케톤산증으로 치료 중입니다. 치료 시작 후 12시간이 지난 시점에서 혈액검사 결과는 다음과 같습니다. 인슐린 지속주입 여부를 결정하는 데 가장 중요한 지표는 무엇인가요?  \n혈액검사 결과:  \n- Glucose: 180 mg/dL  \n- Na+: 135 mEq/L, K+: 3.5 mEq/L, Cl-: 105 mEq/L, P+: 1.5 mg/dL, Mg2+: 2.0 mg/dL, Ca2+: 9.0 mg/dL  \n- BUN: 20 mg/dL, Cr: 2.0 mg/dL  \n- pH: 7.05, HCO3-: 14 mEq/L, pCO2: 28 mmHg  \n\n1) 혈당(Glucose) \n2) 칼슘(Calcium) \n3) 인(Phosphorus) \n4) 칼륨(Potassium) \n5) 음이온 차이(Anion gap)",
-    "answer": "5) 음이온 차이(Anion gap)"
-}

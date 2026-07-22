@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 627344,
-    "domain": 13,
-    "q_type": 1,
-    "question": "60세 남자가 발열과 기침을 주소로 내원하였다. 혈액 배양 검사에서 그람 음성 막대균이 발견되었으며, 세포페라존으로 치료를 계획하고 있다. 디스크 확산법을 사용하여 세포페라존에 대한 감수성을 평가할 때 사용되는 디스크의 농도는 75 mcg이다. 만약 감염 원인균이 세포페라존에 대한 최소 억제 농도(MIC)가 18 mcg/mL로 측정되었다면, CLSI(Clinical and Laboratory Standards Institute) 기준에 따라 이 균주의 세포페라존 감수성 평가는 다음 중 무엇으로 해석될 수 있는가?  \n1) 민감함(Susceptible) \n2) 중간 감수성(Intermediate) \n3) 저항성(Resistant) \n4) 고농도 민감함(High-dose Susceptible) \n5) 실험실 오류(Laboratory Error)",
-    "answer": "2) 중간 감수성(Intermediate)"
-}
