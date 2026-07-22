@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 627035,
-    "domain": 13,
-    "q_type": 1,
-    "question": "40세 남성 환자가 HIV 감염으로 인해 abacavir와 lamivudine을 포함한 항레트로바이러스제를 복용 중이다. 약물 복용 후 1년이 지난 현재, 환자의 혈청 바이러스 RNA 수치는 여전히 감소하지 않고 있으며, 바이러스 유전자형 분석 결과 M184V 및 K65R 아미노산 치환이 발견되었다. 이러한 바이러스 유전자형 변화가 의미하는 바는 무엇인가?\n\n1) M184V 치환은 lamivudine에 대한 내성을 나타내며, K65R 치환은 tenofovir 및 abacavir에 대한 내성을 나타낼 수 있다.  \n2) M184V 치환은 abacavir에 대한 내성을 나타내며, K65R 치환은 protease inhibitors에 대한 내성을 나타낸다.  \n3) M184V 및 K65R 치환은 모두 항레트로바이러스제에 대한 내성과 무관하다.  \n4) M184V 치환은 lamivudine에 대한 내성을 나타내며, K65R 치환은 abacavir 및 tenofovir에 대한 내성을 나타낼 수 있다.  \n5) M184V 및 K65R 치환은 abacavir와 lamivudine에 대한 내성을 유발하지 않는다.",
-    "answer": "4) M184V 치환은 lamivudine에 대한 내성을 나타내며, K65R 치환은 abacavir 및 tenofovir에 대한 내성을 나타낼 수 있다."
-}

@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 623995,
-    "domain": 13,
-    "q_type": 3,
-    "question": "65세 남성이 만성 림프구성 백혈병(CLL) 진단을 받았다. 혈액 검사에서 B-림프구의 비정상적인 증가가 관찰되었고, 추가 검사에서 IL-4에 의해 특정 단백질의 발현이 증가한 것으로 나타났다. 이 단백질은 작은 G 단백질의 활성화에 관여하는 guanine nucleotide exchange factor이다. 이 단백질의 이름과 그 기능을 서술하시오.",
-    "answer": "이 단백질은 Dock10이다. Dock10은 DOCK-D subfamily에 속하는 guanine nucleotide exchange factor로, 작은 G 단백질인 Cdc42, TC10 및 TCL의 활성화를 돕는다. IL-4는 Dock10의 발현을 증가시키며, 이는 Dock10이 B-세포의 활성화와 증식 과정에서 중요한 역할을 할 가능성을 시사한다."
-}

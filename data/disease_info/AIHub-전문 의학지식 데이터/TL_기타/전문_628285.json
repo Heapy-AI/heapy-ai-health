@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 628285,
-    "domain": 13,
-    "q_type": 1,
-    "question": "Cimetidine의 사용에 관한 설명으로 옳지 않은 것은?\n\n1) Cimetidine은 위산 분비를 줄여주는 H2 차단제에 속한다.  \n2) 위궤양과 GERD 치료에 사용되며, Zollinger-Ellison 증후군에서 과도한 위산 분비를 억제한다.  \n3) OTC cimetidine은 2주 이상 사용하기 전에 의사와 상의해야 한다.  \n4) cimetidine 복용 중에는 심각한 부작용이 나타날 수 있으며, 환각과 같은 증상이 나타나면 즉시 의사와 상의해야 한다.  \n5) cimetidine은 때때로 스트레스성 궤양, 두드러기, 바이러스성 사마귀 치료에도 사용될 수 있다.",
-    "answer": "3) OTC cimetidine은 2주 이상 사용하기 전에 의사와 상의해야 한다."
-}

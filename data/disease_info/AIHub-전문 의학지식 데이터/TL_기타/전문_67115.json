@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 67115,
-    "domain": 13,
-    "q_type": 1,
-    "question": "COVID-19의 VOC-202012/01 변이를 RT-PCR 검사에서 간접적으로 확인할 수 있는 방법은 무엇인가?  \n1) del 69-70에 의해 S gene target failure (SGTF)를 확인  \n2) D614G 변이의 존재 확인  \n3) N501Y 변이의 직접 검출  \n4) P681H 변이의 직접 검출  \n5) 백신 접종 후 항체 반응 확인",
-    "answer": "1) del 69-70에 의해 S gene target failure (SGTF)를 확인"
-}
