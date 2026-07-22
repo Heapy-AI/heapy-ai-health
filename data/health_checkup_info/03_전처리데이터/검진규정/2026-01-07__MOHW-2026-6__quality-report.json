@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "dataset": {
+    "document_count": 3,
+    "item_count": 43,
+    "rule_count": 104,
+    "atomic_rule_count": 56,
+    "composite_rule_count": 48,
+    "eligibility_count": 16,
+    "boundary_case_count": 17
+  },
+  "checks": {
+    "source_checksums": true,
+    "source_page_anchors": true,
+    "unique_item_codes": true,
+    "unique_rule_ids": true,
+    "boundary_cases": true
+  },
+  "errors": [],
+  "known_limitations": [
+    "표 병합과 복합 조건 때문에 원문 표를 무검수 자동 변환하지 않고 시각 검수된 규칙 사양을 사용함",
+    "정수 구간으로 제시된 노인신체기능 검사는 소수 입력을 판정하지 않음",
+    "원문이 정의하지 않은 혈색소 상한 초과와 감마지티피 하한 미만은 임의 판정하지 않음",
+    "규칙은 건강검진 판정이며 질병 진단 또는 치료 결정을 의미하지 않음"
+  ]
+}

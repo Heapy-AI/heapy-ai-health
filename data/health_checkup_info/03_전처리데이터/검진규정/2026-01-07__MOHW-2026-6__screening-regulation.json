@@ -1,0 +1,3519 @@
+{
+  "schema_version": "1.0.0",
+  "regulation": {
+    "title": "건강검진 실시기준",
+    "notice": "보건복지부고시 제2026-6호",
+    "effective_from": "2026-01-07",
+    "jurisdiction": "KR",
+    "scope": "일반건강검진 및 의료급여생애전환기검진",
+    "usage_warning": "국가건강검진 판정용이며 진단기준 또는 검사실 참고범위로 재사용하지 않음"
+  },
+  "documents": [
+    {
+      "document_code": "MOHW_SCREENING_2026_6_APPENDIX_1",
+      "title": "건강검진 실시기준 [별표 1] 일반건강검진 검사항목, 검진비용, 대상자 및 검사방법",
+      "path": "storage/source_document/mohw_screening/raw/2026-01-07__MOHW-2026-6__appendix-1-items.pdf",
+      "source_url": "https://law.go.kr/LSW/flDownload.do?flSeq=160922447",
+      "law_attachment_id": "3146325",
+      "sha256": "0c61bb0f3d5b63d83c3fa36b56100e90a8925fd4c5afc2baf836d848c83515d9",
+      "page_count": 7,
+      "actual_sha256": "0c61bb0f3d5b63d83c3fa36b56100e90a8925fd4c5afc2baf836d848c83515d9",
+      "anchor_checks": [
+        {
+          "page": 1,
+          "anchors": [
+            "일반건강검진",
+            "혈압측정",
+            "흉부방사선"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 2,
+          "anchors": [
+            "요단백",
+            "공복혈당",
+            "저밀도"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 3,
+          "anchors": [
+            "B형간염",
+            "C형간염",
+            "골밀도",
+            "폐기능"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 4,
+          "anchors": [
+            "인지기능장애",
+            "생활습관평가"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 5,
+          "anchors": [
+            "PHQ-9",
+            "CAPE-15",
+            "노인신체기능검사"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 6,
+          "anchors": [
+            "구강검진",
+            "치면세균막"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 7,
+          "anchors": [
+            "분류번호"
+          ],
+          "missing": [],
+          "passed": true
+        }
+      ]
+    },
+    {
+      "document_code": "MOHW_SCREENING_2026_6_APPENDIX_4",
+      "title": "건강검진 실시기준 [별표 4] 일반건강검진 및 의료급여생애전환기검진 결과 판정기준",
+      "path": "storage/source_document/mohw_screening/raw/2026-01-07__MOHW-2026-6__appendix-4-judgement.pdf",
+      "source_url": "https://law.go.kr/LSW/flDownload.do?flSeq=160922523",
+      "law_attachment_id": "3146331",
+      "sha256": "5b581fa2bb092f340411f507cd56195adf23737d51ec424c09ff9225d159a16b",
+      "page_count": 4,
+      "actual_sha256": "5b581fa2bb092f340411f507cd56195adf23737d51ec424c09ff9225d159a16b",
+      "anchor_checks": [
+        {
+          "page": 1,
+          "anchors": [
+            "정상A",
+            "정상B",
+            "일반 질환의심",
+            "유질환자"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 2,
+          "anchors": [
+            "공복 혈당",
+            "고밀도",
+            "신사구체여과율"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 3,
+          "anchors": [
+            "PHQ-9",
+            "CAPE-15",
+            "KDSQ-C",
+            "만성폐쇄성"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 4,
+          "anchors": [
+            "치아우식증",
+            "치주질환",
+            "치면세균막"
+          ],
+          "missing": [],
+          "passed": true
+        }
+      ]
+    },
+    {
+      "document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "title": "건강검진 실시기준 [별표 4의 별첨] 검사항목별 판정기준",
+      "path": "storage/source_document/mohw_screening/raw/2026-01-07__MOHW-2026-6__v2026-6.pdf",
+      "source_url": "https://law.go.kr/LSW/flDownload.do?flSeq=160922929",
+      "law_attachment_id": "3146451",
+      "sha256": "5f804efa7257c067eabe8084cff6b9fb3d140f8f33e10234fc5423351f6ed11a",
+      "page_count": 3,
+      "actual_sha256": "5f804efa7257c067eabe8084cff6b9fb3d140f8f33e10234fc5423351f6ed11a",
+      "anchor_checks": [
+        {
+          "page": 1,
+          "anchors": [
+            "공복 혈당",
+            "고밀도",
+            "신사구체여과율"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 2,
+          "anchors": [
+            "PHQ-9",
+            "CAPE-15",
+            "KDSQ-C",
+            "만성폐쇄성"
+          ],
+          "missing": [],
+          "passed": true
+        },
+        {
+          "page": 3,
+          "anchors": [
+            "치아우식증",
+            "치주질환",
+            "치면세균막"
+          ],
+          "missing": [],
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "result_definitions": [
+    {
+      "result_code": "NORMAL_A",
+      "label_ko": "정상A",
+      "severity_rank": 0,
+      "definition": "검진 결과 건강이 양호한 경우"
+    },
+    {
+      "result_code": "NORMAL_B",
+      "label_ko": "정상B(경계)",
+      "severity_rank": 1,
+      "definition": "자가관리 및 예방조치가 필요한 경우"
+    },
+    {
+      "result_code": "GENERAL_DISEASE_SUSPECTED",
+      "label_ko": "일반 질환의심",
+      "severity_rank": 2,
+      "definition": "추적검사 또는 전문 의료기관의 진단과 진료가 필요한 경우"
+    },
+    {
+      "result_code": "CARDIOMETABOLIC_DISEASE_SUSPECTED",
+      "label_ko": "고혈압·당뇨병·이상지질혈증 질환의심",
+      "severity_rank": 2,
+      "definition": "고혈압, 당뇨병 또는 이상지질혈증이 의심되어 진료와 검사 등이 필요한 경우"
+    },
+    {
+      "result_code": "KNOWN_DISEASE",
+      "label_ko": "유질환자",
+      "severity_rank": 2,
+      "definition": "고혈압, 당뇨병, 이상지질혈증, 폐결핵, 우울증, 조기정신증, C형간염 또는 만성폐쇄성폐질환으로 진단받고 현재 약물 치료를 받는 경우"
+    },
+    {
+      "result_code": "ORAL_GOOD",
+      "label_ko": "구강 양호",
+      "severity_rank": 0,
+      "definition": "구강 관련 이상 소견과 치료가 필요한 우식치아가 없는 경우"
+    },
+    {
+      "result_code": "ORAL_CAUTION",
+      "label_ko": "구강 주의",
+      "severity_rank": 1,
+      "definition": "수복치아, 구강악습관, 보통 수준 치면세균막 또는 생활습관 위험이 있는 경우"
+    },
+    {
+      "result_code": "ORAL_DISEASE_SUSPECTED",
+      "label_ko": "구강 질환의심",
+      "severity_rank": 2,
+      "definition": "우식 의심치아, 경증 치은염·치석 또는 개선요망 치면세균막이 있는 경우"
+    },
+    {
+      "result_code": "ORAL_TREATMENT_REQUIRED",
+      "label_ko": "구강 치료필요",
+      "severity_rank": 3,
+      "definition": "명확한 우식치아 또는 중증 치석·치주낭 등으로 치료가 필요한 경우"
+    }
+  ],
+  "items": [
+    {
+      "item_code": "CHEST_XRAY_RESULT",
+      "display_name_ko": "흉부방사선촬영 결과",
+      "domain": "CHEST",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "NORMAL",
+        "INACTIVE_TB",
+        "OTHER_ABNORMAL",
+        "IMAGE_POOR",
+        "NOT_TAKEN"
+      ]
+    },
+    {
+      "item_code": "SUBJECT_SEX",
+      "display_name_ko": "성별",
+      "domain": "DEMOGRAPHIC",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "MALE",
+        "FEMALE"
+      ]
+    },
+    {
+      "item_code": "SYSTOLIC_BP",
+      "display_name_ko": "수축기 혈압",
+      "domain": "CARDIOVASCULAR",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mmHg",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "DIASTOLIC_BP",
+      "display_name_ko": "이완기 혈압",
+      "domain": "CARDIOVASCULAR",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mmHg",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "BMI",
+      "display_name_ko": "체질량지수",
+      "domain": "BODY_COMPOSITION",
+      "value_type": "NUMERIC",
+      "canonical_unit": "kg/m2",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "WAIST_CIRCUMFERENCE",
+      "display_name_ko": "허리둘레",
+      "domain": "BODY_COMPOSITION",
+      "value_type": "NUMERIC",
+      "canonical_unit": "cm",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "HEMOGLOBIN",
+      "display_name_ko": "혈색소",
+      "domain": "HEMATOLOGY",
+      "value_type": "NUMERIC",
+      "canonical_unit": "g/dL",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "FASTING_GLUCOSE",
+      "display_name_ko": "공복혈당",
+      "domain": "GLUCOSE_METABOLISM",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mg/dL",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "TOTAL_CHOLESTEROL",
+      "display_name_ko": "총콜레스테롤",
+      "domain": "LIPID",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mg/dL",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "HDL_CHOLESTEROL",
+      "display_name_ko": "고밀도(HDL) 콜레스테롤",
+      "domain": "LIPID",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mg/dL",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "TRIGLYCERIDES",
+      "display_name_ko": "중성지방",
+      "domain": "LIPID",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mg/dL",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "LDL_CHOLESTEROL",
+      "display_name_ko": "저밀도(LDL) 콜레스테롤",
+      "domain": "LIPID",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mg/dL",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "AST",
+      "display_name_ko": "에이에스티(AST/SGOT)",
+      "domain": "LIVER",
+      "value_type": "NUMERIC",
+      "canonical_unit": "U/L",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "ALT",
+      "display_name_ko": "에이엘티(ALT/SGPT)",
+      "domain": "LIVER",
+      "value_type": "NUMERIC",
+      "canonical_unit": "U/L",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "GAMMA_GTP",
+      "display_name_ko": "감마지티피(γ-GTP)",
+      "domain": "LIVER",
+      "value_type": "NUMERIC",
+      "canonical_unit": "U/L",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "URINE_PROTEIN",
+      "display_name_ko": "요단백",
+      "domain": "KIDNEY",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "NEGATIVE",
+        "TRACE",
+        "POSITIVE_1",
+        "POSITIVE_2",
+        "POSITIVE_3",
+        "POSITIVE_4"
+      ]
+    },
+    {
+      "item_code": "SERUM_CREATININE",
+      "display_name_ko": "혈청크레아티닌",
+      "domain": "KIDNEY",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mg/dL",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "EGFR",
+      "display_name_ko": "신사구체여과율(e-GFR)",
+      "domain": "KIDNEY",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mL/min/1.73m2",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "BONE_DENSITY_T_SCORE",
+      "display_name_ko": "골밀도 T-score",
+      "domain": "BONE",
+      "value_type": "NUMERIC",
+      "canonical_unit": "T-score",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "PERIPHERAL_BONE_DENSITY",
+      "display_name_ko": "말단골 정량적 골밀도",
+      "domain": "BONE",
+      "value_type": "NUMERIC",
+      "canonical_unit": "mg/cm3",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "LOWER_LIMB_FUNCTION_SECONDS",
+      "display_name_ko": "하지기능 검사시간",
+      "domain": "PHYSICAL_FUNCTION",
+      "value_type": "NUMERIC",
+      "canonical_unit": "s",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "BALANCE_EYES_CLOSED_SECONDS",
+      "display_name_ko": "평형성(눈감은 상태)",
+      "domain": "PHYSICAL_FUNCTION",
+      "value_type": "NUMERIC",
+      "canonical_unit": "s",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "BALANCE_EYES_OPEN_SECONDS",
+      "display_name_ko": "평형성(눈 뜬 상태)",
+      "domain": "PHYSICAL_FUNCTION",
+      "value_type": "NUMERIC",
+      "canonical_unit": "s",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "PHQ9_TOTAL",
+      "display_name_ko": "PHQ-9 총점",
+      "domain": "MENTAL_HEALTH",
+      "value_type": "NUMERIC",
+      "canonical_unit": "score",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "PHQ9_ITEM9",
+      "display_name_ko": "PHQ-9 9번 문항",
+      "domain": "MENTAL_HEALTH",
+      "value_type": "NUMERIC",
+      "canonical_unit": "score",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "CAPE15_FREQUENCY_TOTAL",
+      "display_name_ko": "CAPE-15 빈도 총점",
+      "domain": "MENTAL_HEALTH",
+      "value_type": "NUMERIC",
+      "canonical_unit": "score",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "CAPE15_DISTRESS_TOTAL",
+      "display_name_ko": "CAPE-15 고통 총점",
+      "domain": "MENTAL_HEALTH",
+      "value_type": "NUMERIC",
+      "canonical_unit": "score",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "KDSQC_TOTAL",
+      "display_name_ko": "KDSQ-C 총점",
+      "domain": "COGNITIVE",
+      "value_type": "NUMERIC",
+      "canonical_unit": "score",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "WHISPER_LEFT_CORRECT",
+      "display_name_ko": "귓속말 검사 왼쪽 정답수",
+      "domain": "HEARING",
+      "value_type": "NUMERIC",
+      "canonical_unit": "count",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "WHISPER_RIGHT_CORRECT",
+      "display_name_ko": "귓속말 검사 오른쪽 정답수",
+      "domain": "HEARING",
+      "value_type": "NUMERIC",
+      "canonical_unit": "count",
+      "integer_only": true,
+      "allowed_values": []
+    },
+    {
+      "item_code": "PURE_TONE_DB",
+      "display_name_ko": "순음청력검사",
+      "domain": "HEARING",
+      "value_type": "NUMERIC",
+      "canonical_unit": "dB",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "FEV1_FVC_PERCENT",
+      "display_name_ko": "FEV1/FVC",
+      "domain": "PULMONARY",
+      "value_type": "NUMERIC",
+      "canonical_unit": "%",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "FEV1_PERCENT",
+      "display_name_ko": "FEV1 예측치 대비",
+      "domain": "PULMONARY",
+      "value_type": "NUMERIC",
+      "canonical_unit": "%",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "FVC_PERCENT",
+      "display_name_ko": "FVC 예측치 대비",
+      "domain": "PULMONARY",
+      "value_type": "NUMERIC",
+      "canonical_unit": "%",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "FEV1_FEV6_PERCENT",
+      "display_name_ko": "FEV1/FEV6",
+      "domain": "PULMONARY",
+      "value_type": "NUMERIC",
+      "canonical_unit": "%",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "FEV6_PERCENT",
+      "display_name_ko": "FEV6 예측치 대비",
+      "domain": "PULMONARY",
+      "value_type": "NUMERIC",
+      "canonical_unit": "%",
+      "integer_only": false,
+      "allowed_values": []
+    },
+    {
+      "item_code": "DENTAL_CARIES",
+      "display_name_ko": "우식치아",
+      "domain": "ORAL",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "ABSENT",
+        "PRESENT"
+      ]
+    },
+    {
+      "item_code": "DENTAL_CARIES_SUSPECTED",
+      "display_name_ko": "우식의심치아",
+      "domain": "ORAL",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "ABSENT",
+        "PRESENT"
+      ]
+    },
+    {
+      "item_code": "DENTAL_RESTORATION",
+      "display_name_ko": "수복치아",
+      "domain": "ORAL",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "ABSENT",
+        "PRESENT"
+      ]
+    },
+    {
+      "item_code": "DENTAL_MISSING",
+      "display_name_ko": "상실치아",
+      "domain": "ORAL",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "ABSENT",
+        "PRESENT"
+      ]
+    },
+    {
+      "item_code": "GINGIVITIS",
+      "display_name_ko": "치은염증",
+      "domain": "ORAL",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "NONE",
+        "MILD",
+        "SEVERE"
+      ]
+    },
+    {
+      "item_code": "CALCULUS",
+      "display_name_ko": "치석",
+      "domain": "ORAL",
+      "value_type": "CODE",
+      "canonical_unit": null,
+      "integer_only": false,
+      "allowed_values": [
+        "NONE",
+        "MILD",
+        "SEVERE"
+      ]
+    },
+    {
+      "item_code": "PLAQUE_SCORE",
+      "display_name_ko": "치면세균막검사",
+      "domain": "ORAL",
+      "value_type": "NUMERIC",
+      "canonical_unit": "score",
+      "integer_only": false,
+      "allowed_values": []
+    }
+  ],
+  "eligibility": [
+    {
+      "component_code": "GENERAL_BASE",
+      "display_name_ko": "문진·진찰·신체계측·혈압·시력·청력",
+      "eligibility": {
+        "all_screening_subjects": true
+      },
+      "interval": "검진 대상 주기",
+      "source_locator": "별표1 1쪽"
+    },
+    {
+      "component_code": "CHEST_XRAY",
+      "display_name_ko": "흉부방사선 촬영",
+      "eligibility": {
+        "all_screening_subjects": true
+      },
+      "interval": "검진 대상 주기",
+      "source_locator": "별표1 1쪽"
+    },
+    {
+      "component_code": "URINE_PROTEIN",
+      "display_name_ko": "요단백",
+      "eligibility": {
+        "all_screening_subjects": true
+      },
+      "interval": "검진 대상 주기",
+      "source_locator": "별표1 2쪽"
+    },
+    {
+      "component_code": "CORE_BLOOD_TESTS",
+      "display_name_ko": "혈색소·공복혈당·간·신장 검사",
+      "eligibility": {
+        "all_screening_subjects": true
+      },
+      "interval": "검진 대상 주기",
+      "source_locator": "별표1 2쪽"
+    },
+    {
+      "component_code": "LIPID_PANEL",
+      "display_name_ko": "콜레스테롤 4종",
+      "eligibility": {
+        "any": [
+          {
+            "all": [
+              {
+                "sex": "MALE"
+              },
+              {
+                "age_gte": 24
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "sex": "FEMALE"
+              },
+              {
+                "age_gte": 40
+              }
+            ]
+          }
+        ]
+      },
+      "interval": "4년마다",
+      "source_locator": "별표1 2쪽"
+    },
+    {
+      "component_code": "HEPATITIS_B",
+      "display_name_ko": "B형간염 표면항원·항체",
+      "eligibility": {
+        "age_eq": 40,
+        "exclusions": [
+          "기존 표면항원 양성",
+          "자동·피동면역 항체형성"
+        ]
+      },
+      "interval": "해당 연령",
+      "source_locator": "별표1 3쪽"
+    },
+    {
+      "component_code": "HEPATITIS_C",
+      "display_name_ko": "C형간염 항체",
+      "eligibility": {
+        "age_eq": 56
+      },
+      "interval": "해당 연령",
+      "source_locator": "별표1 3쪽"
+    },
+    {
+      "component_code": "BONE_DENSITY",
+      "display_name_ko": "골밀도 검사",
+      "eligibility": {
+        "sex": "FEMALE",
+        "age_in": [
+          54,
+          60,
+          66
+        ]
+      },
+      "interval": "해당 연령",
+      "source_locator": "별표1 3쪽"
+    },
+    {
+      "component_code": "PULMONARY_FUNCTION",
+      "display_name_ko": "폐기능 검사",
+      "eligibility": {
+        "age_in": [
+          56,
+          66
+        ]
+      },
+      "interval": "해당 연령",
+      "source_locator": "별표1 3-4쪽"
+    },
+    {
+      "component_code": "KDSQC",
+      "display_name_ko": "인지기능장애 KDSQ-C",
+      "eligibility": {
+        "age_gte": 66
+      },
+      "interval": "2년마다",
+      "source_locator": "별표1 4쪽"
+    },
+    {
+      "component_code": "LIFESTYLE_ASSESSMENT",
+      "display_name_ko": "생활습관평가",
+      "eligibility": {
+        "age_in": [
+          40,
+          50,
+          60,
+          70
+        ]
+      },
+      "interval": "해당 연령",
+      "source_locator": "별표1 4쪽"
+    },
+    {
+      "component_code": "PHQ9",
+      "display_name_ko": "정신건강검사 PHQ-9",
+      "eligibility": {
+        "age_rules": [
+          {
+            "age_range": [
+              20,
+              34
+            ],
+            "interval": "2년마다"
+          },
+          {
+            "age_range": [
+              35,
+              39
+            ],
+            "interval": "1회"
+          },
+          {
+            "age_range": [
+              40,
+              49
+            ],
+            "interval": "1회"
+          },
+          {
+            "age_range": [
+              50,
+              59
+            ],
+            "interval": "1회"
+          },
+          {
+            "age_range": [
+              60,
+              69
+            ],
+            "interval": "1회"
+          },
+          {
+            "age_range": [
+              70,
+              79
+            ],
+            "interval": "1회"
+          }
+        ]
+      },
+      "interval": "연령별",
+      "source_locator": "별표1 5쪽"
+    },
+    {
+      "component_code": "CAPE15",
+      "display_name_ko": "정신건강검사 CAPE-15",
+      "eligibility": {
+        "age_range": [
+          20,
+          34
+        ]
+      },
+      "interval": "2년마다",
+      "source_locator": "별표1 5쪽"
+    },
+    {
+      "component_code": "OLDER_ADULT_FUNCTION",
+      "display_name_ko": "노인신체기능검사",
+      "eligibility": {
+        "age_in": [
+          66,
+          70,
+          80
+        ]
+      },
+      "interval": "해당 연령",
+      "source_locator": "별표1 5-6쪽"
+    },
+    {
+      "component_code": "ORAL_SCREENING",
+      "display_name_ko": "구강검진",
+      "eligibility": {
+        "all_screening_subjects": true
+      },
+      "interval": "검진 대상 주기",
+      "source_locator": "별표1 6쪽"
+    },
+    {
+      "component_code": "PLAQUE_TEST",
+      "display_name_ko": "치면세균막검사",
+      "eligibility": {
+        "age_eq": 40
+      },
+      "interval": "해당 연령",
+      "source_locator": "별표1 6쪽"
+    }
+  ],
+  "rules": [
+    {
+      "rule_id": "CHEST_XRAY_NORMAL",
+      "target_condition": "CHEST_DISEASE",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "CHEST_XRAY_RESULT",
+        "op": "eq",
+        "value": "NORMAL"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 폐결핵 및 기타흉부질환",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "CHEST_XRAY_INACTIVE_TB",
+      "target_condition": "CHEST_DISEASE",
+      "result_code": "NORMAL_B",
+      "result_label_original": "비활동성 폐결핵",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "field": "CHEST_XRAY_RESULT",
+        "op": "eq",
+        "value": "INACTIVE_TB"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 폐결핵 및 기타흉부질환",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "CHEST_XRAY_OTHER",
+      "target_condition": "CHEST_DISEASE",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "CHEST_XRAY_RESULT",
+        "op": "eq",
+        "value": "OTHER_ABNORMAL"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 폐결핵 및 기타흉부질환",
+      "notes": "사진불량·미촬영은 판정에서 제외",
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BP_NORMAL_A",
+      "target_condition": "HYPERTENSION",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "SYSTOLIC_BP",
+            "op": "lt",
+            "value": 120
+          },
+          {
+            "field": "DIASTOLIC_BP",
+            "op": "lt",
+            "value": 80
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 고혈압",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BP_NORMAL_B",
+      "target_condition": "HYPERTENSION",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "any": [
+              {
+                "all": [
+                  {
+                    "field": "SYSTOLIC_BP",
+                    "op": "gte",
+                    "value": 120
+                  },
+                  {
+                    "field": "SYSTOLIC_BP",
+                    "op": "lt",
+                    "value": 140
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "field": "DIASTOLIC_BP",
+                    "op": "gte",
+                    "value": 80
+                  },
+                  {
+                    "field": "DIASTOLIC_BP",
+                    "op": "lt",
+                    "value": 90
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "not": {
+              "any": [
+                {
+                  "field": "SYSTOLIC_BP",
+                  "op": "gte",
+                  "value": 140
+                },
+                {
+                  "field": "DIASTOLIC_BP",
+                  "op": "gte",
+                  "value": 90
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 고혈압",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BP_SUSPECTED",
+      "target_condition": "HYPERTENSION",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "any": [
+          {
+            "field": "SYSTOLIC_BP",
+            "op": "gte",
+            "value": 140
+          },
+          {
+            "field": "DIASTOLIC_BP",
+            "op": "gte",
+            "value": 90
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 고혈압",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BMI_NORMAL_A",
+      "target_condition": "OBESITY_BMI",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "BMI",
+            "op": "gte",
+            "value": 18.5
+          },
+          {
+            "field": "BMI",
+            "op": "lt",
+            "value": 25
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 비만",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BMI_LOW",
+      "target_condition": "OBESITY_BMI",
+      "result_code": "NORMAL_B_LOW",
+      "result_label_original": "정상B(저체중)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "field": "BMI",
+        "op": "lt",
+        "value": 18.5
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 비만",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BMI_BORDERLINE",
+      "target_condition": "OBESITY_BMI",
+      "result_code": "NORMAL_B_HIGH",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "BMI",
+            "op": "gte",
+            "value": 25
+          },
+          {
+            "field": "BMI",
+            "op": "lt",
+            "value": 30
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 비만",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BMI_SUSPECTED",
+      "target_condition": "OBESITY_BMI",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "BMI",
+        "op": "gte",
+        "value": 30
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 비만",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "WAIST_MALE_NORMAL",
+      "target_condition": "ABDOMINAL_OBESITY",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "MALE"
+          },
+          {
+            "field": "WAIST_CIRCUMFERENCE",
+            "op": "lt",
+            "value": 90
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 허리둘레",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "WAIST_MALE_SUSPECTED",
+      "target_condition": "ABDOMINAL_OBESITY",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "MALE"
+          },
+          {
+            "field": "WAIST_CIRCUMFERENCE",
+            "op": "gte",
+            "value": 90
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 허리둘레",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "WAIST_FEMALE_NORMAL",
+      "target_condition": "ABDOMINAL_OBESITY",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "FEMALE"
+          },
+          {
+            "field": "WAIST_CIRCUMFERENCE",
+            "op": "lt",
+            "value": 85
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 허리둘레",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "WAIST_FEMALE_SUSPECTED",
+      "target_condition": "ABDOMINAL_OBESITY",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "FEMALE"
+          },
+          {
+            "field": "WAIST_CIRCUMFERENCE",
+            "op": "gte",
+            "value": 85
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 허리둘레",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "HEMOGLOBIN_MALE_NORMAL",
+      "target_condition": "ANEMIA",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "MALE"
+          },
+          {
+            "all": [
+              {
+                "field": "HEMOGLOBIN",
+                "op": "gte",
+                "value": 13.0
+              },
+              {
+                "field": "HEMOGLOBIN",
+                "op": "lte",
+                "value": 16.5
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 빈혈",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "HEMOGLOBIN_MALE_BORDERLINE",
+      "target_condition": "ANEMIA",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "MALE"
+          },
+          {
+            "all": [
+              {
+                "field": "HEMOGLOBIN",
+                "op": "gte",
+                "value": 12.0
+              },
+              {
+                "field": "HEMOGLOBIN",
+                "op": "lt",
+                "value": 13.0
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 빈혈",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "HEMOGLOBIN_MALE_SUSPECTED",
+      "target_condition": "ANEMIA",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "MALE"
+          },
+          {
+            "field": "HEMOGLOBIN",
+            "op": "lt",
+            "value": 12.0
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 빈혈",
+      "notes": "원문이 정의하지 않은 상한 초과는 임의 판정하지 않음",
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "HEMOGLOBIN_FEMALE_NORMAL",
+      "target_condition": "ANEMIA",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "FEMALE"
+          },
+          {
+            "all": [
+              {
+                "field": "HEMOGLOBIN",
+                "op": "gte",
+                "value": 12.0
+              },
+              {
+                "field": "HEMOGLOBIN",
+                "op": "lte",
+                "value": 15.5
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 빈혈",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "HEMOGLOBIN_FEMALE_BORDERLINE",
+      "target_condition": "ANEMIA",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "FEMALE"
+          },
+          {
+            "all": [
+              {
+                "field": "HEMOGLOBIN",
+                "op": "gte",
+                "value": 10.0
+              },
+              {
+                "field": "HEMOGLOBIN",
+                "op": "lt",
+                "value": 12.0
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 빈혈",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "HEMOGLOBIN_FEMALE_SUSPECTED",
+      "target_condition": "ANEMIA",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "FEMALE"
+          },
+          {
+            "field": "HEMOGLOBIN",
+            "op": "lt",
+            "value": 10.0
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 빈혈",
+      "notes": "원문이 정의하지 않은 상한 초과는 임의 판정하지 않음",
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "GLUCOSE_NORMAL_A",
+      "target_condition": "DIABETES",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "FASTING_GLUCOSE",
+        "op": "lt",
+        "value": 100
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 당뇨병",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "GLUCOSE_NORMAL_B",
+      "target_condition": "DIABETES",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "FASTING_GLUCOSE",
+            "op": "gte",
+            "value": 100
+          },
+          {
+            "field": "FASTING_GLUCOSE",
+            "op": "lt",
+            "value": 126
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 당뇨병",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "GLUCOSE_SUSPECTED",
+      "target_condition": "DIABETES",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "FASTING_GLUCOSE",
+        "op": "gte",
+        "value": 126
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 당뇨병",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "TOTAL_CHOL_NORMAL_A",
+      "target_condition": "DYSLIPIDEMIA_TOTAL",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "TOTAL_CHOLESTEROL",
+        "op": "lt",
+        "value": 200
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "TOTAL_CHOL_NORMAL_B",
+      "target_condition": "DYSLIPIDEMIA_TOTAL",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "TOTAL_CHOLESTEROL",
+            "op": "gte",
+            "value": 200
+          },
+          {
+            "field": "TOTAL_CHOLESTEROL",
+            "op": "lt",
+            "value": 240
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "TOTAL_CHOL_SUSPECTED",
+      "target_condition": "DYSLIPIDEMIA_TOTAL",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "TOTAL_CHOLESTEROL",
+        "op": "gte",
+        "value": 240
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "HDL_NORMAL_A",
+      "target_condition": "DYSLIPIDEMIA_HDL",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "HDL_CHOLESTEROL",
+        "op": "gte",
+        "value": 60
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 HDL",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "HDL_NORMAL_B",
+      "target_condition": "DYSLIPIDEMIA_HDL",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "HDL_CHOLESTEROL",
+            "op": "gte",
+            "value": 40
+          },
+          {
+            "field": "HDL_CHOLESTEROL",
+            "op": "lt",
+            "value": 60
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 HDL",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "HDL_SUSPECTED",
+      "target_condition": "DYSLIPIDEMIA_HDL",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "HDL_CHOLESTEROL",
+        "op": "lt",
+        "value": 40
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 HDL",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "TG_NORMAL_A",
+      "target_condition": "DYSLIPIDEMIA_TG",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "TRIGLYCERIDES",
+        "op": "lt",
+        "value": 150
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 중성지방",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "TG_NORMAL_B",
+      "target_condition": "DYSLIPIDEMIA_TG",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "TRIGLYCERIDES",
+            "op": "gte",
+            "value": 150
+          },
+          {
+            "field": "TRIGLYCERIDES",
+            "op": "lt",
+            "value": 200
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 중성지방",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "TG_SUSPECTED",
+      "target_condition": "DYSLIPIDEMIA_TG",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "TRIGLYCERIDES",
+        "op": "gte",
+        "value": 200
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 중성지방",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "LDL_NORMAL_A",
+      "target_condition": "DYSLIPIDEMIA_LDL",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "LDL_CHOLESTEROL",
+        "op": "lt",
+        "value": 130
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 LDL",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "LDL_NORMAL_B",
+      "target_condition": "DYSLIPIDEMIA_LDL",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "LDL_CHOLESTEROL",
+            "op": "gte",
+            "value": 130
+          },
+          {
+            "field": "LDL_CHOLESTEROL",
+            "op": "lt",
+            "value": 160
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 LDL",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "LDL_SUSPECTED",
+      "target_condition": "DYSLIPIDEMIA_LDL",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "LDL_CHOLESTEROL",
+        "op": "gte",
+        "value": 160
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 이상지질혈증 LDL",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "AST_NORMAL_A",
+      "target_condition": "LIVER_AST",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "AST",
+        "op": "lte",
+        "value": 40
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 간장질환 AST",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "AST_NORMAL_B",
+      "target_condition": "LIVER_AST",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "AST",
+            "op": "gt",
+            "value": 40
+          },
+          {
+            "field": "AST",
+            "op": "lte",
+            "value": 50
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 간장질환 AST",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "AST_SUSPECTED",
+      "target_condition": "LIVER_AST",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "AST",
+        "op": "gt",
+        "value": 50
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 간장질환 AST",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "ALT_NORMAL_A",
+      "target_condition": "LIVER_ALT",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "ALT",
+        "op": "lte",
+        "value": 35
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 간장질환 ALT",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "ALT_NORMAL_B",
+      "target_condition": "LIVER_ALT",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "ALT",
+            "op": "gt",
+            "value": 35
+          },
+          {
+            "field": "ALT",
+            "op": "lte",
+            "value": 45
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 간장질환 ALT",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "ALT_SUSPECTED",
+      "target_condition": "LIVER_ALT",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "ALT",
+        "op": "gt",
+        "value": 45
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 간장질환 ALT",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "GGT_MALE_NORMAL",
+      "target_condition": "LIVER_GGT",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "MALE"
+          },
+          {
+            "all": [
+              {
+                "field": "GAMMA_GTP",
+                "op": "gte",
+                "value": 11
+              },
+              {
+                "field": "GAMMA_GTP",
+                "op": "lte",
+                "value": 63
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 감마지티피",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "GGT_MALE_BORDERLINE",
+      "target_condition": "LIVER_GGT",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "MALE"
+          },
+          {
+            "all": [
+              {
+                "field": "GAMMA_GTP",
+                "op": "gt",
+                "value": 63
+              },
+              {
+                "field": "GAMMA_GTP",
+                "op": "lte",
+                "value": 77
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 감마지티피",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "GGT_MALE_SUSPECTED",
+      "target_condition": "LIVER_GGT",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "MALE"
+          },
+          {
+            "field": "GAMMA_GTP",
+            "op": "gt",
+            "value": 77
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 감마지티피",
+      "notes": "원문이 정의하지 않은 정상범위 하한 미만은 임의 판정하지 않음",
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "GGT_FEMALE_NORMAL",
+      "target_condition": "LIVER_GGT",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "FEMALE"
+          },
+          {
+            "all": [
+              {
+                "field": "GAMMA_GTP",
+                "op": "gte",
+                "value": 8
+              },
+              {
+                "field": "GAMMA_GTP",
+                "op": "lte",
+                "value": 35
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 감마지티피",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "GGT_FEMALE_BORDERLINE",
+      "target_condition": "LIVER_GGT",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "FEMALE"
+          },
+          {
+            "all": [
+              {
+                "field": "GAMMA_GTP",
+                "op": "gt",
+                "value": 35
+              },
+              {
+                "field": "GAMMA_GTP",
+                "op": "lte",
+                "value": 45
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 감마지티피",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "GGT_FEMALE_SUSPECTED",
+      "target_condition": "LIVER_GGT",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "SUBJECT_SEX",
+            "op": "eq",
+            "value": "FEMALE"
+          },
+          {
+            "field": "GAMMA_GTP",
+            "op": "gt",
+            "value": 45
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 감마지티피",
+      "notes": "원문이 정의하지 않은 정상범위 하한 미만은 임의 판정하지 않음",
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "URINE_PROTEIN_NEGATIVE",
+      "target_condition": "KIDNEY_URINE_PROTEIN",
+      "result_code": "NORMAL_A",
+      "result_label_original": "음성(-)",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "URINE_PROTEIN",
+        "op": "eq",
+        "value": "NEGATIVE"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 요단백",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "URINE_PROTEIN_TRACE",
+      "target_condition": "KIDNEY_URINE_PROTEIN",
+      "result_code": "NORMAL_B",
+      "result_label_original": "약양성(±)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "field": "URINE_PROTEIN",
+        "op": "eq",
+        "value": "TRACE"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 요단백",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "URINE_PROTEIN_POSITIVE",
+      "target_condition": "KIDNEY_URINE_PROTEIN",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "양성(+1) 이상",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "URINE_PROTEIN",
+        "op": "in",
+        "value": [
+          "POSITIVE_1",
+          "POSITIVE_2",
+          "POSITIVE_3",
+          "POSITIVE_4"
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 요단백",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "CREATININE_NORMAL",
+      "target_condition": "KIDNEY_CREATININE",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "SERUM_CREATININE",
+        "op": "lte",
+        "value": 1.5
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 혈청크레아티닌",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "CREATININE_SUSPECTED",
+      "target_condition": "KIDNEY_CREATININE",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "SERUM_CREATININE",
+        "op": "gt",
+        "value": 1.5
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 혈청크레아티닌",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "EGFR_NORMAL",
+      "target_condition": "KIDNEY_EGFR",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "EGFR",
+        "op": "gte",
+        "value": 60
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 e-GFR",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "EGFR_SUSPECTED",
+      "target_condition": "KIDNEY_EGFR",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "EGFR",
+        "op": "lt",
+        "value": 60
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 1쪽 e-GFR",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BONE_T_NORMAL_A",
+      "target_condition": "OSTEOPOROSIS_T_SCORE",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "BONE_DENSITY_T_SCORE",
+        "op": "gte",
+        "value": -1
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 골다공증 T-score",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BONE_T_NORMAL_B",
+      "target_condition": "OSTEOPOROSIS_T_SCORE",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "BONE_DENSITY_T_SCORE",
+            "op": "gt",
+            "value": -2.5
+          },
+          {
+            "field": "BONE_DENSITY_T_SCORE",
+            "op": "lt",
+            "value": -1
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 골다공증 T-score",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BONE_T_SUSPECTED",
+      "target_condition": "OSTEOPOROSIS_T_SCORE",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "BONE_DENSITY_T_SCORE",
+        "op": "lte",
+        "value": -2.5
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 골다공증 T-score",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BONE_QCT_NORMAL_A",
+      "target_condition": "OSTEOPOROSIS_PERIPHERAL",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "PERIPHERAL_BONE_DENSITY",
+        "op": "gt",
+        "value": 120
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 말단골 골밀도",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BONE_QCT_NORMAL_B",
+      "target_condition": "OSTEOPOROSIS_PERIPHERAL",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "PERIPHERAL_BONE_DENSITY",
+            "op": "gte",
+            "value": 80
+          },
+          {
+            "field": "PERIPHERAL_BONE_DENSITY",
+            "op": "lte",
+            "value": 120
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 말단골 골밀도",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BONE_QCT_SUSPECTED",
+      "target_condition": "OSTEOPOROSIS_PERIPHERAL",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "PERIPHERAL_BONE_DENSITY",
+        "op": "lt",
+        "value": 80
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 말단골 골밀도",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "LOWER_LIMB_NORMAL_A",
+      "target_condition": "OLDER_ADULT_LOWER_LIMB",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "LOWER_LIMB_FUNCTION_SECONDS",
+        "op": "lte",
+        "value": 10
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 하지기능",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "LOWER_LIMB_NORMAL_B",
+      "target_condition": "OLDER_ADULT_LOWER_LIMB",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "LOWER_LIMB_FUNCTION_SECONDS",
+            "op": "gte",
+            "value": 11
+          },
+          {
+            "field": "LOWER_LIMB_FUNCTION_SECONDS",
+            "op": "lte",
+            "value": 19
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 하지기능",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "LOWER_LIMB_SUSPECTED",
+      "target_condition": "OLDER_ADULT_LOWER_LIMB",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "LOWER_LIMB_FUNCTION_SECONDS",
+        "op": "gte",
+        "value": 20
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 하지기능",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BALANCE_CLOSED_NORMAL_A",
+      "target_condition": "OLDER_ADULT_BALANCE_CLOSED",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "BALANCE_EYES_CLOSED_SECONDS",
+        "op": "gte",
+        "value": 15
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 평형성(눈감은 상태)",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BALANCE_CLOSED_NORMAL_B",
+      "target_condition": "OLDER_ADULT_BALANCE_CLOSED",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "BALANCE_EYES_CLOSED_SECONDS",
+            "op": "gte",
+            "value": 6
+          },
+          {
+            "field": "BALANCE_EYES_CLOSED_SECONDS",
+            "op": "lte",
+            "value": 14
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 평형성(눈감은 상태)",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BALANCE_CLOSED_SUSPECTED",
+      "target_condition": "OLDER_ADULT_BALANCE_CLOSED",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "BALANCE_EYES_CLOSED_SECONDS",
+        "op": "lte",
+        "value": 5
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 평형성(눈감은 상태)",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BALANCE_OPEN_NORMAL_A",
+      "target_condition": "OLDER_ADULT_BALANCE_OPEN",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "BALANCE_EYES_OPEN_SECONDS",
+        "op": "gte",
+        "value": 20
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 평형성(눈 뜬 상태)",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "BALANCE_OPEN_NORMAL_B",
+      "target_condition": "OLDER_ADULT_BALANCE_OPEN",
+      "result_code": "NORMAL_B",
+      "result_label_original": "정상B(경계)",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "BALANCE_EYES_OPEN_SECONDS",
+            "op": "gte",
+            "value": 10
+          },
+          {
+            "field": "BALANCE_EYES_OPEN_SECONDS",
+            "op": "lte",
+            "value": 19
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 평형성(눈 뜬 상태)",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "BALANCE_OPEN_SUSPECTED",
+      "target_condition": "OLDER_ADULT_BALANCE_OPEN",
+      "result_code": "DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "BALANCE_EYES_OPEN_SECONDS",
+        "op": "lte",
+        "value": 9
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 평형성(눈 뜬 상태)",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "PHQ9_NONE",
+      "target_condition": "DEPRESSION_SCREEN",
+      "result_code": "PHQ9_NONE",
+      "result_label_original": "우울증상이 없음",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "PHQ9_TOTAL",
+            "op": "gte",
+            "value": 0
+          },
+          {
+            "field": "PHQ9_TOTAL",
+            "op": "lte",
+            "value": 4
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 PHQ-9",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "PHQ9_MILD",
+      "target_condition": "DEPRESSION_SCREEN",
+      "result_code": "PHQ9_MILD",
+      "result_label_original": "가벼운 우울증상",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "PHQ9_TOTAL",
+            "op": "gte",
+            "value": 5
+          },
+          {
+            "field": "PHQ9_TOTAL",
+            "op": "lte",
+            "value": 9
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 PHQ-9",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "PHQ9_MODERATE",
+      "target_condition": "DEPRESSION_SCREEN",
+      "result_code": "PHQ9_MODERATE_SUSPECTED",
+      "result_label_original": "중간정도 우울증 의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "PHQ9_TOTAL",
+            "op": "gte",
+            "value": 10
+          },
+          {
+            "field": "PHQ9_TOTAL",
+            "op": "lte",
+            "value": 19
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 PHQ-9",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "PHQ9_SEVERE",
+      "target_condition": "DEPRESSION_SCREEN",
+      "result_code": "PHQ9_SEVERE_SUSPECTED",
+      "result_label_original": "심한 우울증 의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 40,
+      "expression": {
+        "any": [
+          {
+            "field": "PHQ9_TOTAL",
+            "op": "gte",
+            "value": 20
+          },
+          {
+            "field": "PHQ9_ITEM9",
+            "op": "gte",
+            "value": 1
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 PHQ-9",
+      "notes": "9번 문항 1점 이상은 총점과 무관하게 우선 적용",
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "CAPE15_NO_REMARK",
+      "target_condition": "EARLY_PSYCHOSIS_SCREEN",
+      "result_code": "CAPE15_NO_REMARK",
+      "result_label_original": "특이소견 없음",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "all": [
+              {
+                "field": "CAPE15_FREQUENCY_TOTAL",
+                "op": "gte",
+                "value": 0
+              },
+              {
+                "field": "CAPE15_FREQUENCY_TOTAL",
+                "op": "lte",
+                "value": 5
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "field": "CAPE15_DISTRESS_TOTAL",
+                "op": "gte",
+                "value": 0
+              },
+              {
+                "field": "CAPE15_DISTRESS_TOTAL",
+                "op": "lte",
+                "value": 5
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 CAPE-15",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "CAPE15_REFERRAL",
+      "target_condition": "EARLY_PSYCHOSIS_SCREEN",
+      "result_code": "CAPE15_SPECIALIST_REQUIRED",
+      "result_label_original": "전문의 진단 필요",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "any": [
+          {
+            "field": "CAPE15_FREQUENCY_TOTAL",
+            "op": "gte",
+            "value": 6
+          },
+          {
+            "field": "CAPE15_DISTRESS_TOTAL",
+            "op": "gte",
+            "value": 6
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 CAPE-15",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "KDSQC_NO_REMARK",
+      "target_condition": "COGNITIVE_SCREEN",
+      "result_code": "KDSQC_NO_REMARK",
+      "result_label_original": "특이소견 없음",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "KDSQC_TOTAL",
+            "op": "gte",
+            "value": 0
+          },
+          {
+            "field": "KDSQC_TOTAL",
+            "op": "lte",
+            "value": 5
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 KDSQ-C",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "KDSQC_SUSPECTED",
+      "target_condition": "COGNITIVE_SCREEN",
+      "result_code": "KDSQC_DECLINE_SUSPECTED",
+      "result_label_original": "인지기능 저하 의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "KDSQC_TOTAL",
+            "op": "gte",
+            "value": 6
+          },
+          {
+            "field": "KDSQC_TOTAL",
+            "op": "lte",
+            "value": 30
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 KDSQ-C",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "WHISPER_PASS",
+      "target_condition": "HEARING_WHISPER",
+      "result_code": "HEARING_PASS",
+      "result_label_original": "정상(통과)",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "WHISPER_LEFT_CORRECT",
+            "op": "gte",
+            "value": 3
+          },
+          {
+            "field": "WHISPER_RIGHT_CORRECT",
+            "op": "gte",
+            "value": 3
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 귓속말 검사",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "WHISPER_REFERRAL",
+      "target_condition": "HEARING_WHISPER",
+      "result_code": "HEARING_REFERRAL",
+      "result_label_original": "질환의심(의뢰)",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "any": [
+          {
+            "field": "WHISPER_LEFT_CORRECT",
+            "op": "lt",
+            "value": 3
+          },
+          {
+            "field": "WHISPER_RIGHT_CORRECT",
+            "op": "lt",
+            "value": 3
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 귓속말 검사",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "PURE_TONE_PASS",
+      "target_condition": "HEARING_PURE_TONE",
+      "result_code": "HEARING_PASS",
+      "result_label_original": "정상(통과)",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "PURE_TONE_DB",
+        "op": "lt",
+        "value": 40
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 순음청력검사",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "PURE_TONE_REFERRAL",
+      "target_condition": "HEARING_PURE_TONE",
+      "result_code": "HEARING_REFERRAL",
+      "result_label_original": "질환의심(의뢰)",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "PURE_TONE_DB",
+        "op": "gte",
+        "value": 40
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 순음청력검사",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "SPIRO_BASIC_NORMAL",
+      "target_condition": "PULMONARY_BASIC",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "FEV1_FVC_PERCENT",
+            "op": "gte",
+            "value": 70
+          },
+          {
+            "field": "FEV1_PERCENT",
+            "op": "gte",
+            "value": 80
+          },
+          {
+            "field": "FVC_PERCENT",
+            "op": "gte",
+            "value": 80
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 기본 폐기능검사",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "SPIRO_BASIC_COPD",
+      "target_condition": "PULMONARY_BASIC",
+      "result_code": "COPD_SUSPECTED",
+      "result_label_original": "만성폐쇄성폐질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 40,
+      "expression": {
+        "field": "FEV1_FVC_PERCENT",
+        "op": "lt",
+        "value": 70
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 기본 폐기능검사",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "SPIRO_BASIC_OTHER",
+      "target_condition": "PULMONARY_BASIC",
+      "result_code": "OTHER_PULMONARY_ABNORMALITY",
+      "result_label_original": "기타 폐기능 이상",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "FEV1_FVC_PERCENT",
+            "op": "gte",
+            "value": 70
+          },
+          {
+            "any": [
+              {
+                "field": "FEV1_PERCENT",
+                "op": "lt",
+                "value": 80
+              },
+              {
+                "field": "FVC_PERCENT",
+                "op": "lt",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 기본 폐기능검사",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "SPIRO_SIMPLE_NORMAL",
+      "target_condition": "PULMONARY_SIMPLE",
+      "result_code": "NORMAL_A",
+      "result_label_original": "정상A",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "all": [
+          {
+            "field": "FEV1_FEV6_PERCENT",
+            "op": "gte",
+            "value": 73
+          },
+          {
+            "field": "FEV1_PERCENT",
+            "op": "gte",
+            "value": 80
+          },
+          {
+            "field": "FEV6_PERCENT",
+            "op": "gte",
+            "value": 80
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 간이 호흡기능검사",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "SPIRO_SIMPLE_COPD",
+      "target_condition": "PULMONARY_SIMPLE",
+      "result_code": "COPD_SUSPECTED",
+      "result_label_original": "만성폐쇄성폐질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 40,
+      "expression": {
+        "field": "FEV1_FEV6_PERCENT",
+        "op": "lt",
+        "value": 73
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 간이 호흡기능검사",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "SPIRO_SIMPLE_OTHER",
+      "target_condition": "PULMONARY_SIMPLE",
+      "result_code": "OTHER_PULMONARY_ABNORMALITY",
+      "result_label_original": "기타 폐기능 이상",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "all": [
+          {
+            "field": "FEV1_FEV6_PERCENT",
+            "op": "gte",
+            "value": 73
+          },
+          {
+            "any": [
+              {
+                "field": "FEV1_PERCENT",
+                "op": "lt",
+                "value": 80
+              },
+              {
+                "field": "FEV6_PERCENT",
+                "op": "lt",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 2쪽 간이 호흡기능검사",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "DENTAL_CARIES_ABSENT",
+      "target_condition": "ORAL_DENTAL_CARIES",
+      "result_code": "ORAL_GOOD",
+      "result_label_original": "양호",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "DENTAL_CARIES",
+        "op": "eq",
+        "value": "ABSENT"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 우식치아",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "DENTAL_CARIES_SUSPECTED_ABSENT",
+      "target_condition": "ORAL_DENTAL_CARIES_SUSPECTED",
+      "result_code": "ORAL_GOOD",
+      "result_label_original": "양호",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "DENTAL_CARIES_SUSPECTED",
+        "op": "eq",
+        "value": "ABSENT"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 우식의심치아",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "DENTAL_RESTORATION_ABSENT",
+      "target_condition": "ORAL_DENTAL_RESTORATION",
+      "result_code": "ORAL_GOOD",
+      "result_label_original": "양호",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "DENTAL_RESTORATION",
+        "op": "eq",
+        "value": "ABSENT"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 수복치아",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "DENTAL_MISSING_ABSENT",
+      "target_condition": "ORAL_DENTAL_MISSING",
+      "result_code": "ORAL_GOOD",
+      "result_label_original": "양호",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "DENTAL_MISSING",
+        "op": "eq",
+        "value": "ABSENT"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 상실치아",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "DENTAL_CARIES_PRESENT",
+      "target_condition": "ORAL_DENTAL_CARIES",
+      "result_code": "ORAL_TREATMENT_REQUIRED",
+      "result_label_original": "치료필요",
+      "normalized_status": "TREATMENT_REQUIRED",
+      "severity_rank": 3,
+      "priority": 40,
+      "expression": {
+        "field": "DENTAL_CARIES",
+        "op": "eq",
+        "value": "PRESENT"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 우식치아",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "DENTAL_CARIES_SUSPECTED_PRESENT",
+      "target_condition": "ORAL_DENTAL_CARIES_SUSPECTED",
+      "result_code": "ORAL_DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "DENTAL_CARIES_SUSPECTED",
+        "op": "eq",
+        "value": "PRESENT"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 우식의심치아",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "DENTAL_RESTORATION_PRESENT",
+      "target_condition": "ORAL_DENTAL_RESTORATION",
+      "result_code": "ORAL_CAUTION",
+      "result_label_original": "주의",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "field": "DENTAL_RESTORATION",
+        "op": "eq",
+        "value": "PRESENT"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 수복치아",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "DENTAL_MISSING_PRESENT",
+      "target_condition": "ORAL_DENTAL_MISSING",
+      "result_code": "ORAL_TREATMENT_REQUIRED",
+      "result_label_original": "치료필요",
+      "normalized_status": "TREATMENT_REQUIRED",
+      "severity_rank": 3,
+      "priority": 40,
+      "expression": {
+        "field": "DENTAL_MISSING",
+        "op": "eq",
+        "value": "PRESENT"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 상실치아",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "GINGIVITIS_NONE",
+      "target_condition": "ORAL_GINGIVITIS",
+      "result_code": "ORAL_GOOD",
+      "result_label_original": "양호",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "GINGIVITIS",
+        "op": "eq",
+        "value": "NONE"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치은염증",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "GINGIVITIS_MILD",
+      "target_condition": "ORAL_GINGIVITIS",
+      "result_code": "ORAL_DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "GINGIVITIS",
+        "op": "eq",
+        "value": "MILD"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치은염증",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "GINGIVITIS_SEVERE",
+      "target_condition": "ORAL_GINGIVITIS",
+      "result_code": "ORAL_TREATMENT_REQUIRED",
+      "result_label_original": "치료필요",
+      "normalized_status": "TREATMENT_REQUIRED",
+      "severity_rank": 3,
+      "priority": 40,
+      "expression": {
+        "field": "GINGIVITIS",
+        "op": "eq",
+        "value": "SEVERE"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치은염증",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "CALCULUS_NONE",
+      "target_condition": "ORAL_CALCULUS",
+      "result_code": "ORAL_GOOD",
+      "result_label_original": "양호",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "CALCULUS",
+        "op": "eq",
+        "value": "NONE"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치석",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "CALCULUS_MILD",
+      "target_condition": "ORAL_CALCULUS",
+      "result_code": "ORAL_DISEASE_SUSPECTED",
+      "result_label_original": "질환의심",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "CALCULUS",
+        "op": "eq",
+        "value": "MILD"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치석",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "CALCULUS_SEVERE",
+      "target_condition": "ORAL_CALCULUS",
+      "result_code": "ORAL_TREATMENT_REQUIRED",
+      "result_label_original": "치료필요",
+      "normalized_status": "TREATMENT_REQUIRED",
+      "severity_rank": 3,
+      "priority": 40,
+      "expression": {
+        "field": "CALCULUS",
+        "op": "eq",
+        "value": "SEVERE"
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치석",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "PLAQUE_GOOD",
+      "target_condition": "ORAL_PLAQUE",
+      "result_code": "ORAL_GOOD",
+      "result_label_original": "우수",
+      "normalized_status": "NORMAL_A",
+      "severity_rank": 0,
+      "priority": 10,
+      "expression": {
+        "field": "PLAQUE_SCORE",
+        "op": "lt",
+        "value": 1
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치면세균막검사",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    },
+    {
+      "rule_id": "PLAQUE_CAUTION",
+      "target_condition": "ORAL_PLAQUE",
+      "result_code": "ORAL_CAUTION",
+      "result_label_original": "보통",
+      "normalized_status": "NORMAL_B",
+      "severity_rank": 1,
+      "priority": 20,
+      "expression": {
+        "all": [
+          {
+            "field": "PLAQUE_SCORE",
+            "op": "gte",
+            "value": 1
+          },
+          {
+            "field": "PLAQUE_SCORE",
+            "op": "lt",
+            "value": 3
+          }
+        ]
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치면세균막검사",
+      "notes": null,
+      "rule_type": "COMPOSITE"
+    },
+    {
+      "rule_id": "PLAQUE_SUSPECTED",
+      "target_condition": "ORAL_PLAQUE",
+      "result_code": "ORAL_DISEASE_SUSPECTED",
+      "result_label_original": "개선요망",
+      "normalized_status": "DISEASE_SUSPECTED",
+      "severity_rank": 2,
+      "priority": 30,
+      "expression": {
+        "field": "PLAQUE_SCORE",
+        "op": "gte",
+        "value": 3
+      },
+      "source_document_code": "MOHW_SCREENING_2026_6_APPENDIX_4_DETAIL",
+      "source_locator": "별표4의 별첨 3쪽 치면세균막검사",
+      "notes": null,
+      "rule_type": "ATOMIC"
+    }
+  ],
+  "boundary_cases": [
+    {
+      "id": "glucose_99",
+      "target": "DIABETES",
+      "values": {
+        "FASTING_GLUCOSE": 99
+      },
+      "expected": "NORMAL_A"
+    },
+    {
+      "id": "glucose_100",
+      "target": "DIABETES",
+      "values": {
+        "FASTING_GLUCOSE": 100
+      },
+      "expected": "NORMAL_B"
+    },
+    {
+      "id": "glucose_125",
+      "target": "DIABETES",
+      "values": {
+        "FASTING_GLUCOSE": 125
+      },
+      "expected": "NORMAL_B"
+    },
+    {
+      "id": "glucose_126",
+      "target": "DIABETES",
+      "values": {
+        "FASTING_GLUCOSE": 126
+      },
+      "expected": "DISEASE_SUSPECTED"
+    },
+    {
+      "id": "bp_normal",
+      "target": "HYPERTENSION",
+      "values": {
+        "SYSTOLIC_BP": 119,
+        "DIASTOLIC_BP": 79
+      },
+      "expected": "NORMAL_A"
+    },
+    {
+      "id": "bp_border_diastolic",
+      "target": "HYPERTENSION",
+      "values": {
+        "SYSTOLIC_BP": 119,
+        "DIASTOLIC_BP": 80
+      },
+      "expected": "NORMAL_B"
+    },
+    {
+      "id": "bp_suspected_systolic",
+      "target": "HYPERTENSION",
+      "values": {
+        "SYSTOLIC_BP": 140,
+        "DIASTOLIC_BP": 79
+      },
+      "expected": "DISEASE_SUSPECTED"
+    },
+    {
+      "id": "hdl_39",
+      "target": "DYSLIPIDEMIA_HDL",
+      "values": {
+        "HDL_CHOLESTEROL": 39
+      },
+      "expected": "DISEASE_SUSPECTED"
+    },
+    {
+      "id": "hdl_40",
+      "target": "DYSLIPIDEMIA_HDL",
+      "values": {
+        "HDL_CHOLESTEROL": 40
+      },
+      "expected": "NORMAL_B"
+    },
+    {
+      "id": "hdl_60",
+      "target": "DYSLIPIDEMIA_HDL",
+      "values": {
+        "HDL_CHOLESTEROL": 60
+      },
+      "expected": "NORMAL_A"
+    },
+    {
+      "id": "phq_item9_override",
+      "target": "DEPRESSION_SCREEN",
+      "values": {
+        "PHQ9_TOTAL": 8,
+        "PHQ9_ITEM9": 1
+      },
+      "expected": "PHQ9_SEVERE_SUSPECTED"
+    },
+    {
+      "id": "cape_distress_override",
+      "target": "EARLY_PSYCHOSIS_SCREEN",
+      "values": {
+        "CAPE15_FREQUENCY_TOTAL": 2,
+        "CAPE15_DISTRESS_TOTAL": 6
+      },
+      "expected": "CAPE15_SPECIALIST_REQUIRED"
+    },
+    {
+      "id": "hearing_one_ear_fail",
+      "target": "HEARING_WHISPER",
+      "values": {
+        "WHISPER_LEFT_CORRECT": 3,
+        "WHISPER_RIGHT_CORRECT": 2
+      },
+      "expected": "HEARING_REFERRAL"
+    },
+    {
+      "id": "spiro_basic_copd",
+      "target": "PULMONARY_BASIC",
+      "values": {
+        "FEV1_FVC_PERCENT": 69,
+        "FEV1_PERCENT": 90,
+        "FVC_PERCENT": 90
+      },
+      "expected": "COPD_SUSPECTED"
+    },
+    {
+      "id": "spiro_basic_other",
+      "target": "PULMONARY_BASIC",
+      "values": {
+        "FEV1_FVC_PERCENT": 70,
+        "FEV1_PERCENT": 79,
+        "FVC_PERCENT": 90
+      },
+      "expected": "OTHER_PULMONARY_ABNORMALITY"
+    },
+    {
+      "id": "plaque_1",
+      "target": "ORAL_PLAQUE",
+      "values": {
+        "PLAQUE_SCORE": 1
+      },
+      "expected": "ORAL_CAUTION"
+    },
+    {
+      "id": "plaque_3",
+      "target": "ORAL_PLAQUE",
+      "values": {
+        "PLAQUE_SCORE": 3
+      },
+      "expected": "ORAL_DISEASE_SUSPECTED"
+    }
+  ]
+}
