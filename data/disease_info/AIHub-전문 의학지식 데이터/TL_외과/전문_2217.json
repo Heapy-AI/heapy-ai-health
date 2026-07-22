@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 2217,
-    "domain": 1,
-    "q_type": 1,
-    "question": "신경섬유종증(NF, Neurofibromatosis) type 1과 type 2의 tumor suppressor gene에 대한 설명 중 옳은 것은?  \n1) NF-1 유전자는 17번 염색체에 위치하며, 생성되는 단백질은 neurofibromin이다.  \n2) NF-1 유전자는 유전자 전사 조절 인자(transcriptional regulator)로 작용한다.  \n3) NF-1 유전자가 손상되면 ras 단백질의 활성이 증가하여 세포의 비정상적인 성장이 유발된다.  \n4) NF-2 유전자는 22번 염색체에 위치하며, 생성되는 단백질은 merlin(schwannomin)이다.  \n5) NF-1 유전자 돌연변이는 신경섬유종증 type 1에 특이적이며, meningioma나 sarcoma와의 감별 진단에 사용된다.",
-    "answer": "3) NF-1 유전자가 손상되면 ras 단백질의 활성이 증가하여 세포의 비정상적인 성장이 유발된다."
-}

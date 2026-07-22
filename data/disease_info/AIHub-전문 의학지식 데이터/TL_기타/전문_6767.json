@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 6767,
-    "domain": 13,
-    "q_type": 1,
-    "question": "Camostat mesilate와 nafamostat mesilate는 SARS-CoV-2 바이러스의 세포 진입을 억제하는 기전으로 작용한다. 이 약물들이 억제하는 주요 단백질은 무엇인가?  \n1) ACE2 수용체  \n2) TMPRSS2 단백분해효소  \n3) RNA 중합효소  \n4) 역전사효소  \n5) 단백질 합성효소",
-    "answer": "2) TMPRSS2 단백분해효소"
-}

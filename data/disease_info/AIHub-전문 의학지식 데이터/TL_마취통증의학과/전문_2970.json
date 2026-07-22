@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 2970,
-    "domain": 11,
-    "q_type": 1,
-    "question": "다음 중 수술 전에 심박동 조율기(pacemaker)의 삽입을 고려하지 않아도 되는 경우는 무엇인가?  \n1) 3도 방실차단 (third-degree A-V block) \n2) 증상이 있는 Mobitz type Ⅰ 방실차단  \n3) 잦은 동정지(sinus pause)를 동반하는 심박수 40회/분 미만의 서맥  \n4) 다소성심실조기수축(Multifocal ventricular premature contraction) \n5) QRS widening을 동반하는 Mobitz typeⅡ 방실차단",
-    "answer": "4) 다소성심실조기수축(Multifocal ventricular premature contraction)"
-}

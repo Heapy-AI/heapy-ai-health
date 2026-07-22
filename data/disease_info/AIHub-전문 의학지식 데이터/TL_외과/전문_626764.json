@@ -1,7 +1,0 @@
-﻿{
-    "qa_id": 626764,
-    "domain": 1,
-    "q_type": 1,
-    "question": "65세 남성이 최근 체중 감소와 함께 소화불량을 호소하며 내원하였다. 복부 CT 검사 결과 췌장에 종양이 발견되었고, 조직 검사에서 gastrin-releasing peptide receptor (GRPR)의 과발현이 확인되었다. GRPR은 G 단백질 연결 수용체(GPCR)로 알려져 있다. 이 수용체의 활성화로 인해 주로 관여하는 신호전달 경로는 무엇인가?  \n1) JAK-STAT 경로  \n2) PI3K-AKT 경로  \n3) NF-kB 경로  \n4) Wnt/β-catenin 경로  \n5) Phospholipase C 경로",
-    "answer": "5) Phospholipase C 경로"
-}
