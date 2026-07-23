@@ -202,4 +202,4 @@ data/
 #vdb/chunk/
 
 # 벡터DB 인덱스는 Git LFS로 추적합니다.
-# vdb/chroma/  # 일반 Git 추적에서 제외하지 않음
+vdb/chroma/  
