@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heapy AI health care - Pipeline</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: #fafafa;
+    color: #222;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    padding: 12px 20px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; font-weight: 600; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .controls button {
+    border: 1px solid #d0d0d0;
+    background: #fff;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #333;
+  }
+  .controls button:hover { background: #f0f0f0; }
+  .hint { font-size: 12px; color: #888; margin-right: 4px; }
+  #diagram-container {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  #diagram-container svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .loading {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #999;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Booster Pro X2 — AI Care Mode 파이프라인</h1>
+  <div class="controls">
+    <span class="hint">스크롤: 확대 · 드래그: 이동</span>
+    <button onclick="zoomIn()">+</button>
+    <button onclick="zoomOut()">−</button>
+    <button onclick="resetZoom()">맞춤</button>
+  </div>
+</header>
+<div id="diagram-container">
+  <div class="loading">다이어그램 로딩 중…</div>
+  <pre class="mermaid" id="mermaid-src" style="display:none">
+---
+config:
+  theme: default
+  themeVariables:
+    fontSize: 20px
+---
+flowchart LR
+  subgraph INPUT["입력"]
+    U["사용자 질문"]
+    HIST["대화 히스토리<br>(멀티턴)"]
+  end
+
+  subgraph SESSION["세션/컨텍스트 관리"]
+    S1["세션 조회"]
+    S1CHK{"기존 세션<br>존재 여부"}
+    S2["이전 턴 컨텍스트 로드<br>(최근 N턴 + 요약)"]
+    S3["질문 재구성<br>(대명사/생략 복원)"]
+    S4["신규 세션 초기화<br>(빈 히스토리)"]
+  end
+
+  subgraph DECIDER["Decider - Embedding + Linear Classifier"]
+    A1["Sentence-Transformers<br>임베딩 변환"]
+    A2["학습된 <br>Linear Layer"]
+    A3["Softmax"]
+    A4{"Intent 분류"}
+  end
+
+  subgraph SIMPLE["Simple Lookup"]
+    SC1{"쿼리 임베딩<br>캐시 조회"}
+    SC2["캐시 HIT<br>(유사도 ≥ threshold)"]
+    C1["VDB 검색 RAG"]
+    C1CHK{"검색결과 <br>유무"}
+    SC3["캐시 저장<br>(임베딩+청크, TTL)"]
+    C2["프롬프트 구성<br>(VDB + 히스토리)"]
+  end
+
+  subgraph COMPREHENSIVE["Comprehensive RAG+LLM"]
+    B1{"Sub-intent 분류<br>(다중 선택 가능)"}
+    BC1{"쿼리 임베딩<br>캐시 조회"}
+    BC2["캐시 HIT<br>(유사도 ≥ threshold)"]
+    B2["VDB 검색 RAG"]
+    B3CHK{"검색결과 <br>유무"}
+    BC3["캐시 저장<br>(임베딩+청크, TTL)"]
+    B4["프롬프트 구성<br>(VDB+RDB+히스토리+분석지시)"]
+  end
+
+  subgraph AUTH["본인인증"]
+    AU1{"세션/접근권한 <br>확인"}
+    AU2["로그인 여부 확인"]
+  end
+
+  subgraph COLLECT["컨텍스트 수집 (캐시 제외)"]
+    D1["프로필 조회"]
+    D2["필요한 데이터<br>조합"]
+  end
+
+  subgraph CHAT["General Chat"]
+    C5["프롬프트 구성<br>(자유 대화 + 히스토리)"]
+  end
+
+  subgraph IGNORE["Ignore"]
+    E1["고정 문구 반환"]
+  end
+
+  subgraph LLM["LLM (공통, 스트리밍)"]
+    L1["LLM 호출<br>(stream=True)"]
+    L1CHK{"LLM 호출 <br>성공여부"}
+    L2["토큰 스트림 생성"]
+    L3["청크 단위 전송<br>(SSE/WebSocket)"]
+    B5["응답 검증<br>(누적 후)"]
+  end
+
+  subgraph ERRHANDLE["에러/타임아웃 처리"]
+    VCHK{"응답 성공여부"}
+    RCHK{"응답 성공여부"}
+    ERRMSG["에러 안내 문구 반환"]
+  end
+
+  subgraph MONITOR["로깅/모니터링"]
+    LOG1["분류결과 로그<br>(intent, 확률, sub-intent)"]
+    LOG2["검증/에러 로그<br>(검증결과, 에러유형, 재시도횟수)"]
+    LOG3["캐시/스트리밍 로그<br>(hit율, TTFT, 토큰속도)"]
+  end
+
+  subgraph OUTPUT["출력"]
+    O1["응답 JSON / 스트림"]
+    O2["최종 응답"]
+  end
+    O3["히스토리 저장<br>(턴 append + 요약갱신)"]
+
+  subgraph DATA["데이터 저장소"]
+    RDB["RDB"]
+    VDB["VDB"]
+    HDB["세션/히스토리<br>(Redis)"]
+    QCACHE["쿼리 캐시<br>(Redis)"]
+  end
+
+  U --> S1
+  HIST -. 로드 .-> S2
+  S1 -. 조회 .-> HDB
+  S1 --> S1CHK
+  S1CHK -- "기존 세션" --> S2
+  S1CHK -- "신규 세션(콜드 스타트)" --> S4
+  S2 --> S3
+  S3 -- "재구성된 질문" --> A1
+  S4 -- "원문 질문" --> A1
+
+  A1 -- 벡터 --> A2
+  A2 -- 확률 --> A3
+  A3 -- intent --> A4
+  A4 -. 분류결과 .-> LOG1
+
+  A4 -- simple_lookup --> SC1
+  A4 -- comprehensive --> B1
+  A4 -- general_chat --> C5
+  A4 -- ignore --> E1
+
+  SC1 -. 조회 .-> QCACHE
+  SC1 -- HIT --> SC2
+  SC1 -- MISS --> C1
+  SC2 -- 청크 재사용 --> C2
+  C1 -. 검색 .-> VDB
+
+  VCHK -- 성공 --> C1CHK
+  VCHK -- "실패(재시도 초과)" --> ERRMSG
+  C1CHK -- 있음 --> SC3
+  SC3 -. 저장 .-> QCACHE
+  SC3 --> C2
+  C1CHK -- "없음(일반대화 전환)" --> C5
+  C2 -- "짧은 프롬프트" --> L1
+
+  B1 -- "콜렉션 list<br>[건강검진,질병정보,복약]" --> BC1
+  BC1 -. 조회 .-> QCACHE
+  BC1 -- HIT --> BC2
+  BC2 -- 청크 재사용 --> B4
+  BC1 -- MISS --> B2
+  B2 -. 검색 .-> VDB
+  VDB -. 응답 .-> VCHK
+  VCHK -- 성공 --> B3CHK
+  B2 -. 병렬조회 .-> AU1
+
+  AU1 -- 인증성공 --> D1
+  AU1 -- 인증실패 --> AU2
+  AU2 --> O2
+
+  D1 -. 조회 .-> RDB
+  RDB -. 응답 .-> RCHK
+  RCHK -- 성공 --> D2
+  RCHK -- "실패(재시도 초과)" --> ERRMSG
+  D1 -- 검진/복약/생활 --> D2
+  D2 -- 컨텍스트 --> B4
+
+  B3CHK -- 있음 --> BC3
+  BC3 -. 저장 .-> QCACHE
+  BC3 --> B4
+  B3CHK -- "없음(일반대화 전환)" --> C5
+  B4 -- "긴 프롬프트" --> L1
+
+  C5 -- "자유 대화 프롬프트" --> L1
+
+  L1 -- LLM 응답 --> L1CHK
+  L1CHK -- 성공 --> L2
+  L1CHK -- "실패(재시도 초과)" --> ERRMSG
+  L2 --> L3
+  L3 -- "스트림 청크" --> O1
+  L3 --> B5
+  B5 -- 검증 --> O1
+  B5 -. 검증결과 .-> LOG2
+  ERRMSG -. 에러로그 .-> LOG2
+  ERRMSG --> O1
+  SC1 -. hit율 .-> LOG3
+  BC1 -. hit율 .-> LOG3
+  L3 -. TTFT/속도 .-> LOG3
+
+  E1 -- 고정 문구 --> O1
+  O1 --> O2
+  O2 --> O3
+  O3 -. 저장 .-> HDB
+
+  U:::input
+  HIST:::input
+  S1:::session
+  S1CHK:::check
+  S2:::session
+  S3:::session
+  S4:::session
+  A1:::a
+  A2:::a
+  A3:::a
+  A4:::a
+  SC1:::cache
+  SC2:::cache
+  SC3:::cache
+  C1:::c
+  C1CHK:::check
+  C2:::c
+  B1:::b
+  BC1:::cache
+  BC2:::cache
+  BC3:::cache
+  B2:::b
+  B3CHK:::check
+  B4:::b
+  B5:::b
+  AU1:::auth
+  AU2:::auth
+  D1:::d
+  D2:::d
+  C5:::c
+  E1:::e
+  L1:::llm
+  L1CHK:::check
+  L2:::llm
+  L3:::llm
+  VCHK:::check
+  RCHK:::check
+  ERRMSG:::err
+  LOG1:::monitor
+  LOG2:::monitor
+  LOG3:::monitor
+  O1:::output
+  O2:::output
+  O3:::output
+  RDB:::store
+  VDB:::store
+  HDB:::store
+  QCACHE:::store
+
+  classDef a fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+  classDef b fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+  classDef c fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+  classDef d fill:#fff3e0,stroke:#e65100,stroke-width:2px
+  classDef e fill:#f5f5f5,stroke:#616161,stroke-width:2px
+  classDef llm fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+  classDef store fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+  classDef input fill:#fffde7,stroke:#f57f17,stroke-width:2px
+  classDef output fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+  classDef check fill:#fff59d,stroke:#f9a825,stroke-width:2px
+  classDef auth fill:#ffccbc,stroke:#bf360c,stroke-width:2px
+  classDef err fill:#ffcdd2,stroke:#b71c1c,stroke-width:2px
+  classDef monitor fill:#cfd8dc,stroke:#37474f,stroke-width:2px
+  classDef session fill:#d1c4e9,stroke:#311b92,stroke-width:2px
+  classDef cache fill:#b2dfdb,stroke:#004d40,stroke-width:2px
+  </pre>
+</div>
+
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', maxTextSize: 200000 });
+
+let panZoom = null;
+
+async function render() {
+  const src = document.getElementById('mermaid-src').textContent;
+  const { svg } = await mermaid.render('generated-diagram', src);
+  const container = document.getElementById('diagram-container');
+  container.innerHTML = svg;
+
+  const svgEl = container.querySelector('svg');
+  svgEl.setAttribute('width', '100%');
+  svgEl.setAttribute('height', '100%');
+  svgEl.style.maxWidth = 'none';
+
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js';
+  script.onload = () => {
+    panZoom = svgPanZoom(svgEl, {
+      zoomEnabled: true,
+      controlIconsEnabled: false,
+      fit: true,
+      center: true,
+      minZoom: 0.1,
+      maxZoom: 20,
+      zoomScaleSensitivity: 0.3
+    });
+    window.addEventListener('resize', () => { panZoom.resize(); panZoom.fit(); panZoom.center(); });
+  };
+  document.head.appendChild(script);
+}
+
+window.zoomIn = () => panZoom && panZoom.zoomBy(1.3);
+window.zoomOut = () => panZoom && panZoom.zoomBy(0.77);
+window.resetZoom = () => { if (panZoom) { panZoom.resize(); panZoom.fit(); panZoom.center(); } };
+
+render();
+</script>
+</body>
+</html>
