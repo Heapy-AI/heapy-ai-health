@@ -202,4 +202,6 @@ data/
 #vdb/chunk/
 
 # 벡터DB 인덱스는 Git LFS로 추적합니다.
-# vdb/chroma/  # 일반 Git 추적에서 제외하지 않음
+# Pinecone을 사용하므로 로컬 벡터 인덱스와 적재 체크포인트는 공유하지 않음
+vdb/chroma/
+vdb/manifest/
