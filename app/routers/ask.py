@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
-from app.core.config import EMBED_MODEL, COLLECTIONS
+from app.core.config import COLLECTIONS, SEARCH_TOP_K
 from app.core.state import state
-from app.services.rag import cite
+from app.services.rag import cite, format_docs
 from app.schemas.health_chatbot import (AskRequest, SearchHit, SearchResponse, AskResponse)
 
 
@@ -21,7 +21,7 @@ def _get_collection_or_404(collection: str):
 
 def _retrieve(collection: str, question: str):
     """질문으로 관련 청크를 검색해 Document 리스트를 돌려준다(검색만, LLM 호출 없음)."""
-    return state["retrievers"][collection].invoke(question)
+    return state["vector_search"].search(collection, question, SEARCH_TOP_K)
 
 
 def _to_sources(docs) -> list[str]:
@@ -36,10 +36,15 @@ def health():
 
     하나라도 비어 있으면 전체 ready=False — 배포 직후 '준비 안 됨'을 빨리 알 수 있습니다.
     """
-    vectorstores = state.get("vectorstores", {})
-    counts = {name: vs._collection.count() for name, vs in vectorstores.items()}
+    counts = state.get("indexed_chunks", {})
     ready = bool(state.get("ready")) and all(c > 0 for c in counts.values()) and len(counts) > 0
-    return {"status": "ok", "ready": ready, "indexed_chunks": counts, "embed_model": EMBED_MODEL}
+    return {
+        "status": "ok",
+        "ready": ready,
+        "vector_backend": state.get("backend", "unknown"),
+        "indexed_chunks": counts,
+        "embed_model": state.get("embed_model", "unknown"),
+    }
 
 
 # ── /search — LLM 없이 검색 결과만(빠르고 저렴) ──
@@ -66,7 +71,12 @@ def ask(req: AskRequest):
     """
     _get_collection_or_404(req.collection)
     docs = _retrieve(req.collection, req.question)
-    answer = state["chains"][req.collection].invoke(req.question)
+    answer = state["answer_chain"].invoke(
+        {
+            "context": format_docs(docs),
+            "question": req.question,
+        }
+    )
     grounded = NOT_GROUNDED_MARK not in answer
     sources = _to_sources(docs) if grounded else []
     return AskResponse(answer=answer, sources=sources, grounded=grounded)

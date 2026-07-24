@@ -1,4 +1,2 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-# Large Chroma vector index files should be managed by Git LFS
-vdb/chroma/** filter=lfs diff=lfs merge=lfs -text

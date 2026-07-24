@@ -12,6 +12,7 @@ def _find_root(start: Path) -> Path:
 
 ROOT = _find_root(Path(__file__).resolve().parent)
 DATA = ROOT / "data"
+CHUNK_ROOT = ROOT / "vdb" / "chunk"
 
 load_dotenv(ROOT / ".env")                 # .env 의 GEMINI_API_KEY / GOOGLE_API_KEY 읽기
 load_dotenv()                              # 현재 작업 폴더의 .env 도 한 번 더(보강)
@@ -26,13 +27,18 @@ os.environ["GOOGLE_API_KEY"] = google_key
 
 MODEL = "gemini-2.5-flash"                     # 답변 생성에 쓸 모델 이름
 EMBED_MODEL = "jhgan/ko-sroberta-multitask"    # 한국어 무료 임베딩(API 비용 0)
-PERSIST_DIR = str(ROOT / "vdb" / "chroma")     # Chroma 영속화 폴더 (지난 구조 논의와 일치)
-DOCS_DIR = DATA / "disease_info"               # 질병정보 원천 문서 폴더
+PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY", "").strip()
+PINECONE_INDEX_NAME = os.environ.get(
+    "PINECONE_INDEX_NAME",
+    "heapy-rag",
+).strip()
+PINECONE_DIMENSION = 768
+PINECONE_METRIC = "cosine"
+SEARCH_TOP_K = 3
 
-# Chroma DB collection name
+# vdb/chunk의 하위 폴더를 Pinecone namespace로 사용한다.
 COLLECTIONS = {
-    "disease_info": DATA / "disease_info",
-    "health_checkup_info": DATA / "health_checkup_info",
-    # "medication_info": DATA / "medication_info",
-    # "lifestyle_info": DATA / "lifestyle_info",   # 추가
+    path.name: path
+    for path in CHUNK_ROOT.iterdir()
+    if path.is_dir()
 }

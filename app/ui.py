@@ -23,7 +23,8 @@ def get_collections() -> list[str]:
     """서버 /health 의 컬렉션 목록을 가져온다(빌드 시 1회). 서버가 없으면 기본값."""
     try:
         data = requests.get(f"{API_BASE_URL}/health", timeout=5).json()
-        names = list(data.get("indexed_chunks", {}).keys())
+        counts = data.get("indexed_chunks", {}) or {}
+        names = [name for name, count in counts.items() if count > 0]
         return names or FALLBACK_COLLECTIONS
     except Exception:
         return FALLBACK_COLLECTIONS
@@ -42,6 +43,7 @@ def check_health() -> str:
             f"🔍 **서버 상태**\n\n"
             f"- **Status**: {data.get('status', 'unknown')}\n"
             f"- **Ready**: {'✅ 준비 완료' if ready else '❌ 준비 안 됨'}\n"
+            f"- **벡터 백엔드**: `{data.get('vector_backend', 'unknown')}`\n"
             f"- **임베딩 모델**: `{data.get('embed_model', 'unknown')}`\n"
             f"- **컬렉션별 인덱스**:\n{lines}"
         )
