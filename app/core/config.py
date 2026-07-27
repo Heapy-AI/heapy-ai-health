@@ -36,6 +36,15 @@ PINECONE_DIMENSION = 768
 PINECONE_METRIC = "cosine"
 SEARCH_TOP_K = 3
 
+_intent_model_value = os.environ.get(
+    "INTENT_MODEL_PATH",
+    "classifier/artifacts/intent_linear.json",
+)
+INTENT_MODEL_PATH = Path(_intent_model_value)
+if not INTENT_MODEL_PATH.is_absolute():
+    INTENT_MODEL_PATH = ROOT / INTENT_MODEL_PATH
+INTENT_MIN_CONFIDENCE = float(os.environ.get("INTENT_MIN_CONFIDENCE", "0.55"))
+
 # vdb/chunk의 하위 폴더를 Pinecone namespace로 사용한다.
 COLLECTIONS = {
     path.name: path

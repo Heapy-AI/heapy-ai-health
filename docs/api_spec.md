@@ -18,11 +18,27 @@ Pinecone 연결과 namespace별 적재 수를 반환합니다.
     "disease_info": 54330,
     "health_checkup_info": 30
   },
-  "embed_model": "jhgan/ko-sroberta-multitask"
+  "embed_model": "jhgan/ko-sroberta-multitask",
+  "intent_classifier": {
+    "ready": false,
+    "model_version": null
+  }
 }
 ```
 
 등록된 namespace 중 하나라도 0건이면 `ready=false`입니다.
+
+## `POST /intent/classify`
+
+질문을 로컬 모델로 한 번 임베딩한 뒤 Linear/Softmax 분류기로 최상위 intent를 반환합니다.
+
+요청:
+
+```json
+{"question":"최근 AST가 높은데 왜 그런가요?"}
+```
+
+응답에는 `intent`, `confidence`, intent별 `probabilities`, `uncertain`, `model_version`이 포함됩니다. 학습된 모델 artifact가 없으면 `503`을 반환합니다.
 
 ## `POST /search`
 
@@ -82,6 +98,7 @@ Pinecone 검색 청크를 근거로 Gemini 답변을 생성합니다.
 |---|---|
 | `400` | 등록되지 않은 collection |
 | `422` | 요청 필드 누락 또는 형식 오류 |
+| `503` | 학습된 intent 모델 artifact 없음 |
 | `500` | Pinecone, 임베딩 모델 또는 Gemini 호출 오류 |
 
 ## collection과 namespace
