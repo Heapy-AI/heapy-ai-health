@@ -4,7 +4,9 @@ from fastapi import FastAPI
 from app.core.state import state
 from app.services.rag import build_answer_chain
 from app.services.vector_search import build_pinecone_search_service
-from app.routers import ask
+from app.services.intent_classifier import LinearIntentClassifier
+from app.core.config import INTENT_MIN_CONFIDENCE, INTENT_MODEL_PATH
+from app.routers import ask, intent
 
 
 @asynccontextmanager
@@ -20,6 +22,22 @@ async def lifespan(app: FastAPI):
     state["indexed_chunks"] = counts
     state["ready"] = True
 
+    if INTENT_MODEL_PATH.is_file():
+        state["intent_classifier"] = LinearIntentClassifier.from_file(
+            INTENT_MODEL_PATH,
+            INTENT_MIN_CONFIDENCE,
+        )
+        print(
+            f"[lifespan] intent 분류기 준비 완료 - "
+            f"version={state['intent_classifier'].model_version}"
+        )
+    else:
+        state["intent_classifier"] = None
+        print(
+            f"[lifespan] intent 모델 없음 - 학습 후 배치 필요: "
+            f"{INTENT_MODEL_PATH}"
+        )
+
     print(
         f"[lifespan] 벡터 백엔드 준비 완료 - "
         f"backend={vector_search.backend_name}, model={vector_search.embed_model}"
@@ -32,6 +50,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="HEAPY RAG 서빙", version="1.0", lifespan=lifespan)
 app.include_router(ask.router)
+app.include_router(intent.router)
 
 # 실행 명령어: uvicorn app.main:app --reload
 # Gradio UI 실행: python run_ui.py

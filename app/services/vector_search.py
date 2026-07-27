@@ -71,9 +71,23 @@ class PineconeSearchService:
         self._index = client.Index(host=host)
         self._embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
 
-    def search(self, collection: str, question: str, top_k: int) -> list[Document]:
-        """지정 namespace에서 질문과 유사한 청크를 반환한다."""
+    def embed_query(self, question: str) -> list[float]:
+        """질문을 검색·분류에서 재사용할 768차원 벡터로 변환한다."""
         query_vector = self._embeddings.embed_query(question)
+        if len(query_vector) != PINECONE_DIMENSION:
+            raise ValueError(
+                f"질문 임베딩 차원이 올바르지 않습니다: "
+                f"{len(query_vector)} != {PINECONE_DIMENSION}"
+            )
+        return query_vector
+
+    def search_by_vector(
+        self,
+        collection: str,
+        query_vector: list[float],
+        top_k: int,
+    ) -> list[Document]:
+        """이미 계산한 질문 벡터로 지정 namespace를 검색한다."""
         if len(query_vector) != PINECONE_DIMENSION:
             raise ValueError(
                 f"질문 임베딩 차원이 올바르지 않습니다: "
@@ -99,6 +113,11 @@ class PineconeSearchService:
             metadata["score"] = float(_read_value(match, "score", 0.0) or 0.0)
             documents.append(Document(page_content=page_content, metadata=metadata))
         return documents
+
+    def search(self, collection: str, question: str, top_k: int) -> list[Document]:
+        """질문을 임베딩한 뒤 지정 namespace에서 유사 청크를 반환한다."""
+        query_vector = self.embed_query(question)
+        return self.search_by_vector(collection, query_vector, top_k)
 
     def counts(self) -> dict[str, int]:
         """namespace별 적재 벡터 수를 반환한다."""

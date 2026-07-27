@@ -38,12 +38,19 @@ def health():
     """
     counts = state.get("indexed_chunks", {})
     ready = bool(state.get("ready")) and all(c > 0 for c in counts.values()) and len(counts) > 0
+    classifier = state.get("intent_classifier")
     return {
         "status": "ok",
         "ready": ready,
         "vector_backend": state.get("backend", "unknown"),
         "indexed_chunks": counts,
         "embed_model": state.get("embed_model", "unknown"),
+        "intent_classifier": {
+            "ready": classifier is not None,
+            "model_version": (
+                classifier.model_version if classifier is not None else None
+            ),
+        },
     }
 
 

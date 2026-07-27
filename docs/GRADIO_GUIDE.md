@@ -39,6 +39,12 @@ Pinecone 인덱스와 namespace별 레코드 수를 표시합니다.
 
 질문은 FastAPI에 로딩된 로컬 모델로 임베딩되고 선택한 Pinecone namespace에서 검색됩니다. Gemini를 호출하지 않습니다.
 
+## Intent
+
+질문을 로컬 모델로 임베딩한 뒤 Linear/Softmax 분류 결과를 확인합니다. 최상위 intent, 신뢰도, intent별 확률과 `uncertain` 여부를 표시합니다.
+
+학습된 `classifier/artifacts/intent_linear.json`이 없으면 Intent 탭만 사용할 수 없으며 Search와 Ask는 계속 동작합니다.
+
 ## Ask
 
 Search와 같은 Pinecone 검색 결과를 근거로 Gemini가 답변합니다. 근거가 없으면 추측하지 않고 회피합니다.

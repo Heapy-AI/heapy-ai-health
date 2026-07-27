@@ -1,10 +1,11 @@
 """
 HEAPY 건강정보 RAG — Gradio 웹 인터페이스
 
-3개 탭:
+4개 탭:
 1. Health : 서버·컬렉션별 인덱스 상태 확인
-2. Search : 유사 청크 검색 (LLM 호출 없음)
-3. Ask    : 지식베이스 근거 답변 (LLM 호출)
+2. Intent : 사용자 질문의 최상위 intent 분류
+3. Search : 유사 청크 검색 (LLM 호출 없음)
+4. Ask    : 지식베이스 근거 답변 (LLM 호출)
 
 ※ 우리 API는 컬렉션(health_checkup_info / disease_info …) 지정이 필수라 각 탭에 컬렉션 선택을 둔다.
 """
@@ -38,6 +39,7 @@ def check_health() -> str:
         data = resp.json()
         ready = data.get("ready", False)
         counts = data.get("indexed_chunks", {}) or {}
+        intent_status = data.get("intent_classifier", {}) or {}
         lines = "\n".join(f"  - `{name}`: {cnt:,}개" for name, cnt in counts.items()) or "  - (없음)"
         return (
             f"🔍 **서버 상태**\n\n"
@@ -45,10 +47,48 @@ def check_health() -> str:
             f"- **Ready**: {'✅ 준비 완료' if ready else '❌ 준비 안 됨'}\n"
             f"- **벡터 백엔드**: `{data.get('vector_backend', 'unknown')}`\n"
             f"- **임베딩 모델**: `{data.get('embed_model', 'unknown')}`\n"
+            f"- **Intent 분류기**: "
+            f"{'✅ 준비 완료' if intent_status.get('ready') else '❌ 모델 없음'}"
+            f" (`{intent_status.get('model_version') or 'none'}`)\n"
             f"- **컬렉션별 인덱스**:\n{lines}"
         )
     except Exception as e:
         return f"❌ **오류**: {e}\n\n서버가 실행 중인지 확인하세요 (`uvicorn app.main:app`)."
+
+
+# ───────────────────────── Intent ─────────────────────────
+def classify_intent(question: str) -> Tuple[str, str]:
+    """질문의 최상위 intent와 클래스별 확률을 표시한다."""
+    if not question.strip():
+        return "💡 질문을 입력하세요.", ""
+    try:
+        resp = requests.post(
+            f"{API_BASE_URL}/intent/classify",
+            json={"question": question},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        probabilities = data.get("probabilities", {}) or {}
+        probability_lines = "\n".join(
+            f"- `{label}`: {probability:.2%}"
+            for label, probability in sorted(
+                probabilities.items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+        )
+        return (
+            f"🧭 **Intent 분류 결과**\n\n"
+            f"- 질문: `{question}`\n"
+            f"- intent: `{data.get('intent', 'unknown')}`\n"
+            f"- 신뢰도: `{data.get('confidence', 0.0):.2%}`\n"
+            f"- 검토 필요: `{'예' if data.get('uncertain') else '아니요'}`\n"
+            f"- 모델: `{data.get('model_version', 'unknown')}`\n\n"
+            f"**클래스별 확률**\n{probability_lines}"
+        ), json.dumps(data, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return f"❌ **오류**: {e}", ""
 
 
 # ───────────────────────── Search ─────────────────────────
@@ -116,6 +156,17 @@ def create_ui():
                 health_btn = gr.Button("상태 확인", variant="primary", size="lg")
                 health_output = gr.Markdown("상태를 확인하려면 버튼을 클릭하세요.")
                 health_btn.click(fn=check_health, outputs=health_output)
+
+            # ── Intent ──
+            with gr.TabItem("🧭 Intent"):
+                gr.Markdown("### 최상위 Intent 분류\n질문을 임베딩한 뒤 Linear/Softmax 분류 결과와 확률을 표시합니다.")
+                intent_question = gr.Textbox(label="질문", placeholder="예: 최근 AST가 높은데 왜 그런가요?", lines=2)
+                intent_btn = gr.Button("분류", variant="primary", size="lg")
+                with gr.Row():
+                    intent_output = gr.Markdown(value="분류 결과가 여기 표시됩니다.")
+                    intent_json = gr.Code(label="JSON 응답", language="json", interactive=False)
+                intent_btn.click(classify_intent, intent_question, [intent_output, intent_json])
+                intent_question.submit(classify_intent, intent_question, [intent_output, intent_json])
 
             # ── Search ──
             with gr.TabItem("🔎 Search"):
