@@ -19,6 +19,7 @@ flowchart LR
   end
 
   subgraph DECIDER["Decider - Embedding + Linear Classifier"]
+    SG{"의료 Safety Guard<br>진단·약물결정·내원판단"}
     A1["Sentence-Transformers<br>임베딩 변환"]
     A2["학습된 <br>Linear Layer"]
     A3["Softmax"]
@@ -102,8 +103,10 @@ flowchart LR
   S1CHK -- "기존 세션" --> S2
   S1CHK -- "신규 세션(콜드 스타트)" --> S4
   S2 --> S3
-  S3 -- "재구성된 질문" --> A1
-  S4 -- "원문 질문" --> A1
+  S3 -- "재구성된 질문" --> SG
+  S4 -- "원문 질문" --> SG
+  SG -- "통과" --> A1
+  SG -- "의료적 결정 요청" --> E1
 
   A1 -- 벡터 --> A2
   A2 -- 확률 --> A3
@@ -185,6 +188,7 @@ flowchart LR
   S3:::session
   S4:::session
   A1:::a
+  SG:::check
   A2:::a
   A3:::a
   A4:::a

@@ -21,6 +21,8 @@ Healpy AI health care의 요청 처리 파이프라인에서 노드 간에 흐�
 | `resolved_query` | 문자열 | S3 또는 S4 | 재구성된 질문. 신규 세션은 원문과 동일 |
 | `query_embedding` | 실수 배열 | A1 | 질문 임베딩 벡터. 캐시 조회·검색·저장에서 재사용 |
 | `intent` | 열거형 | A4 | simple_lookup / comprehensive / general_chat / ignore |
+| `guard_triggered` | 불리언 | SG | 의료 Safety Guard 작동 여부 |
+| `guard_reason` | 문자열 또는 없음 | SG | definitive_diagnosis / medication_decision / medical_visit_decision |
 | `sub_intents` | 문자열 목록 | B1 | 다중 선택 가능. 검색 대상 콜렉션과 매핑 |
 | `chunks` | 청크 목록 또는 없음 | 검색/캐시 노드 | 검색 결과 청크. 아래 "chunks 상태 규약" 참조 |
 | `cache_hit` | 불리언 | SC1 또는 BC1 | 캐시 히트 여부 |
@@ -77,6 +79,7 @@ VDB 검색으로 확보한 개별 지식 청크를 표현한다.
 
 | 노드 | 입력 | 출력 | 비고 |
 |---|---|---|---|
+| SG Safety Guard | `resolved_query` | `guard_triggered`, `guard_reason`, (차단 시)`intent` | 진단·약물 결정·내원 판단이면 임베딩 전에 ignore |
 | A1 임베딩 변환 | `resolved_query` | `query_embedding` | Sentence-Transformers. 이후 캐시·검색에서 재사용 |
 | A2 Linear Layer | `query_embedding` | (로짓, 내부) | 학습된 선형 분류기 |
 | A3 Softmax | (로짓) | (확률 분포, 내부) | intent별 확률 |
@@ -116,7 +119,7 @@ VDB 검색으로 확보한 개별 지식 청크를 표현한다.
 
 하나의 요청이 처리되는 동안 State가 채워지는 순서를 요약한다.
 
-요청이 들어오면 S1이 세션을 조회하고 S1CHK가 신규 여부를 판정한다. 기존 세션이면 S2가 히스토리와 요약을 로드하고 S3가 질문을 재구성하며, 신규 세션이면 S4가 빈 히스토리로 초기화하고 원문을 그대로 사용한다. 이후 A1이 임베딩을 생성하고 A4가 intent를 결정한다.
+요청이 들어오면 S1이 세션을 조회하고 S1CHK가 신규 여부를 판정한다. 기존 세션이면 S2가 히스토리와 요약을 로드하고 S3가 질문을 재구성하며, 신규 세션이면 S4가 빈 히스토리로 초기화하고 원문을 그대로 사용한다. 이후 SG가 의료적 결정 요청을 먼저 확인한다. Guard가 작동하면 임베딩 없이 ignore로 라우팅하고, 통과한 질문만 A1이 임베딩을 생성한 뒤 A4가 intent를 결정한다.
 
 intent가 simple 또는 comprehensive이면 먼저 캐시를 조회하고, 히트하면 저장된 청크를 재사용하며 미스이면 VDB를 검색한다. VDB 응답 성공을 확인한 뒤 검색 결과 유무를 판정하고, 결과가 있으면 캐시에 저장한 다음 프롬프트를 구성한다. comprehensive 경로는 이와 병렬로 인증을 거쳐 개인 컨텍스트를 조합하며, 이 개인 데이터는 캐시하지 않는다.
 

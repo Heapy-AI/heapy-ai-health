@@ -207,3 +207,9 @@ vdb/manifest/
 
 # 검수 전 로컬에서 생성한 intent 모델 artifact
 classifier/artifacts/*.json
+
+# HEAPY Intent v5 MVP 팀 공유 파일
+!classifier/artifacts/intent_linear.json
+!classifier/artifacts/intent_linear_v5_candidate.json
+!classifier/data/
+!classifier/data/HEAPY_intent_dataset_v3_500.csv
