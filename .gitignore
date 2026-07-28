@@ -198,8 +198,9 @@ health-ai/
 
 # 대용량 데이터/전처리 산출물 (재생성 가능 → 커밋 제외)
 data/
+output/
 #preprocessed/
 #vdb/chunk/
 
 # 벡터DB 인덱스는 Git LFS로 추적합니다.
-# vdb/chroma/  # 일반 Git 추적에서 제외하지 않음
+vdb/chroma/  # 일반 Git 추적에서 제외하지 않음

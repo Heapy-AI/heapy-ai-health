@@ -1,59 +1,412 @@
 {
- "1081_복통.json":        {"category":"symptom",  "confidence":"high",   "reason":"자기치료없음, 관련질환에 충수염·담낭염 등 실제 질환 위임"},
- "1201_얼굴마비.json":      {"category":"symptom",  "confidence":"medium", "reason":"징후(마비), 치료없이 중추성/말초성 하위 원인질환 기술"},
- "1261_간의 양성종양.json":  {"category":"disease",  "confidence":"medium", "reason":"간 양성종양 진단명(간혈관종·간선종 등), 치료 언급 존재"},
- "2049_겨울철 저체온증 예방요령.json": {"category":"lifestyle","confidence":"medium","reason":"저체온증 예방 실천요령(예방요령)"},
- "2050_겨울철 동상 및 동창 예방요령.json": {"category":"lifestyle","confidence":"medium","reason":"동상·동창 예방 실천수칙"},
- "2052_겨울철 대표 질환별 응급조치 요령.json": {"category":"lifestyle","confidence":"low","reason":"응급조치·대처 요령 안내, 특정 진단명 아님"},
- "2107_소아의 대소변 가리기.json": {"category":"lifestyle","confidence":"medium","reason":"소아 배변훈련 발달지침(생활지도)"},
- "2347_당뇨병 합병증(급성 합병증).json": {"category":"disease","confidence":"medium","reason":"당뇨병 급성합병증(케토산증·저혈당 등) 질환, 개요만 존재"},
- "2351_당뇨병 합병증(만성 합병증).json": {"category":"disease","confidence":"medium","reason":"당뇨병 만성합병증(혈관·비혈관) 질환군"},
- "2367_건막염.json":       {"category":"disease",  "confidence":"medium", "reason":"건막염(건염) 진단명"},
- "3134_항문직장농양과 치루.json": {"category":"disease","confidence":"high","reason":"항문직장농양·치루 진단명, 정의 명확"},
- "3627_척추의 형태 이상.json": {"category":"disease","confidence":"medium","reason":"척추변형 질환군(측만증·후만증 등)"},
- "3690_저체온증.json":      {"category":"disease",  "confidence":"medium", "reason":"저체온증(T68) 진단명, 정의+예방/처치"},
- "3987_자궁경부암 백신.json": {"category":"lifestyle","confidence":"low",  "reason":"HPV 예방접종 안내(예방), 질환/검사 아님"},
- "4027_언어장애.json":      {"category":"disease",  "confidence":"medium", "reason":"언어장애(말·언어 장애) 질환 서술"},
- "5304_고혈당.json":       {"category":"symptom",  "confidence":"low",    "reason":"고혈당(R73) 임상 징후/소견, 최종 진단명(당뇨병) 아님"},
- "5416_정상청소년의 성장과 발달.json": {"category":"lifestyle","confidence":"medium","reason":"정상 청소년 성장·발달 안내(질환 아님)"},
- "5420_해외유입기생충감염증.json": {"category":"disease","confidence":"medium","reason":"기생충 감염증 질환(종류 나열)"},
- "5428_노인 약물복용.json":  {"category":"lifestyle","confidence":"medium","reason":"노인 약물복용 관리·주의 안내(자가관리)"},
- "5481_가정 내 아동안전.json": {"category":"lifestyle","confidence":"medium","reason":"아동 안전사고 예방 실천/교육"},
- "5483_동물 및 곤충에 의한 응급상황.json": {"category":"lifestyle","confidence":"low","reason":"교상 응급처치·예방 안내"},
- "5503_장루 및 장루 관리.json": {"category":"lifestyle","confidence":"medium","reason":"장루 자가관리·도구관리 안내"},
- "5528_사상충증.json":      {"category":"disease",  "confidence":"high",   "reason":"사상충 감염 질환, 원인·증상·예방접종"},
- "5679_열상.json":         {"category":"disease",  "confidence":"medium", "reason":"열상(창상) 손상 진단"},
- "5680_유선염.json":       {"category":"disease",  "confidence":"high",   "reason":"유선염 진단명, 정의·종류·원인"},
- "5688_백선증.json":       {"category":"disease",  "confidence":"high",   "reason":"백선(피부사상균 감염) 질환, 진단및검사"},
- "5696_상처관리와 흉터예방.json": {"category":"lifestyle","confidence":"medium","reason":"상처 자가관리·흉터예방 안내"},
- "5705_목쉼.json":         {"category":"symptom",  "confidence":"high",   "reason":"목쉼(음성변화) 징후, 관련질환 위임"},
- "5722_대변 이상.json":     {"category":"symptom",  "confidence":"medium", "reason":"영아 대변이상(설사 등) 징후 서술"},
- "5779_연조직염과 종기.json": {"category":"disease","confidence":"high","reason":"연조직염·종기 세균감염 질환"},
- "5849_외상성 척추손상.json": {"category":"disease","confidence":"medium","reason":"외상성 척추손상 진단"},
- "5850_외상성 척수손상.json": {"category":"disease","confidence":"medium","reason":"외상성 척수손상 진단"},
- "5864_외상성 뇌손상.json":  {"category":"disease","confidence":"medium","reason":"외상성 뇌손상 진단"},
- "6189_언어장애(성인 언어 및 말장애의 진단과 치료).json": {"category":"disease","confidence":"medium","reason":"성인 언어·말장애 질환 서술"},
- "6253_기침(성인).json":    {"category":"symptom",  "confidence":"high",   "reason":"기침(성인) 징후, 관련질환 위임"},
- "6259_성폭력.json":       {"category":"lifestyle", "confidence":"low",   "reason":"성폭력 예방·대처 안내(사회건강 주제), 진단명 아님"},
- "6311_스포츠 손상과 안전(견관절(어깨 관절) 손상).json": {"category":"disease","confidence":"medium","reason":"어깨관절 스포츠손상 질환(+예방)"},
- "6316_독극물 섭취.json":    {"category":"disease",  "confidence":"medium", "reason":"중독(독극물 섭취) 임상상태·대처"},
- "6320_치통 및 만성 통증(치통).json": {"category":"symptom","confidence":"high","reason":"치통 징후, 치수염·치주염 등 원인질환 위임"},
- "6322_치통 및 만성 통증.json": {"category":"symptom","confidence":"medium","reason":"구강안면통증 징후 서술"},
- "6479_귀의 형태 이상(기타).json": {"category":"disease","confidence":"low","reason":"귀 형태이상(무이증·매몰귀 등) 선천기형, 종류만"},
- "6481_얼굴떨림(얼굴연축).json": {"category":"disease","confidence":"medium","reason":"반얼굴연축·눈꺼풀연축 신경계질환"},
- "6483_정상소아의 성장.json": {"category":"lifestyle","confidence":"medium","reason":"정상 소아 성장 안내(질환 아님)"},
- "6484_정상소아의 성장(성장).json": {"category":"lifestyle","confidence":"medium","reason":"정상 소아 성장 안내"},
- "6485_정상소아의 성장(발달).json": {"category":"lifestyle","confidence":"medium","reason":"정상 소아 발달 안내"},
- "6529_직업성 호흡기질환.json": {"category":"disease","confidence":"medium","reason":"직업성 호흡기질환 질환군"},
- "6550_어지럼.json":       {"category":"symptom",  "confidence":"high",   "reason":"치료섹션없이 관련질환에 이석증·메니에르병 등 위임"},
- "6586_성공적인 모유 수유.json": {"category":"lifestyle","confidence":"medium","reason":"모유수유 실천 안내(자가관리)"},
- "6613_불규칙한 월경주기와 월경전증후군.json": {"category":"disease","confidence":"medium","reason":"월경불순·월경전증후군 질환"},
- "6618_정상 월경의 이해.json": {"category":"lifestyle","confidence":"medium","reason":"정상 월경 이해(교육), 질환 아님"},
- "6686_자연유산.json":      {"category":"disease",  "confidence":"medium", "reason":"자연유산 질환(절박·계류유산 등)"},
- "6713_심장박동조율기.json": {"category":"procedure", "confidence":"medium","reason":"서맥 치료용 기기 삽입 시술(치료법/기기)"},
- "6719_환경과 건강.json":    {"category":"environmental","confidence":"medium","reason":"대기오염·기후변화 등 환경 건강영향"},
- "6723_인지기능저하예방법.json": {"category":"lifestyle","confidence":"medium","reason":"치매/인지저하 예방법 실천 안내"},
- "6744_무릎 관절 손상.json": {"category":"disease","confidence":"medium","reason":"무릎관절 손상 질환"},
- "6752_건강노화.json":      {"category":"lifestyle", "confidence":"medium","reason":"건강노화 생활습관 실천 안내"},
- "6774_죽상경화증.json":    {"category":"disease",  "confidence":"medium", "reason":"죽상동맥경화증 만성질환, 증상 서술"}
+ "1081_복통.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "자기치료없음, 관련질환에 충수염·담낭염 등 실제 질환 위임"
+ },
+ "1201_얼굴마비.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "신경학적 결손을 독립 질환 단위로 취급하는 기준을 실어증과 일관되게 적용. 중추성/말초성 분류 체계 보유. 단 치료 섹션이 없고 본문이 \"병명으로는 벨마비, 람세이-헌트 증후군\"이라며 얼굴마비를 증상 용어로 구분 -> medium"
+ },
+ "1261_간의 양성종양.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "간 양성종양 진단명(간혈관종·간선종 등), 치료 언급 존재"
+ },
+ "2049_겨울철 저체온증 예방요령.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "저체온증 예방 실천요령(예방요령)"
+ },
+ "2050_겨울철 동상 및 동창 예방요령.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "동상·동창 예방 실천수칙"
+ },
+ "2052_겨울철 대표 질환별 응급조치 요령.json": {
+  "category": "lifestyle",
+  "confidence": "low",
+  "reason": "응급조치·대처 요령 안내, 특정 진단명 아님"
+ },
+ "2107_소아의 대소변 가리기.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "소아 배변훈련 발달지침(생활지도)"
+ },
+ "2347_당뇨병 합병증(급성 합병증).json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "당뇨병 급성합병증(케토산증·저혈당 등) 질환, 개요만 존재"
+ },
+ "2351_당뇨병 합병증(만성 합병증).json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "당뇨병 만성합병증(혈관·비혈관) 질환군"
+ },
+ "2367_건막염.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "건막염(건염) 진단명"
+ },
+ "3134_항문직장농양과 치루.json": {
+  "category": "disease",
+  "confidence": "high",
+  "reason": "항문직장농양·치루 진단명, 정의 명확"
+ },
+ "3627_척추의 형태 이상.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "척추변형 질환군(측만증·후만증 등)"
+ },
+ "3690_저체온증.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "저체온증(T68) 진단명, 정의+예방/처치"
+ },
+ "3987_자궁경부암 백신.json": {
+  "category": "lifestyle",
+  "confidence": "low",
+  "reason": "HPV 예방접종 안내(예방), 질환/검사 아님"
+ },
+ "4027_언어장애.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "언어장애(말·언어 장애) 질환 서술"
+ },
+ "5304_고혈당.json": {
+  "category": "symptom",
+  "confidence": "low",
+  "reason": "고혈당(R73) 임상 징후/소견, 최종 진단명(당뇨병) 아님"
+ },
+ "5416_정상청소년의 성장과 발달.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "정상 청소년 성장·발달 안내(질환 아님)"
+ },
+ "5420_해외유입기생충감염증.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "기생충 감염증 질환(종류 나열)"
+ },
+ "5428_노인 약물복용.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "노인 약물복용 관리·주의 안내(자가관리)"
+ },
+ "5481_가정 내 아동안전.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "아동 안전사고 예방 실천/교육"
+ },
+ "5483_동물 및 곤충에 의한 응급상황.json": {
+  "category": "lifestyle",
+  "confidence": "low",
+  "reason": "교상 응급처치·예방 안내"
+ },
+ "5503_장루 및 장루 관리.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "장루 자가관리·도구관리 안내"
+ },
+ "5528_사상충증.json": {
+  "category": "disease",
+  "confidence": "high",
+  "reason": "사상충 감염 질환, 원인·증상·예방접종"
+ },
+ "5679_열상.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "열상(창상) 손상 진단"
+ },
+ "5680_유선염.json": {
+  "category": "disease",
+  "confidence": "high",
+  "reason": "유선염 진단명, 정의·종류·원인"
+ },
+ "5688_백선증.json": {
+  "category": "disease",
+  "confidence": "high",
+  "reason": "백선(피부사상균 감염) 질환, 진단및검사"
+ },
+ "5696_상처관리와 흉터예방.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "상처 자가관리·흉터예방 안내"
+ },
+ "5705_목쉼.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "목쉼(음성변화) 징후, 관련질환 위임"
+ },
+ "5722_대변 이상.json": {
+  "category": "symptom",
+  "confidence": "medium",
+  "reason": "영아 대변이상(설사 등) 징후 서술"
+ },
+ "5779_연조직염과 종기.json": {
+  "category": "disease",
+  "confidence": "high",
+  "reason": "연조직염·종기 세균감염 질환"
+ },
+ "5849_외상성 척추손상.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "외상성 척추손상 진단"
+ },
+ "5850_외상성 척수손상.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "외상성 척수손상 진단"
+ },
+ "5864_외상성 뇌손상.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "외상성 뇌손상 진단"
+ },
+ "6189_언어장애(성인 언어 및 말장애의 진단과 치료).json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "성인 언어·말장애 질환 서술"
+ },
+ "6253_기침(성인).json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "기침(성인) 징후, 관련질환 위임"
+ },
+ "6259_성폭력.json": {
+  "category": "lifestyle",
+  "confidence": "low",
+  "reason": "성폭력 예방·대처 안내(사회건강 주제), 진단명 아님"
+ },
+ "6311_스포츠 손상과 안전(견관절(어깨 관절) 손상).json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "어깨관절 스포츠손상 질환(+예방)"
+ },
+ "6316_독극물 섭취.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "중독(독극물 섭취) 임상상태·대처"
+ },
+ "6320_치통 및 만성 통증(치통).json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "치통 징후, 치수염·치주염 등 원인질환 위임"
+ },
+ "6322_치통 및 만성 통증.json": {
+  "category": "symptom",
+  "confidence": "medium",
+  "reason": "구강안면통증 징후 서술"
+ },
+ "6479_귀의 형태 이상(기타).json": {
+  "category": "disease",
+  "confidence": "low",
+  "reason": "귀 형태이상(무이증·매몰귀 등) 선천기형, 종류만"
+ },
+ "6481_얼굴떨림(얼굴연축).json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "반얼굴연축·눈꺼풀연축 신경계질환"
+ },
+ "6483_정상소아의 성장.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "정상 소아 성장 안내(질환 아님)"
+ },
+ "6484_정상소아의 성장(성장).json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "정상 소아 성장 안내"
+ },
+ "6485_정상소아의 성장(발달).json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "정상 소아 발달 안내"
+ },
+ "6529_직업성 호흡기질환.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "직업성 호흡기질환 질환군"
+ },
+ "6550_어지럼.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "치료섹션없이 관련질환에 이석증·메니에르병 등 위임"
+ },
+ "6586_성공적인 모유 수유.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "모유수유 실천 안내(자가관리)"
+ },
+ "6613_불규칙한 월경주기와 월경전증후군.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "월경불순·월경전증후군 질환"
+ },
+ "6618_정상 월경의 이해.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "정상 월경 이해(교육), 질환 아님"
+ },
+ "6686_자연유산.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "자연유산 질환(절박·계류유산 등)"
+ },
+ "6713_심장박동조율기.json": {
+  "category": "procedure",
+  "confidence": "medium",
+  "reason": "서맥 치료용 기기 삽입 시술(치료법/기기)"
+ },
+ "6719_환경과 건강.json": {
+  "category": "environmental",
+  "confidence": "medium",
+  "reason": "대기오염·기후변화 등 환경 건강영향"
+ },
+ "6723_인지기능저하예방법.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "치매/인지저하 예방법 실천 안내"
+ },
+ "6744_무릎 관절 손상.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "무릎관절 손상 질환"
+ },
+ "6752_건강노화.json": {
+  "category": "lifestyle",
+  "confidence": "medium",
+  "reason": "건강노화 생활습관 실천 안내"
+ },
+ "6774_죽상경화증.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "죽상동맥경화증 만성질환, 증상 서술"
+ },
+ "6_두근거림.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R00.2 단독. 본문이 '심박동이 빠르거나 불규칙할 때 느끼는 증상'으로 자기정의, 치료섹션은 부정맥·갑상선기능항진증 등 원인질환 치료로 위임"
+ },
+ "5253_노인 호흡곤란.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R06.0 단독. '원인을 감별하여 치료' 명시, 치료섹션 전체가 만성폐쇄폐질환·심장질환 등 원인질환 치료"
+ },
+ "5285_불명열.json": {
+  "category": "symptom",
+  "confidence": "medium",
+  "reason": "R50.90 단독. '원인을 찾아내지 못하는 상태'=징후, 관련질환 섹션 보유, 해열은 대증요법이고 확정치료는 원인질환에 위임"
+ },
+ "5686_유방종괴.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R22 단독. '가장 흔한 증상'으로 자기정의, 치료는 낭종·섬유선종·유방암 등 진단에 따라 위임"
+ },
+ "5804_구역질과 구토.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R11.2 단독. 구역질·구토 자체가 증상, '원인을 찾아 이에 맞춰 치료' 원칙 명시"
+ },
+ "5830_두통.json": {
+  "category": "symptom",
+  "confidence": "medium",
+  "reason": "R51 단독. '인구 70~80%가 경험하는 증상'으로 자기정의, 관련질환·연관증상 섹션 보유. 약물치료는 긴장두통·편두통 등 하위 원발두통질환별 기술"
+ },
+ "5853_실신.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R55 단독. 실신은 징후, '치료는 원인에 따라 다릅니다' 명시하며 미주신경성 등 원인별 위임"
+ },
+ "5858_복부 팽만.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R19.0 단독. '주관적인 증상에 해당' 자기정의, 관련질환·연관증상 섹션 보유, 기질적 질환 치료 우선 명시"
+ },
+ "6252_딸꾹질.json": {
+  "category": "symptom",
+  "confidence": "medium",
+  "reason": "R06.6 단독. '증상을 말합니다' 자기정의, 관련질환 섹션 보유, '가장 효과적인 치료는 원인 해결' 명시"
+ },
+ "6307_심잡음.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R01.0 단독. 청진 소견(징후), '치료는 심잡음의 원인인 심장병에 따라' 판막질환·선천성심장병으로 위임"
+ },
+ "6543_객혈.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R04.2 단독. '혈액이 나오는 증상' 자기정의, 관련질환 섹션 보유, 치료는 기저질환 감별 후 결정"
+ },
+ "6546_체중 감소.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R63.4 단독. '기저 질환의 징후' 자기정의, '발견된 원인에 따라' 치료 위임"
+ },
+ "6712_소변이상(혈뇨).json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R82 단독. 소변검사 이상소견, 치료는 요로감염·사구체신염 등 원인질환에 위임"
+ },
+ "6721_소변이상(당뇨).json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R81 단독. '소변검사에서 당이 검출되는 것'=검사 이상소견, 치료는 당뇨병·요세관손상으로 위임"
+ },
+ "6766_노인 어지럼증.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R29.6/R42 단독. '흔한 증상' 자기정의, 이석증·메니에르병 등 원인질환별 치료로 위임. 기존 symptom인 6550_어지럼과 동일 구조"
+ },
+ "1104_빈혈.json": {
+  "category": "disease",
+  "confidence": "high",
+  "reason": "R71은 매칭오류(정식코드 D50-D64). 적혈구/혈색소 감소라는 확정 진단상태이고 철분제 6개월 복용 등 자체 확정치료 보유"
+ },
+ "3768_코피(비출혈).json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "R04.0이나 본문이 '코질환의 하나'로 자기규정, 지혈·비강패킹·전기소작·혈관결찰 등 병변 자체에 대한 확정치료 보유"
+ },
+ "5723_신생아 황달.json": {
+  "category": "disease",
+  "confidence": "high",
+  "reason": "R17은 매칭오류(정식코드 P58-P59). 성인 황달과 구별되는 독립 질환명이며 광선요법·교환수혈 등 자체 확정치료 보유"
+ },
+ "5860_다한증.json": {
+  "category": "disease",
+  "confidence": "high",
+  "reason": "R61이나 본문이 '치료가 필요한 질환'으로 자기규정. 일차성 다한증은 기저질환 없는 독립 질환이고 보톡스·흉부교감신경절제술 등 확정치료 보유"
+ },
+ "6711_소변이상(단백뇨).json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "R80 검사 이상소견. 소변검사로만 확인되며 치료방침은 사구체질환 등 원인질환에 따라 결정. 동일 시리즈 6712_혈뇨·6721_당뇨와 일관"
+ },
+ "5685_유두분비.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "유방 문제로 내원하는 세 번째로 흔한 호소 증상. 치료를 뇌하수체종양·유선염·관내유두종 등 원인질환에 위임"
+ },
+ "6544_부종.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "정의가 '누구나 한 번쯤 경험할 정도로 흔한 증상'으로 자기규정. 치료를 원인치료/증상치료로 나누고 울혈성심부전·간경변증 등 원인질환에 위임"
+ },
+ "6262_노인 부종.json": {
+  "category": "symptom",
+  "confidence": "medium",
+  "reason": "종류·병태생리·역학 섹션을 갖춘 질환형 구조이나(=medium), 본문은 '흔한 증상'·'질환에 의한 2차 증상'으로 자기규정하고 치료 1항이 '원인 질환의 치료'. 관련질환에 만성정맥부전·심부정맥혈전증을 별개 질환으로 나열"
+ },
+ "5708_귀의 통증 및 분비물.json": {
+  "category": "symptom",
+  "confidence": "high",
+  "reason": "'귀의 통증은 흔한 증상으로' 자기규정, 치료 원칙이 '선행 원인을 치료'이며 외이도염·중이염·편도염 등으로 위임"
+ },
+ "5859_실어증.json": {
+  "category": "disease",
+  "confidence": "medium",
+  "reason": "신경학적 결손을 독립 질환 단위로 취급하는 기준 적용. 브로카·베르니케·전실어증의 명명된 하위 유형과 원발진행실어증(G31.01) 보유, 언어재활치료가 실어증 자체를 겨냥. 단 본문은 실어증을 \"뇌질환의 증상\"으로 자기규정하고 치료 1항이 원인질환 치료 -> medium"
+ }
 }

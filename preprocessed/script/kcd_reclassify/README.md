@@ -3,15 +3,36 @@
 질병관리청 국가건강정보포털 건강정보(650건)를 **7개 카테고리로 재분류**하고, 질환 문서를
 **KCD-9 코드에 매칭**한 뒤, 이미지 속 표/기준 텍스트까지 병합해 **Pinecone용 disease VDB 청크**를 만든다.
 
-> ⚠️ **데이터는 git에 포함되지 않는다.** 아래 "필요한 입력 데이터"를 직접 준비해야 실행된다.
-> 스크립트/코드만 git에 있으며, 모든 경로는 상대경로라 어느 환경에서도 동작한다.
+> ⚠️ **대용량 원천 데이터는 git에 포함되지 않는다.** 아래 "필요한 입력 데이터"를 직접 준비해야 실행된다.
+> 모든 경로는 상대경로라 어느 환경에서도 동작한다.
+>
+> 🔁 **재현성**: 파이프라인은 런타임에 LLM을 호출하지 않으므로 완전 결정적이다(같은 입력 2회 실행 →
+> 650개 산출물 SHA-256 동일 확인). 단 아래 3개 파일이 **함께 커밋되어야** 같은 결과가 나온다.
+> 빠지면 규칙 분류만 돌아가 결과가 달라진다(예: `두근거림`이 symptom → disease로 되돌아감).
+>
+> | 파일 | 크기 | 없으면 |
+> |---|---|---|
+> | `llm_verdicts.json` | ~16KB | 내용 판정 82건 소실 → 카테고리 다수 변경 |
+> | `kcd_overrides.json` | ~2KB | KCD 오매칭 4건 재발 |
+> | `kcd_dict.json` | ~20MB | 매칭 전부 불가. 재생성에는 `data/`의 KCD 마스터파일 xlsx 필요 |
+>
+> 의존성 `rapidfuzz`는 루트 `requirements.txt`에 없다. 별도 설치가 필요하며, fuzzy 매칭 결과의
+> 버전 간 동일성을 보장하려면 버전 고정을 권장한다(검증 환경: `rapidfuzz 3.14.5` / Python 3.11.9).
 
 ---
 
 ## 0. 카테고리 (재분류 결과)
 `disease`(질환) · `symptom`(증상) · `test`(검사방법) · `procedure`(시술·치료법) ·
 `lifestyle`(생활습관) · `environmental`(환경보건) · `service`(행정·제도)
-- KCD-9 매칭 대상 = `disease` 문서 + `symptom`/`test` 문서의 임베디드 질환
+- KCD-9 매칭 대상 = `disease` 문서 + **`symptom` 문서** + `symptom`/`test` 문서의 임베디드 질환
+  - KCD `R00-R99`가 증상·징후 및 검사 이상소견 전용 章이라 증상 문서의 자체 매칭도 유효하다
+    (`두근거림`→R00.2, `두통`→R51). 이 때문에 symptom 매칭률이 disease보다 높다
+- **`disease` / `symptom` 경계**: 치료 섹션 유무는 기준이 아니다. 표제어가 확정 진단명인지, 그리고
+  치료 내용이 그 자체를 겨냥하는지 원인 질환으로 위임되는지로 판정한다
+  (치료 섹션 없는 disease 28건 / 치료 섹션 있는 symptom 20건)
+- **`symptom_kind`** (symptom 문서에만 부여): 검사·검체로만 확인되는 이상소견은 `lab_finding`,
+  자각·관찰 가능한 증상·징후는 `clinical`. KCD `R70-R94` 대역을 1차 신호로 쓰고
+  실제 인지 가능성과 어긋나는 문서는 본문 검토로 덮어쓴다(`symptom_kind_source`에 근거 기록)
 - 자세한 정의·통계는 실행 후 생성되는 `output/_reports/summary_report.md` 참고
 
 ---
@@ -62,8 +83,13 @@ python build_kcd_dict.py
 
 # ③ 재분류 + KCD 매칭 (+ base64 제거, 이미지텍스트 병합)
 python pipeline.py --no-emit
-#   → output/*.json  650건 (category/kcd_matches/embedded_disease_chunks/has_image_text 등 추가)
-#   * llm_verdicts.json(애매 57건 판정결과)은 repo에 포함되어 자동 사용됨
+#   → output/*.json  650건
+#     추가 필드: category / category_confidence / category_source / kcd_matches /
+#               embedded_disease_chunks / has_image_text /
+#               symptom_kind + symptom_kind_source (symptom 문서만) /
+#               kcd_override_reason (예외 적용 문서만)
+#   * llm_verdicts.json(내용 판정 82건)과 kcd_overrides.json(KCD 예외 4건)을 자동으로 읽어 적용
+#     경로 교체: --verdicts <path> / --overrides <path>
 
 # ④ 요약 리포트/CSV
 python report.py
@@ -74,8 +100,13 @@ python integrate_and_build_vdb.py
 #   → vdb/chunk/disease_info/kdca_disease_enriched.jsonl
 ```
 
-기대 결과(정상): 전처리 650건 → 재분류 `disease 430 / lifestyle 59 / test 57 / procedure 55 /
-environmental 33 / symptom 9 / service 7`, disease KCD 매칭 ≈ 268/430, VDB ≈ 15,000청크.
+기대 결과(정상): 전처리 650건 → 재분류 `disease 411 / lifestyle 59 / test 57 / procedure 55 /
+environmental 33 / symptom 28 / service 7`, confidence `high 571 / medium 73 / low 6`.
+KCD 매칭은 disease 248/411(60.3%), symptom 28/28(100%), 임베디드 30/81.
+
+> ⚠️ `vdb/chunk/.../kdca_disease_enriched.jsonl`이 이미 있다면 **구버전일 수 있다.**
+> 현재 저장된 산출물은 430 문서·15,034청크로, 재분류 이전(disease 430) 기준이다.
+> 위 숫자(disease 411)와 맞추려면 ⑤단계를 다시 실행해야 한다.
 
 ---
 
@@ -112,7 +143,8 @@ python integrate_and_build_vdb.py
 | `matcher.py` | KCD 매칭(exact→paren→alias→substring→fuzzy) |
 | `utils.py` | 섹션 dedup, base64 제거, 이미지텍스트 병합, 임베디드/연관질환 추출 |
 | `pipeline.py` | 재분류+매칭+병합 실행 → `output/` |
-| `llm_verdicts.json` | 규칙으로 애매한 57건의 내용판정 결과(입력) |
+| `llm_verdicts.json` | 규칙으로 판정이 애매한 82건의 내용판정 결과(입력). `{파일명: {category, confidence, reason}}` |
+| `kcd_overrides.json` | KCD 오매칭/미매칭 문서의 대체 질의어 테이블(입력). `{파일명: {queries, reason}}` |
 | `report.py` | 요약 리포트/CSV |
 | `gemini_ocr_images.py` | (선택) 이미지 Gemini OCR → `image_ocr/extractions.json` |
 | `integrate_and_build_vdb.py` | `output/` → Pinecone 스키마 VDB 청크 |
@@ -146,3 +178,18 @@ python integrate_and_build_vdb.py
 - **청크 128토큰 초과**: `chunk_disease.py` 프리픽스가 토큰예산에 미포함이라 일부 청크가 128을 살짝 넘어
   임베딩 시 꼬리가 잘릴 수 있음(전 컬렉션 공통 특성). 필요 시 `BUDGET` 하향 튜닝.
 - **미매칭 KCD**: KCD 미수록 구어체(노안·생리통 등)는 `unmatched_kcd.csv`로 남김(임베딩 동의어 매칭이 향후 개선점).
+- **matcher substring 계층은 휴리스틱이다 — 전역 규칙을 바꾸지 말 것.** 두 가지를 실측했고 둘 다 기각했다.
+  - 최소길이 완화(`_substring_candidates`의 `len<3` 가드를 2로): 미매칭 348→306으로 줄지만 2자 조각이
+    열려 59문서가 오염된다(`소아`→F65.4 소아성애증, `성인`→F60.3 성격장애, `운동`→G24).
+    이 가드 때문에 `복통`·`치통` 같은 2자 진단명이 매칭되지 않는다 — 개별 예외로 처리했다.
+  - PRIMARY 이름 우선(alias보다 대표어를 먼저 랭크): 24건 개선 ↔ 23건 악화로 상쇄된다.
+    `중이염`→H65는 정답이 되지만 `인플루엔자`가 J09/J10/J11을 잃고 J14(헤모필루스 폐렴)를 얻고,
+    `뇌졸중`이 I64를 잃는다.
+  - 결론: 개별 문서를 `kcd_overrides.json`에 등록한다. 현재 4건(복통·실어증·치통 2건).
+- **`분비물` 류 일반 명사 조각**: 제목 분할로 생긴 `분비물`·`통증` 같은 일반 명사를 단독 질의하면
+  해부학적 수식어가 붙은 엉뚱한 코드에 붙는다(`귀의 통증 및 분비물`의 `분비물` → 유두분비물 N64.5,
+  요도분비물 R36). `pipeline.py`의 `_GENERIC_FRAGMENT`가 조각일 때만 차단한다(문서명 전체이면 통과).
+- **중복 원본 문서**: 같은 주제가 2건씩 있는 경우가 있다(`부종`/`노인 부종`, `어지럼`/`노인 어지럼증`,
+  `치통 및 만성 통증` 2건). VDB 적재 시 중복 청크가 되므로 필요하면 상위에서 dedup할 것.
+- **임베디드 질환 추출 한계**: `utils.py`의 `_NUM_HEADER`가 번호 목록(`1.`, `1)`)만 인식하므로
+  `관련 질환` 섹션이 산문형이면 추출되지 않는다(symptom 28건 중 6건에서만 작동).
