@@ -32,6 +32,8 @@ Pinecone 연결과 namespace별 적재 수를 반환합니다.
 
 질문을 먼저 규칙 기반 Safety Guard로 확인하고, 통과한 질문만 로컬 모델로 한 번 임베딩한 뒤 Linear/Softmax 분류기로 최상위 intent를 반환합니다.
 
+현재 기본 체크포인트는 `classifier/artifacts/intent-v6/best_model.json`이며, 환경변수 `INTENT_MODEL_PATH`로 다른 버전을 선택할 수 있습니다.
+
 요청:
 
 ```json

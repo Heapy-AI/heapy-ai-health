@@ -38,7 +38,7 @@ SEARCH_TOP_K = 3
 
 _intent_model_value = os.environ.get(
     "INTENT_MODEL_PATH",
-    "classifier/artifacts/intent_linear.json",
+    "classifier/artifacts/intent-v6/best_model.json",
 )
 INTENT_MODEL_PATH = Path(_intent_model_value)
 if not INTENT_MODEL_PATH.is_absolute():

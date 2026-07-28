@@ -205,11 +205,12 @@ data/
 vdb/chroma/
 vdb/manifest/
 
-# 검수 전 로컬에서 생성한 intent 모델 artifact
-classifier/artifacts/*.json
+# Intent 학습 데이터와 평가 산출물은 로컬에서만 보관
+classifier/data/
+classifier/evaluation/
+classifier/artifacts/*
 
-# HEAPY Intent v5 MVP 팀 공유 파일
-!classifier/artifacts/intent_linear.json
-!classifier/artifacts/intent_linear_v5_candidate.json
-!classifier/data/
-!classifier/data/HEAPY_intent_dataset_v3_500.csv
+# 팀 실행에 필요한 v6 운영 체크포인트만 공유
+!classifier/artifacts/intent-v6/
+classifier/artifacts/intent-v6/*
+!classifier/artifacts/intent-v6/best_model.json
