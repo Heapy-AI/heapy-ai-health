@@ -20,10 +20,14 @@ class IntentClassifyRequest(BaseModel):
 
 
 class IntentClassifyResponse(BaseModel):
-    """Linear/Softmax intent 분류 결과."""
+    """Safety Guard 또는 Linear/Softmax intent 분류 결과."""
 
     intent: str
     confidence: float
     probabilities: dict[str, float]
     uncertain: bool
     model_version: str
+    source: str = "linear_classifier"
+    guard_triggered: bool = False
+    guard_reason: str | None = None
+    matched_patterns: list[str] = Field(default_factory=list)

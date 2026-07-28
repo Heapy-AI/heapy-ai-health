@@ -19,6 +19,8 @@
 | `summary` | str \| null | S2 |
 | `query_embedding` | float[] | A1 |
 | `intent` | enum | A4 |
+| `guard_triggered` | bool | SG |
+| `guard_reason` | str | null | SG |
 | `sub_intents` | str[] | B1 |
 | `chunks` | Chunk[] \| null | 검색/캐시 |
 | `cache_hit` | bool | SC1 / BC1 |
@@ -54,6 +56,7 @@
 
 | 노드 | 입력 | 출력 |
 |---|---|---|
+| SG Safety Guard | `resolved_query` | `guard_triggered`, `guard_reason`, 차단 시 `intent=ignore` |
 | A1 임베딩 변환 | `resolved_query` | `query_embedding` |
 | A2~A3 분류기 | `query_embedding` | (내부 로짓/확률) |
 | A4 Intent 분류 | (확률) | `intent` |

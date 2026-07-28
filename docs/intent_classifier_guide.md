@@ -1,107 +1,110 @@
-# Intent 분류기 개발 가이드
+# Intent 분류기 MVP 운영 가이드
 
 - 작성자: 김진우
 
-## 목적
+## 현재 MVP 구성
 
-챗봇 파이프라인의 A1~A4 단계인 `질문 임베딩 → Linear Layer → Softmax → intent 결정`을 구현합니다.
+현재 HEAPY MVP는 다음 순서로 intent를 결정합니다.
 
-## Intent 기준
-
-| Intent | 기준 |
-|---|---|
-| `simple_lookup` | 개인 데이터 없이 일반 건강·의약 지식 검색으로 답변 가능 |
-| `comprehensive` | 개인 검진·복약·생활 데이터 조회 또는 개인화 분석 필요 |
-| `general_chat` | 건강 관련 대화지만 지식 검색과 개인 데이터 분석이 불필요 |
-| `ignore` | 건강과 무관하거나 서비스 상담 범위를 벗어남 |
-
-## 현재 구현 범위
-
-- 기존 `jhgan/ko-sroberta-multitask` 768차원 임베딩 재사용
-- 768→4 Linear Layer와 Softmax
-- intent별 확률과 최고 확률 반환
-- 최고 확률이 기준 미만이면 `uncertain=true`
-- JSON 모델 artifact의 임베딩 모델·차원·라벨 순서 검증
-- `POST /intent/classify` API
-
-Sub-intent 분류와 실제 intent별 챗봇 분기는 다음 단계에서 구현합니다.
-
-## 학습 데이터
-
-JSONL 한 줄에 하나의 질문과 라벨을 기록합니다.
-
-```json
-{"text":"혈압이 무엇인가요?","intent":"simple_lookup","source":"팀 검수"}
+```text
+사용자 질문
+→ 의료 Safety Guard
+→ 통과 시 Sentence Transformer 임베딩
+→ 768→4 Linear Layer
+→ Softmax
+→ intent 결정
 ```
 
-초기 `classifier/data/intent_seed.jsonl`의 10건은 설계 문서 fixture이며 운영 학습 데이터가 아닙니다. 현재 기본 학습 데이터는 `classifier/data/HEAPY_intent_train_v1_400.jsonl`이며 intent별 100건으로 구성합니다.
+Intent는 다음 네 개를 사용합니다.
 
-`source=curated` 데이터는 학습·검증·테스트에 `8:1:1`로 나누고, `source=curated_typo` 데이터는 학습에 포함하지 않은 별도 오타 강건성 평가셋으로 사용합니다. `group_id`가 있는 문장들은 같은 분할에 배치해 유사 문장 누수를 방지합니다.
+- `simple_lookup`
+- `comprehensive`
+- `general_chat`
+- `ignore`
 
-기본 학습은 intent별 20건 미만이면 실패합니다.
+## 기본 모델
+
+- 모델 버전: `intent-linear-f958f959253e`
+- 운영 artifact: `classifier/artifacts/intent_linear.json`
+- 학습 데이터: `classifier/data/HEAPY_intent_dataset_v3_500.csv`
+- 임베딩 모델: `jhgan/ko-sroberta-multitask`
+- Sentence Transformer: frozen
+- Linear Layer: `768 → 4`, 랜덤 초기화 후 학습
+- confidence threshold: `0.55`
+
+기존 체크포인트를 이어서 학습하지 않습니다. `train_intent_classifier.py`는 seed 42로 새로운 Linear Layer를 생성합니다.
 
 ```powershell
+$env:HF_HUB_OFFLINE="1"
 python classifier/script/train_intent_classifier.py
 ```
 
-학습 결과에는 각 분할의 정확도, Macro Precision·Recall·F1, confusion matrix가 저장됩니다. 검증 손실이 개선되지 않으면 early stopping을 적용하고 가장 좋은 epoch의 가중치를 artifact에 기록합니다.
+학습 결과는 `classifier/artifacts/intent_linear_v5_candidate.json`에 저장됩니다. 검증 후 운영 모델로 사용할 때만 `intent_linear.json`으로 승격합니다.
 
-구조만 시험할 때는 seed fixture와 다음 옵션을 사용합니다.
+## Safety Guard
 
-```powershell
-python classifier/script/train_intent_classifier.py --allow-small-dataset
-```
+Safety Guard는 임베딩과 Linear Classifier보다 먼저 실행합니다.
 
-이 옵션으로 만든 모델은 검증 정확도가 없으므로 운영에 사용하지 않습니다.
+| reason | 차단 대상 |
+|---|---|
+| `definitive_diagnosis` | 질병 확정·배제·진단·단정 요구 |
+| `medication_decision` | 약 선택·용량·증감·중단·변경 결정 요구 |
+| `medical_visit_decision` | 병원 방문 또는 응급 여부 결정 요구 |
 
-## v1 첫 학습 결과
+단순 복약 목록·일정·기록 조회와 명시적인 용량 변경이 없는 개인 복약 상호작용 조회에는 Guard가 작동하지 않습니다.
 
-- 모델 버전: `intent-linear-14a6af9a5aba`
-- 분할: 학습 308건, 검증 40건, 테스트 40건, 오타 challenge 12건
-- 검증 정확도: 82.5%, Macro F1 0.8168
-- 테스트 정확도: 90.0%, Macro F1 0.9017
-- 오타 challenge 정확도: 91.7%, Macro F1 0.9000
-
-초기 결과이므로 운영 품질을 확정하는 수치가 아닙니다. 특히 `ignore`와 `simple_lookup`·`comprehensive` 경계 문장을 추가 검수해야 합니다.
-
-## API
-
-학습 모델을 `classifier/artifacts/intent_linear.json`에 배치하고 FastAPI를 재시작합니다.
-
-```http
-POST /intent/classify
-```
-
-요청:
-
-```json
-{"question":"최근 AST가 높은데 왜 그런가요?"}
-```
-
-응답:
+Guard가 작동하면 다음 값을 반환합니다.
 
 ```json
 {
-  "intent":"comprehensive",
-  "confidence":0.81,
-  "probabilities":{
-    "simple_lookup":0.08,
-    "comprehensive":0.81,
-    "general_chat":0.07,
-    "ignore":0.04
-  },
-  "uncertain":false,
-  "model_version":"intent-linear-..."
+  "intent": "ignore",
+  "confidence": 1.0,
+  "uncertain": false,
+  "source": "safety_guard",
+  "guard_triggered": true,
+  "guard_reason": "medication_decision"
 }
 ```
 
-모델 파일이 없으면 분류 API만 `503`을 반환하며 기존 `/search`, `/ask`는 계속 사용할 수 있습니다.
+`confidence=1.0`은 모델 확률이 아니라 명시적인 안전 규칙으로 라우팅했다는 의미입니다.
 
-## 운영 전 필수 검증
+## 평가 결과
 
-- 한 사람이 만든 라벨을 다른 팀원이 교차 검수
-- intent별 데이터 수 균형 확인
-- 학습에 사용하지 않은 별도 테스트셋 평가
-- confusion matrix로 `simple_lookup`과 `comprehensive` 혼동 확인
-- `uncertain=true` 질문의 별도 처리 정책 결정
-- 의료 상담 범위를 벗어나는 질문의 `ignore` 기준 합의
+| 평가셋 | Classifier Accuracy | Guard 포함 Accuracy | Guard 포함 Macro F1 |
+|---|---:|---:|---:|
+| 기존 60 | 0.9500 | 0.9667 | 0.9554 |
+| 독립 54 | 0.9444 | 0.9630 | 0.9404 |
+| Blind 48 | 0.9792 | 0.9792 | 0.9791 |
+
+상세 결과는 `classifier/evaluation/intent_v5/intent_v5_training_report.md`에서 확인합니다.
+
+## 평가 재실행
+
+재평가에 필요한 기존 60문항과 Blind 48 데이터는 평가 폴더에 보존합니다.
+
+```powershell
+$env:HF_HUB_OFFLINE="1"
+python classifier/script/evaluate_intent_v5.py
+python classifier/script/report_intent_v5.py
+```
+
+## API 응답 확장 필드
+
+기존 `intent`, `confidence`, `probabilities`, `uncertain`, `model_version`은 유지합니다. 다음 필드가 추가됩니다.
+
+- `source`
+- `guard_triggered`
+- `guard_reason`
+- `matched_patterns`
+
+기존 클라이언트가 사용하는 필드는 삭제하거나 이름을 변경하지 않습니다.
+
+## 알려진 잔여 오류
+
+다음 Blind 문장은 현재 v5에서도 `ignore`로 오분류합니다.
+
+```text
+오늘 내 복약 목록에서 저녁에 먹기로 한 것만 보여줘
+```
+
+정답은 `comprehensive`이며 Guard는 작동하지 않습니다. MVP 이후 데이터 개선 대상으로 유지합니다.

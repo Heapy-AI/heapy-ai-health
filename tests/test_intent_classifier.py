@@ -72,6 +72,27 @@ class LinearIntentClassifierTest(unittest.TestCase):
 
         self.assertEqual(response.intent, Intent.COMPREHENSIVE.value)
         self.assertEqual(vector_search.question, "최근 검사 결과가 왜 높지?")
+        self.assertEqual(response.source, "linear_classifier")
+        self.assertFalse(response.guard_triggered)
+
+    def test_api_guard_blocks_before_embedding(self) -> None:
+        class FailIfCalledVectorSearch:
+            def embed_query(self, question: str) -> list[float]:
+                raise AssertionError("Guard 작동 시 임베딩을 호출하면 안 됩니다.")
+
+        state["vector_search"] = FailIfCalledVectorSearch()
+        state["intent_classifier"] = self._build_classifier([4.0, 0.0, 0.0, 0.0])
+
+        response = classify_intent(
+            IntentClassifyRequest(question="오늘 약 두 알 먹어도 돼?")
+        )
+
+        self.assertEqual(response.intent, Intent.IGNORE.value)
+        self.assertEqual(response.confidence, 1.0)
+        self.assertFalse(response.uncertain)
+        self.assertEqual(response.source, "safety_guard")
+        self.assertTrue(response.guard_triggered)
+        self.assertEqual(response.guard_reason, "medication_decision")
 
 
 if __name__ == "__main__":

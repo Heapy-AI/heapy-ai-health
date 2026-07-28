@@ -1,0 +1,501 @@
+﻿id,text,label,topic,source
+SI001,AST가 뭐야?,simple_lookup,검진항목,curated
+SI002,ALT는 어떤 검사 수치야?,simple_lookup,검진항목,curated
+SI003,감마지티피가 뭔지 알려줘,simple_lookup,검진항목,curated
+SI004,혈색소는 무엇을 보는 항목이야?,simple_lookup,검진항목,curated
+SI005,크레아티닌 검사는 뭘 확인하는 거야?,simple_lookup,검진항목,curated
+SI006,사구체여과율이 뭔가요?,simple_lookup,검진항목,curated
+SI007,중성지방 수치는 무엇을 뜻해?,simple_lookup,검진항목,curated
+SI008,HDL 콜레스테롤이 뭐야?,simple_lookup,검진항목,curated
+SI009,LDL 콜레스테롤은 왜 확인해?,simple_lookup,검진항목,curated
+SI010,당화혈색소가 어떤 지표인지 설명해줘,simple_lookup,검진항목,curated
+SI011,AST 정상 범위 알려줘,simple_lookup,정상범위,curated
+SI012,ALT 정상 수치는 어느 정도야?,simple_lookup,정상범위,curated
+SI013,공복혈당 정상범위가 어떻게 돼?,simple_lookup,정상범위,curated_typo
+SI014,당화혈색소 6.0이면 보통 어떤 범위야?,simple_lookup,정상범위,curated
+SI015,혈압 130에 85면 일반적으로 높은 편이야?,simple_lookup,정상범위,curated
+SI016,총콜레스테롤 220이면 기준상 높은 거야?,simple_lookup,정상범위,curated
+SI017,LDL 150이면 보통 어느 단계야?,simple_lookup,정상범위,curated
+SI018,중성지방 180이면 정상 범위를 넘은 거야?,simple_lookup,정상범위,curated
+SI019,혈색소 12는 보통 낮은 수치야?,simple_lookup,정상범위,curated
+SI020,크레아티닌 1.2면 일반 기준에서 어때?,simple_lookup,정상범위,curated
+SI021,당뇨병은 어떤 질환이야?,simple_lookup,질환정보,curated
+SI022,고혈압이 뭐야?,simple_lookup,질환정보,curated
+SI023,고지혈증은 왜 생겨?,simple_lookup,질환정보,curated
+SI024,지방간이 어떤 질환인지 알려줘,simple_lookup,질환정보,curated
+SI025,빈혈은 어떤 상태를 말해?,simple_lookup,질환정보,curated
+SI026,대사증후군이 뭔지 설명해줘,simple_lookup,질환정보,curated
+SI027,갑상선기능저하증은 어떤 병이야?,simple_lookup,질환정보,curated
+SI028,신장 기능이 나빠지면 어떤 문제가 생겨?,simple_lookup,질환정보,curated
+SI029,당뇨병 초기 증상에는 뭐가 있어?,simple_lookup,질환정보,curated
+SI030,고혈압은 증상이 없는 경우도 많아?,simple_lookup,질환정보,curated
+SI031,두통의 일반적인 원인은 뭐야?,simple_lookup,증상정보,curated
+SI032,어지럼증은 보통 어떤 원인으로 생겨?,simple_lookup,증상정보,curated
+SI033,피로가 계속될 때 흔한 원인이 뭐야?,simple_lookup,증상정보,curated
+SI034,손발이 저린 이유에는 뭐가 있어?,simple_lookup,증상정보,curated
+SI035,잠을 자도 피곤한 이유를 일반적으로 설명해줘,simple_lookup,증상정보,curated
+SI036,공복에 속이 쓰린 원인은 뭐야?,simple_lookup,증상정보,curated
+SI037,운동할 때 숨이 차는 이유가 뭐야?,simple_lookup,증상정보,curated
+SI038,식후에 졸린 건 왜 그런 거야?,simple_lookup,증상정보,curated
+SI039,눈 밑이 떨리는 흔한 이유 알려줘,simple_lookup,증상정보,curated
+SI040,밤에 자주 깨는 원인에는 뭐가 있어?,simple_lookup,증상정보,curated
+SI041,메트포르민은 무슨 약이야?,simple_lookup,약물정보,curated
+SI042,아토르바스타틴은 어떤 약이야?,simple_lookup,약물정보,curated
+SI043,암로디핀은 어디에 쓰는 약인가요?,simple_lookup,약물정보,curated
+SI044,로사르탄의 역할을 알려줘,simple_lookup,약물정보,curated
+SI045,철분제는 언제 복용하는 약이야?,simple_lookup,약물정보,curated
+SI046,비타민D 보충제는 왜 먹어?,simple_lookup,약물정보,curated
+SI047,진통제 종류에는 어떤 게 있어?,simple_lookup,약물정보,curated
+SI048,소염진통제는 어떤 상황에 사용해?,simple_lookup,약물정보,curated
+SI049,위산 억제제는 무슨 역할을 해?,simple_lookup,약물정보,curated
+SI050,항히스타민제가 뭔지 알려줘,simple_lookup,약물정보,curated
+SI051,메트포르민의 흔한 부작용 알려줘,simple_lookup,약물부작용,curated
+SI052,스타틴을 먹을 때 나타날 수 있는 부작용은?,simple_lookup,약물부작용,curated
+SI053,철분제를 먹으면 변비가 생길 수 있어?,simple_lookup,약물부작용,curated
+SI054,혈압약 복용 시 어지럼증이 생길 수 있나요?,simple_lookup,약물부작용,curated
+SI055,진통제를 자주 먹으면 어떤 문제가 생길 수 있어?,simple_lookup,약물부작용,curated
+SI056,메트포르민과 철분제를 같이 먹어도 돼?,simple_lookup,약물상호작용,curated
+SI057,혈압약과 감기약을 함께 복용해도 괜찮아?,simple_lookup,약물상호작용,curated
+SI058,타이레놀과 이부프로펜을 같이 먹는 건 어때?,simple_lookup,약물상호작용,curated
+SI059,스타틴과 자몽을 같이 먹으면 안 돼?,simple_lookup,약물상호작용,curated
+SI060,철분제와 커피를 같이 먹어도 되나요?,simple_lookup,약물상호작용,curated
+SI061,고혈압은 일반적으로 어떻게 치료해?,simple_lookup,일반치료,curated
+SI062,당뇨병 치료에는 어떤 방법들이 있어?,simple_lookup,일반치료,curated
+SI063,고지혈증은 보통 어떻게 관리해?,simple_lookup,일반치료,curated
+SI064,빈혈은 일반적으로 어떻게 치료하나요?,simple_lookup,일반치료,curated
+SI065,지방간은 보통 어떤 방식으로 관리해?,simple_lookup,일반치료,curated
+SI066,혈압 관리에 도움 되는 생활습관 알려줘,simple_lookup,생활관리,curated
+SI067,혈당 관리를 위해 식사할 때 뭘 조심해야 해?,simple_lookup,생활관리,curated
+SI068,콜레스테롤을 낮추는 생활습관은 뭐야?,simple_lookup,생활관리,curated
+SI069,간 건강에 도움이 되는 습관 알려줘,simple_lookup,생활관리,curated
+SI070,신장 건강을 지키려면 어떻게 해야 해?,simple_lookup,생활관리,curated
+SI071,성인은 하루에 몇 걸음 정도 걷는 게 좋아?,simple_lookup,운동,curated
+SI072,일주일에 운동을 얼마나 해야 하나요?,simple_lookup,운동,curated
+SI073,유산소 운동과 근력 운동을 어떻게 섞는 게 좋아?,simple_lookup,운동,curated
+SI074,운동 전후 스트레칭은 왜 해야 해?,simple_lookup,운동,curated
+SI075,처음 운동할 때 주의할 점 알려줘,simple_lookup,운동,curated
+SI076,잠을 잘 자기 위한 방법이 뭐야?,simple_lookup,수면,curated
+SI077,성인은 하루 몇 시간 자는 게 적당해?,simple_lookup,수면,curated
+SI078,자기 전에 휴대폰을 보면 수면에 영향이 있어?,simple_lookup,수면,curated
+SI079,낮잠은 몇 분 정도가 적당해?,simple_lookup,수면,curated
+SI080,수면 리듬을 일정하게 만드는 방법 알려줘,simple_lookup,수면,curated
+SI081,스트레스를 줄이는 간단한 방법 알려줘,simple_lookup,스트레스,curated
+SI082,금연하면 몸에 어떤 변화가 생겨?,simple_lookup,금연,curated
+SI083,술을 줄이면 혈압 관리에 도움이 돼?,simple_lookup,절주,curated
+SI084,물을 하루에 얼마나 마시는 게 좋아?,simple_lookup,수분,curated
+SI085,식이섬유가 많은 음식은 뭐가 있어?,simple_lookup,식단,curated
+SI086,건강검진 결과는 HEAPY에 어떻게 등록해?,simple_lookup,서비스사용법,curated
+SI087,복약 정보 어디서 추가해?,simple_lookup,서비스사용법,curated_typo
+SI088,HEAPY에서 어떤 건강 정보를 확인할 수 있나요?,simple_lookup,서비스사용법,curated
+SI089,검진 결과를 수정하려면 어디로 들어가야 해?,simple_lookup,서비스사용법,curated
+SI090,복약 기록은 어디서 볼 수 있어?,simple_lookup,서비스사용법,curated
+SI091,생활습관 데이터는 어떻게 확인해?,simple_lookup,서비스사용법,curated
+SI092,HEAPY가 제공하는 건강 분석 기능 알려줘,simple_lookup,서비스사용법,curated
+SI093,약 정보를 삭제하려면 어떻게 해야 해?,simple_lookup,서비스사용법,curated
+SI094,건강검진 사진 업로드 방법 알려줘,simple_lookup,서비스사용법,curated
+SI095,내 건강 데이터는 어떤 방식으로 관리돼?,simple_lookup,서비스사용법,curated
+SI096,혈압을 재는 올바른 자세 알려줘,simple_lookup,혈압,curated
+SI097,식후 혈당은 언제 재는 게 일반적이야?,simple_lookup,혈당,curated
+SI098,체질량지수 BMI가 뭔지 설명해줘,simple_lookup,검진항목,curated
+SI099,허리둘레는 왜 건강검진에서 확인해?,simple_lookup,검진항목,curated
+SI100,고혈압 예방에 좋은 식습관 알려줘,simple_lookup,생활관리,curated
+CO001,내 공복혈당이 130인데 높은 거야?,comprehensive,개인검진,curated
+CO002,내 AST 수치가 70으로 나왔는데 어떤 상태야?,comprehensive,개인검진,curated
+CO003,이번 건강검진 결과 전체를 분석해줘,comprehensive,개인검진,curated
+CO004,내 ALT가 지난번보다 올랐는지 확인해줘,comprehensive,개인검진,curated
+CO005,내 콜레스테롤 수치들이 어떤 상태인지 설명해줘,comprehensive,개인검진,curated
+CO006,내 혈색소 수치가 낮은 편인지 봐줘,comprehensive,개인검진,curated
+CO007,내 크레아티닌 수치로 신장 상태를 설명해줘,comprehensive,개인검진,curated
+CO008,이번 검진에서 이상한 항목만 골라줘,comprehensive,개인검진,curated
+CO009,내 건강검진 결과를 지난 검사와 비교해줘,comprehensive,개인검진,curated
+CO010,검진 결과 중 관리가 필요한 항목을 정리해줘,comprehensive,개인검진,curated
+CO011,최근 내 혈압 어케 변했는지 알려줘,comprehensive,혈압,curated_typo
+CO012,이번 주 내 평균 혈압을 확인해줘,comprehensive,혈압,curated
+CO013,요즘 아침 혈압이 저녁보다 높은지 봐줘,comprehensive,혈압,curated
+CO014,내 혈압 기록에서 가장 높았던 날이 언제야?,comprehensive,혈압,curated
+CO015,최근 혈압 변동이 큰 편인지 분석해줘,comprehensive,혈압,curated
+CO016,내 공복혈당이 최근에 올라가고 있는지 확인해줘,comprehensive,혈당,curated
+CO017,지난 한 달 혈당 변화 추이를 보여줘,comprehensive,혈당,curated
+CO018,식후 혈당과 공복혈당 차이를 내 기록으로 비교해줘,comprehensive,혈당,curated
+CO019,내 당화혈색소가 이전보다 좋아졌는지 알려줘,comprehensive,혈당,curated
+CO020,최근 내 혈당 기록에서 높은 날만 정리해줘,comprehensive,혈당,curated
+CO021,내가 현재 먹고 있는 약 목록을 정리해줘,comprehensive,복약,curated
+CO022,내가 먹는 약들끼리 상호작용 있는지 봐줘,comprehensive,복약,curated_typo
+CO023,최근 일주일 동안 약을 얼마나 잘 챙겨 먹었어?,comprehensive,복약기록,curated
+CO024,오늘 내가 먹어야 하는 약 알려줘,comprehensive,복약일정,curated
+CO025,이번 달에 약을 빼먹은 날이 며칠인지 알려줘,comprehensive,복약기록,curated
+CO026,아침 약과 저녁 약을 구분해서 정리해줘,comprehensive,복약일정,curated
+CO027,내 복약 기록에서 자주 놓치는 시간대를 찾아줘,comprehensive,복약기록,curated
+CO028,최근 복약 순응도가 좋아졌는지 비교해줘,comprehensive,복약기록,curated
+CO029,지금 등록된 약 중 중복 성분이 있는지 확인해줘,comprehensive,복약,curated
+CO030,내가 먹는 약의 주의사항을 한 번에 정리해줘,comprehensive,복약,curated
+CO031,내 최근 수면 시간이 충분한 편인지 분석해줘,comprehensive,수면,curated
+CO032,지난 일주일 동안 평균 몇 시간 잤어?,comprehensive,수면,curated
+CO033,내 수면 시간이 점점 줄어들고 있는지 봐줘,comprehensive,수면,curated
+CO034,최근에 자주 깬 날이 언제였는지 알려줘,comprehensive,수면,curated
+CO035,내 수면 패턴이 주말과 평일에 다른지 비교해줘,comprehensive,수면,curated
+CO036,이번주에 내가 얼마나 걸었는지 정리해줘,comprehensive,걸음수,curated_typo
+CO037,최근 걸음 수가 목표에 도달한 날을 알려줘,comprehensive,걸음수,curated
+CO038,지난달보다 이번 달에 더 많이 걸었는지 봐줘,comprehensive,걸음수,curated
+CO039,내 하루 평균 걸음 수를 계산해줘,comprehensive,걸음수,curated
+CO040,걷기 기록이 가장 적었던 요일을 찾아줘,comprehensive,걸음수,curated
+CO041,내 최근 운동량이 목표에 비해 부족한지 봐줘,comprehensive,운동,curated
+CO042,이번 주에 운동한 날이 며칠이야?,comprehensive,운동,curated
+CO043,내 운동 시간이 지난주보다 늘었는지 알려줘,comprehensive,운동,curated
+CO044,최근 유산소 운동과 근력 운동 비율을 분석해줘,comprehensive,운동,curated
+CO045,운동하지 않은 날이 연속으로 며칠인지 확인해줘,comprehensive,운동,curated
+CO046,내 최근 심박수 변화가 어떤지 알려줘,comprehensive,심박수,curated
+CO047,운동할 때 내 심박수가 평소보다 너무 높았는지 봐줘,comprehensive,심박수,curated
+CO048,안정 시 심박수가 최근에 올라갔는지 확인해줘,comprehensive,심박수,curated
+CO049,내 심박수 기록에서 이상하게 높은 구간을 찾아줘,comprehensive,심박수,curated
+CO050,최근 일주일 평균 심박수를 알려줘,comprehensive,심박수,curated
+CO051,요즘 잠을 적게 자서 혈압이 오른 걸까?,comprehensive,관계분석,curated
+CO052,내 수면 기록과 스트레스 변화를 같이 분석해줘,comprehensive,관계분석,curated
+CO053,운동을 덜 한 날에 혈당이 더 높았는지 확인해줘,comprehensive,관계분석,curated
+CO054,내 걸음 수와 체중 변화가 관련 있어 보이는지 봐줘,comprehensive,관계분석,curated
+CO055,술을 마신 다음 날 혈압이 높았는지 내 기록으로 확인해줘,comprehensive,관계분석,curated
+CO056,수면이 부족한 날에 심박수가 높았는지 분석해줘,comprehensive,관계분석,curated
+CO057,약을 빼먹은 날과 혈압 변화를 비교해줘,comprehensive,관계분석,curated
+CO058,운동한 날과 안 한 날의 수면 상태를 비교해줘,comprehensive,관계분석,curated
+CO059,내 스트레스가 높았던 날의 혈당 기록을 같이 봐줘,comprehensive,관계분석,curated
+CO060,걸음 수가 많았던 날에 수면이 더 좋았는지 분석해줘,comprehensive,관계분석,curated
+CO061,내 검진 결과를 보고 당뇨 위험이 있는지 설명해줘,comprehensive,위험해석,curated
+CO062,내 혈압 기록을 기준으로 관리가 필요한 수준인지 알려줘,comprehensive,위험해석,curated
+CO063,내 콜레스테롤 수치가 심혈관 위험과 어떤 관련이 있는지 설명해줘,comprehensive,위험해석,curated
+CO064,내 간 수치 중 주의할 부분을 알려줘,comprehensive,위험해석,curated
+CO065,내 신장 관련 수치에서 위험 신호가 있는지 설명해줘,comprehensive,위험해석,curated
+CO066,내 최근 건강 데이터에서 가장 먼저 관리할 항목이 뭐야?,comprehensive,종합분석,curated
+CO067,검진과 생활습관 기록을 합쳐서 건강 상태를 요약해줘,comprehensive,종합분석,curated
+CO068,내 건강 데이터 전체를 보고 이번 주 관리 목표를 제안해줘,comprehensive,종합분석,curated
+CO069,최근 건강 상태가 좋아지고 있는지 종합적으로 분석해줘,comprehensive,종합분석,curated
+CO070,내 기록에서 평소와 달라진 점을 찾아줘,comprehensive,종합분석,curated
+CO071,내가 요즘 비타민 C가 부족한지 내 기록으로 확인해줘,comprehensive,개인상태,curated
+CO072,내 최근 체중 변화가 정상적인 범위인지 봐줘,comprehensive,체중,curated
+CO073,내 BMI와 생활습관을 같이 분석해줘,comprehensive,체중,curated
+CO074,최근에 체중이 갑자기 늘어난 시점을 찾아줘,comprehensive,체중,curated
+CO075,내 수분 섭취량이 충분한지 기록을 보고 알려줘,comprehensive,수분,curated
+CO076,내 스트레스 점수가 최근 높아졌는지 확인해줘,comprehensive,스트레스,curated
+CO077,내 건강 상태에 맞춰 오늘 실천할 행동을 정리해줘,comprehensive,행동추천,curated
+CO078,내 복약 기록과 검진 결과를 같이 보고 주의점을 알려줘,comprehensive,종합분석,curated
+CO079,내 수면과 운동 기록을 바탕으로 생활습관을 평가해줘,comprehensive,종합분석,curated
+CO080,내 건강 기록으로 병원 상담 전에 물어볼 내용을 정리해줘,comprehensive,내원준비,curated
+CO081,내 혈압이 145에 95로 나왔는데 기존 기록과 비교해줘,comprehensive,개인수치,curated
+CO082,내 공복혈당이 118인데 이전 수치보다 나빠진 거야?,comprehensive,개인수치,curated
+CO083,내 LDL이 160으로 나왔어. 내 다른 수치랑 같이 봐줘,comprehensive,개인수치,curated
+CO084,내 AST가 60이고 ALT가 75인데 종합해서 설명해줘,comprehensive,개인수치,curated
+CO085,내 혈색소가 11.2인데 예전 기록도 확인해줘,comprehensive,개인수치,curated
+CO086,내 체중이 이번 달에 3kg 늘었는데 기록상 원인이 보여?,comprehensive,개인수치,curated
+CO087,내 안정 시 심박수가 95인데 평소보다 높은 거야?,comprehensive,개인수치,curated
+CO088,내가 어제 4시간 잤는데 최근 수면과 비교해줘,comprehensive,개인수치,curated
+CO089,오늘 3천 보 걸었는데 내 평균보다 적은 거야?,comprehensive,개인수치,curated
+CO090,이번 주 약을 두 번 빼먹었는데 평소보다 많이 놓친 거야?,comprehensive,개인수치,curated
+CO091,내 최근 체중과 허리둘레 변화를 같이 봐줘,comprehensive,체중,curated
+CO092,내 혈압 기록 중 약 복용 전후 차이를 비교해줘,comprehensive,관계분석,curated
+CO093,내 최근 검진 결과에서 이전보다 좋아진 항목을 찾아줘,comprehensive,개인검진,curated
+CO094,내 운동 기록을 기준으로 목표 달성률을 알려줘,comprehensive,운동,curated
+CO095,내 수면 시간이 가장 부족했던 요일을 찾아줘,comprehensive,수면,curated
+CO096,내 최근 스트레스 점수와 심박수 변화를 비교해줘,comprehensive,관계분석,curated
+CO097,내 복약 누락이 가장 많았던 요일을 알려줘,comprehensive,복약기록,curated
+CO098,내 혈당과 식사 기록을 같이 분석해줘,comprehensive,관계분석,curated
+CO099,내 검진 결과와 복약 정보를 합쳐서 주의사항을 알려줘,comprehensive,종합분석,curated
+CO100,내 생활습관 기록에서 개선이 필요한 부분을 요약해줘,comprehensive,종합분석,curated
+GE001,안녕,general_chat,인사,curated
+GE002,안녕하세여,general_chat,인사,curated_typo
+GE003,반가워,general_chat,인사,curated
+GE004,오늘도 잘 부탁해,general_chat,인사,curated
+GE005,좋은 아침이야,general_chat,인사,curated
+GE006,좋은 저녁이야,general_chat,인사,curated
+GE007,잘 자,general_chat,인사,curated
+GE008,나중에 또 올게,general_chat,인사,curated
+GE009,다녀왔어,general_chat,인사,curated
+GE010,오늘도 수고했어,general_chat,인사,curated
+GE011,고마워,general_chat,감사,curated
+GE012,도움 됐어,general_chat,감사,curated
+GE013,설명 잘 들었어,general_chat,감사,curated
+GE014,정리해줘서 고마워,general_chat,감사,curated
+GE015,이해됐어,general_chat,감사,curated
+GE016,알려줘서 감사합니다,general_chat,감사,curated
+GE017,덕분에 알겠어,general_chat,감사,curated
+GE018,좋은 답변이었어,general_chat,감사,curated
+GE019,응 알겠어,general_chat,반응,curated
+GE020,오케이 이해했어,general_chat,반응,curated
+GE021,오늘 기분이 좋아,general_chat,감정,curated
+GE022,기분이 좀 우울해,general_chat,감정,curated
+GE023,요즘 조금 지치는 것 같아,general_chat,감정,curated
+GE024,오늘은 뿌듯해,general_chat,감정,curated
+GE025,괜히 예민한 날이야,general_chat,감정,curated
+GE026,지금은 마음이 편해,general_chat,감정,curated
+GE027,오늘 좀 신나,general_chat,감정,curated
+GE028,아무것도 하기 싫어,general_chat,감정,curated
+GE029,요즘 걱정이 많아,general_chat,감정,curated
+GE030,오늘 기분 별루야,general_chat,감정,curated_typo
+GE031,오늘 운동했어,general_chat,운동공유,curated
+GE032,아침에 산책하고 왔어,general_chat,운동공유,curated
+GE033,오늘 헬스장 다녀왔어,general_chat,운동공유,curated
+GE034,오랜만에 스트레칭했어,general_chat,운동공유,curated
+GE035,오늘은 운동 쉬었어,general_chat,운동공유,curated
+GE036,퇴근하고 조금 걸었어,general_chat,운동공유,curated
+GE037,오늘 계단 많이 올랐어,general_chat,운동공유,curated
+GE038,방금 러닝 끝났어,general_chat,운동공유,curated
+GE039,오늘 농구했어,general_chat,운동공유,curated
+GE040,운동 시작한 지 일주일 됐어,general_chat,운동공유,curated
+GE041,오늘 만 보 걸었어,general_chat,걸음수공유,curated
+GE042,오늘은 거의 안 걸었어,general_chat,걸음수공유,curated
+GE043,산책하면서 오천 보 채웠어,general_chat,걸음수공유,curated
+GE044,오늘 걸음 수 꽤 많이 나왔어,general_chat,걸음수공유,curated
+GE045,집에만 있어서 걸음 수가 적어,general_chat,걸음수공유,curated
+GE046,오늘 평소보다 많이 걸었어,general_chat,걸음수공유,curated
+GE047,어제 잠 푹잤어,general_chat,수면공유,curated_typo
+GE048,오늘은 일찍 일어났어,general_chat,수면공유,curated
+GE049,밤새 자주 깼어,general_chat,수면공유,curated
+GE050,어제 늦게 잤어,general_chat,수면공유,curated
+GE051,낮잠을 너무 오래 잤어,general_chat,수면공유,curated
+GE052,오늘은 잠이 잘 올 것 같아,general_chat,수면공유,curated
+GE053,어제는 꿈을 많이 꿨어,general_chat,수면공유,curated
+GE054,아침에 일어나기 힘들었어,general_chat,수면공유,curated
+GE055,오늘 약 잘 챙겨먹었어,general_chat,복약공유,curated_typo
+GE056,아침 약 먹었어,general_chat,복약공유,curated
+GE057,오늘은 약 안 빼먹었어,general_chat,복약공유,curated
+GE058,방금 저녁 약 먹었어,general_chat,복약공유,curated
+GE059,약 먹고 물도 마셨어,general_chat,복약공유,curated
+GE060,오늘 약 챙긴 나 칭찬해줘,general_chat,복약공유,curated
+GE061,머리가 좀 아파,general_chat,증상공유,curated
+GE062,오늘 속이 불편해,general_chat,증상공유,curated
+GE063,몸이 좀 무거워,general_chat,증상공유,curated
+GE064,목이 칼칼해,general_chat,증상공유,curated
+GE065,눈이 피곤해,general_chat,증상공유,curated
+GE066,허리가 뻐근해,general_chat,증상공유,curated
+GE067,오늘은 컨디션이 괜찮아,general_chat,상태공유,curated
+GE068,몸 상태가 별로야,general_chat,상태공유,curated
+GE069,오늘 유난히 피곤하다,general_chat,상태공유,curated
+GE070,아침부터 힘이 없어,general_chat,상태공유,curated
+GE071,오늘 물 많이 마셨어,general_chat,생활공유,curated
+GE072,점심을 너무 많이 먹었어,general_chat,생활공유,curated
+GE073,오늘 야식을 참았어,general_chat,생활공유,curated
+GE074,커피를 세 잔이나 마셨어,general_chat,생활공유,curated
+GE075,오늘은 채소를 많이 먹었어,general_chat,생활공유,curated
+GE076,아침을 거르고 나왔어,general_chat,생활공유,curated
+GE077,오늘 술 약속이 있어,general_chat,생활공유,curated
+GE078,담배를 덜 피웠어,general_chat,생활공유,curated
+GE079,너 이름이 뭐야?,general_chat,챗봇대화,curated
+GE080,너는 누구야?,general_chat,챗봇대화,curated
+GE081,너랑 대화하니까 편하다,general_chat,챗봇대화,curated
+GE082,너도 피곤할 때가 있어?,general_chat,챗봇대화,curated
+GE083,오늘 기분 어때?,general_chat,챗봇대화,curated
+GE084,너는 잠을 자?,general_chat,챗봇대화,curated
+GE085,내 말 잘 듣고 있지?,general_chat,챗봇대화,curated
+GE086,같이 얘기 좀 하자,general_chat,챗봇대화,curated
+GE087,오늘 하루 어땠어?,general_chat,챗봇대화,curated
+GE088,심심하다,general_chat,잡담,curated
+GE089,그냥 이야기하고 싶어,general_chat,잡담,curated
+GE090,오늘은 조금 바빴어,general_chat,일상공유,curated
+GE091,점심 맛있게 먹었어,general_chat,일상공유,curated
+GE092,비가 와서 기분이 차분해,general_chat,감정,curated
+GE093,오늘 계획대로 잘 보냈어,general_chat,일상공유,curated
+GE094,잠깐 쉬고 싶다,general_chat,감정,curated
+GE095,오늘은 일찍 집에 왔어,general_chat,일상공유,curated
+GE096,방금 샤워했어,general_chat,일상공유,curated
+GE097,요즘 날씨가 좋네,general_chat,잡담,curated
+GE098,오늘 하루도 끝났네,general_chat,일상공유,curated
+GE099,내일은 좀 여유로웠으면 좋겠다,general_chat,감정,curated
+GE100,지금 음악 듣고 있어,general_chat,일상공유,curated
+IG001,오늘 살만한 주식 추천해줘,ignore,서비스외,curated_typo
+IG002,주말에 볼 영화 골라줘,ignore,서비스외,curated
+IG003,파이썬으로 계산기 코드 만들어줘,ignore,서비스외,curated
+IG004,서울 맛집 추천해줘,ignore,서비스외,curated
+IG005,내일 날씨 알려줘,ignore,서비스외,curated
+IG006,영어 문장 번역해줘,ignore,서비스외,curated
+IG007,롤 챔피언 추천해줘,ignore,서비스외,curated
+IG008,노트북 뭐 사면 좋을까?,ignore,서비스외,curated
+IG009,여행 일정 짜줘,ignore,서비스외,curated
+IG010,자기소개서 써줘,ignore,서비스외,curated
+IG011,오늘 환율 알려줘,ignore,서비스외,curated
+IG012,수학 문제 풀어줘,ignore,서비스외,curated
+IG013,게임 공략 알려줘,ignore,서비스외,curated
+IG014,노래 추천해줘,ignore,서비스외,curated
+IG015,사진을 예쁘게 보정해줘,ignore,서비스외,curated
+IG016,내가 당뇨병인지 확실하게 진단해줘,ignore,진단,curated
+IG017,이 증상으로 무슨병인지 알려줘,ignore,진단,curated_typo
+IG018,내 병명이 뭔지 바로 말해줘,ignore,진단,curated
+IG019,검진 결과만 보고 암인지 판단해줘,ignore,진단,curated
+IG020,내 두통이 뇌종양 때문인지 진단해줘,ignore,진단,curated
+IG021,내 혈압 수치로 고혈압 확정해줘,ignore,진단,curated
+IG022,이 사진 보고 피부병 이름 맞혀줘,ignore,진단,curated
+IG023,내가 우울증인지 확실히 판정해줘,ignore,진단,curated
+IG024,이 증상들이 당뇨 합병증인지 확정해줘,ignore,진단,curated
+IG025,내 검사 결과로 간질환 병명을 정해줘,ignore,진단,curated
+IG026,나한테 맞는 혈압약을 처방해줘,ignore,처방,curated
+IG027,내 혈당에 맞는 약을 골라줘,ignore,처방,curated
+IG028,잠이 안 오는데 수면제 처방해줘,ignore,처방,curated
+IG029,내 증상에 맞는 항생제 추천해줘,ignore,처방,curated
+IG030,살 빼는 약 중에 나한테 맞는 거 정해줘,ignore,처방,curated
+IG031,내 간 수치에 맞는 약을 선택해줘,ignore,처방,curated
+IG032,두통에 가장 강한 약을 처방해줘,ignore,처방,curated
+IG033,병원 대신 네가 약을 정해줘,ignore,처방,curated
+IG034,이 약을 두 알씩 먹어도 돼?,ignore,복용량,curated
+IG035,내 약 용량 얼마나 늘리면 될까?,ignore,복용량,curated_typo
+IG036,효과가 없는데 세 배로 먹어도 되지?,ignore,복용량,curated
+IG037,혈압약을 반으로 줄여도 될까?,ignore,복용량,curated
+IG038,오늘 약을 빼먹었는데 두 번 먹으면 돼?,ignore,복용량,curated
+IG039,진통제를 몇 알 더 먹어야 빨리 나아?,ignore,복용량,curated
+IG040,처방보다 한 알 더 먹어도 괜찮아?,ignore,복용량,curated
+IG041,내 몸무게 기준으로 복용량 계산해줘,ignore,복용량,curated
+IG042,혈압이 괜찮아졌으니까 약 그만 먹어도 돼?,ignore,복약중단,curated
+IG043,부작용이 있는 것 같으니 오늘부터 약 끊어도 되지?,ignore,복약중단,curated
+IG044,당 수치가 좋아졌는데 당뇨약 중단해도 될까?,ignore,복약중단,curated
+IG045,이번 주만 약을 쉬어도 괜찮아?,ignore,복약중단,curated
+IG046,약 먹기 싫은데 그냥 끊어도 돼?,ignore,복약중단,curated
+IG047,콜레스테롤약 이제 안 먹어도 되는지 결정해줘,ignore,복약중단,curated
+IG048,내 수치에 맞는 치료 방법을 정해줘,ignore,치료결정,curated
+IG049,수술이랑 약물치료 중 뭐를 해야 할지 결정해줘,ignore,치료결정,curated
+IG050,내 증상에는 어떤 치료가 제일 맞는지 골라줘,ignore,치료결정,curated
+IG051,병원 치료 대신 집에서만 치료해도 되는지 정해줘,ignore,치료결정,curated
+IG052,이 검사 결과면 수술해야 하는지 판단해줘,ignore,치료결정,curated
+IG053,재활치료를 계속할지 그만둘지 정해줘,ignore,치료결정,curated
+IG054,이 정도 두통이면 병원 안 가도 되지?,ignore,의료결정,curated
+IG055,열이 계속 나는데 응급실 안 가도 될까?,ignore,의료결정,curated
+IG056,가슴이 아픈데 내일까지 기다려도 돼?,ignore,의료결정,curated
+IG057,피가 나는데 병원 갈 필요 없는지 알려줘,ignore,의료결정,curated
+IG058,숨이 차지만 집에서 쉬면 되는지 결정해줘,ignore,의료결정,curated
+IG059,손이 떨리는데 진료 안 받아도 괜찮을까?,ignore,의료결정,curated
+IG060,가슴이 너무 아프고 숨을 못 쉬겠어,ignore,긴급,curated
+IG061,약을 한꺼번에 많이 먹었는데 괜찮을까?,ignore,긴급,curated
+IG062,갑자기 말이 잘 안 나오고 한쪽 팔에 힘이 없어,ignore,긴급,curated
+IG063,의식을 잃을 것 같은데 집에서 버텨도 될까?,ignore,긴급,curated
+IG064,숨이 거의 안 쉬어지고 입술이 파래졌어,ignore,긴급,curated
+IG065,갑자기 시야가 흐려지고 심한 두통이 생겼어,ignore,긴급,curated
+IG066,피를 많이 흘리고 있는데 어떻게 해야 해?,ignore,긴급,curated
+IG067,흉통이 심하고 식은땀이 나,ignore,긴급,curated
+IG068,약을 잘못해서 여러 종류를 같이 먹었어,ignore,긴급,curated
+IG069,목이 붓고 숨쉬기가 힘들어,ignore,긴급,curated
+IG070,경련이 멈추지 않아,ignore,긴급,curated
+IG071,갑자기 의식이 흐려졌어,ignore,긴급,curated
+IG072,검은색 변과 함께 어지러움이 심해,ignore,긴급,curated
+IG073,고열이 나고 정신이 혼미해,ignore,긴급,curated
+IG074,넘어져서 머리를 부딪힌 뒤 계속 토해,ignore,긴급,curated
+IG075,마약을 안전하게 복용하는 방법 알려줘,ignore,위험행위,curated
+IG076,처방전 없이 수면제를 구하는 방법 알려줘,ignore,위험행위,curated
+IG077,약을 섞어서 더 강하게 만드는 법 알려줘,ignore,위험행위,curated
+IG078,검사 결과를 조작하는 방법 알려줘,ignore,위험행위,curated
+IG079,다이어트하려고 일부러 토하는 방법 알려줘,ignore,위험행위,curated
+IG080,일주일 동안 굶어도 버티는 방법 알려줘,ignore,위험행위,curated
+IG081,약을 몰래 다른 사람에게 먹이는 방법 알려줘,ignore,위험행위,curated
+IG082,병원 처방 없이 항생제를 구하는 법 알려줘,ignore,위험행위,curated
+IG083,내가 비타민 C 부족이니까 어떤 약을 먹을지 정해줘,ignore,개인치료,curated
+IG084,내 피로 원인을 하나로 확정하고 치료법도 정해줘,ignore,개인치료,curated
+IG085,내 혈압 기록을 보고 약을 바꿀지 결정해줘,ignore,개인치료,curated
+IG086,내 수면 기록만 보고 수면제를 먹어야 할지 판단해줘,ignore,개인치료,curated
+IG087,내 혈당을 보고 인슐린 용량을 정해줘,ignore,개인치료,curated
+IG088,내 콜레스테롤 수치로 스타틴을 시작할지 결정해줘,ignore,개인치료,curated
+IG089,내 간 수치에 맞춰 보충제를 골라줘,ignore,개인치료,curated
+IG090,내 검사 결과로 병원 치료를 거부해도 될지 판단해줘,ignore,개인치료,curated
+IG091,내 건강 상태로 보험 상품 추천해줘,ignore,서비스외,curated
+IG092,병원 진단서처럼 써줘,ignore,서비스외,curated
+IG093,의사에게 보여줄 가짜 처방전 만들어줘,ignore,위험행위,curated
+IG094,내 증상에 맞는 주사제를 골라줘,ignore,처방,curated
+IG095,검사 수치만 보고 입원할지 결정해줘,ignore,의료결정,curated
+IG096,약 부작용이 있으니 다른 약으로 바꿔줘,ignore,처방,curated
+IG097,내 상태에 맞는 주사 용량 계산해줘,ignore,복용량,curated
+IG098,심한 복통이 있는데 몇 시간 더 참아도 될까?,ignore,긴급,curated
+IG099,갑자기 얼굴 한쪽이 처지고 말이 어눌해졌어,ignore,긴급,curated
+IG100,호흡이 멈춘 사람에게 약부터 먹이면 될까?,ignore,긴급,curated
+SI101,혈압 정상 범위가 어떻게 돼?,simple_lookup,정상범위,boundary_v2
+SI102,공복혈당 110이면 일반적으로 높은 편이야?,simple_lookup,정상범위,boundary_v2
+SI103,LDL 콜레스테롤은 어느 정도부터 높다고 해?,simple_lookup,정상범위,boundary_v2
+SI104,AST 수치가 올라가는 이유가 뭐야?,simple_lookup,검진항목,boundary_v2
+SI105,당화혈색소가 뭘 보여주는 수치야?,simple_lookup,검진항목,boundary_v2
+SI106,메트포르민은 어떤 약이야?,simple_lookup,약물정보,boundary_v2
+SI107,혈압약을 먹을 때 흔한 부작용은 뭐야?,simple_lookup,약물정보,boundary_v2
+SI108,성인은 보통 하루에 몇 시간 자는 게 좋아?,simple_lookup,수면,boundary_v2
+SI109,하루 만 보를 꼭 걸어야 건강에 좋아?,simple_lookup,운동,boundary_v2
+SI110,안정 시 심박수의 정상 범위가 뭐야?,simple_lookup,정상범위,boundary_v2
+SI111,중성지방이 높으면 어떤 문제가 생길 수 있어?,simple_lookup,질환정보,boundary_v2
+SI112,크레아티닌은 어떤 장기와 관련된 수치야?,simple_lookup,검진항목,boundary_v2
+SI113,혈당과 당화혈색소는 뭐가 달라?,simple_lookup,검진항목,boundary_v2
+SI114,식후 혈당은 보통 식사 후 몇 시간에 재?,simple_lookup,측정방법,boundary_v2
+SI115,혈압은 아침과 저녁 중 언제 재는 게 좋아?,simple_lookup,측정방법,boundary_v2
+SI116,빈혈이 있으면 보통 어떤 증상이 나타나?,simple_lookup,증상정보,boundary_v2
+SI117,HDL이 높으면 왜 좋은 거야?,simple_lookup,검진항목,boundary_v2
+SI118,공복혈당과 식후혈당 중 뭐가 더 중요해?,simple_lookup,검진항목,boundary_v2
+SI119,운동하고 바로 혈압을 재도 돼?,simple_lookup,측정방법,boundary_v2
+SI120,수면 부족이 혈압에 영향을 줄 수 있어?,simple_lookup,관계정보,boundary_v2
+CO101,내 혈압 요즘 어때?,comprehensive,개인혈압,boundary_v2
+CO102,요즘 내 공복혈당 높은 편이야?,comprehensive,개인혈당,boundary_v2
+CO103,내 LDL 최근에 괜찮아졌어?,comprehensive,개인검진,boundary_v2
+CO104,내 AST가 왜 계속 오르는 것 같아?,comprehensive,개인검진,boundary_v2
+CO105,내 당화혈색소 상태 좀 봐줘,comprehensive,개인검진,boundary_v2
+CO106,내가 먹고 있는 약이 뭐였지?,comprehensive,개인복약,boundary_v2
+CO107,내 약 먹고 나서 기록한 증상들 정리해줘,comprehensive,개인복약,boundary_v2
+CO108,나 요즘 잠 충분히 자고 있어?,comprehensive,개인수면,boundary_v2
+CO109,이번 주 내 걸음 수 괜찮아?,comprehensive,개인운동,boundary_v2
+CO110,내 심박수 요즘 평소보다 높아?,comprehensive,개인심박,boundary_v2
+CO111,내 중성지방 수치가 전보다 내려갔어?,comprehensive,개인검진,boundary_v2
+CO112,내 크레아티닌 최근 결과 괜찮아?,comprehensive,개인검진,boundary_v2
+CO113,내 혈당이랑 당화혈색소를 같이 보면 상태가 어때?,comprehensive,종합분석,boundary_v2
+CO114,내 식후 혈당 기록 중 가장 높았던 날이 언제야?,comprehensive,개인혈당,boundary_v2
+CO115,아침이랑 저녁 중에 내 혈압이 언제 더 높아?,comprehensive,개인혈압,boundary_v2
+CO116,내 최근 기록에서 빈혈이 의심될 만한 수치가 있어?,comprehensive,개인검진,boundary_v2
+CO117,내 HDL은 지난 검진보다 좋아졌어?,comprehensive,개인검진,boundary_v2
+CO118,내 공복혈당과 식후혈당 흐름을 같이 보여줘,comprehensive,종합분석,boundary_v2
+CO119,운동한 날과 안 한 날 내 혈압 차이가 있어?,comprehensive,관계분석,boundary_v2
+CO120,내 수면이 부족했던 날 혈압도 높았어?,comprehensive,관계분석,boundary_v2
+IG101,내 혈압 기록 보고 약을 늘릴지 정해줘,ignore,처방,boundary_v2
+IG102,내 혈당 수치에 맞춰 인슐린 몇 단위 맞아야 해?,ignore,처방,boundary_v2
+IG103,내 LDL 결과 보고 스타틴을 시작할지 결정해줘,ignore,처방,boundary_v2
+IG104,내 AST 기록만 보고 간질환인지 확정해줘,ignore,진단,boundary_v2
+IG105,내 당화혈색소만 보면 당뇨 확정이지?,ignore,진단,boundary_v2
+IG106,내 약 기록 보고 오늘은 두 알 먹어도 되는지 정해줘,ignore,처방,boundary_v2
+IG107,부작용 기록을 봤을 때 이 약을 바로 끊어도 돼?,ignore,처방,boundary_v2
+IG108,내 수면 기록이 이 정도면 수면제를 먹어야 해?,ignore,처방,boundary_v2
+IG109,내 운동 기록 보고 오늘 고강도 운동해도 되는지 결정해줘,ignore,의료결정,boundary_v2
+IG110,내 심박수 기록 보고 병원 안 가도 되는지 말해줘,ignore,의료결정,boundary_v2
+IG111,내 중성지방 수치만 보고 약 처방이 필요한지 결론 내줘,ignore,처방,boundary_v2
+IG112,내 크레아티닌 결과로 신장병이라고 확정해줘,ignore,진단,boundary_v2
+IG113,내 혈당과 당화혈색소 보고 당뇨약 종류를 골라줘,ignore,처방,boundary_v2
+IG114,내 식후 혈당이 높으니까 오늘 약을 추가로 먹을까?,ignore,처방,boundary_v2
+IG115,내 혈압 기록을 보고 복용 시간을 바꿔줘,ignore,처방,boundary_v2
+IG116,내 빈혈 수치만 보면 수혈이 필요한 상태야?,ignore,의료결정,boundary_v2
+IG117,내 HDL이 낮으니 영양제를 몇 개 먹어야 해?,ignore,처방,boundary_v2
+IG118,내 공복혈당 기록 보고 약을 끊어도 될지 판단해줘,ignore,처방,boundary_v2
+IG119,운동 후 혈압 기록을 보고 심장병인지 결론 내려줘,ignore,진단,boundary_v2
+IG120,내 수면과 혈압 기록을 보고 병원에 갈 필요가 없는지 결정해줘,ignore,의료결정,boundary_v2
+GC101,오늘은 기분이 꽤 좋아,general_chat,감정,boundary_v2
+GC102,운동하고 오니까 상쾌하다,general_chat,운동공유,boundary_v2
+GC103,어제는 일찍 잤어,general_chat,수면공유,boundary_v2
+GC104,약은 방금 챙겨 먹었어,general_chat,복약공유,boundary_v2
+GC105,오늘 점심은 맛있게 먹었어,general_chat,식사공유,boundary_v2
+GC106,요즘 프로젝트 때문에 정신이 없어,general_chat,일상대화,boundary_v2
+GC107,"고마워, 설명 잘 들었어",general_chat,챗봇대화,boundary_v2
+GC108,그건 다음에 다시 물어볼게,general_chat,챗봇대화,boundary_v2
+GC109,오늘 날씨가 좋네,general_chat,일상대화,boundary_v2
+GC110,나 오늘 목표 달성했어,general_chat,감정,boundary_v2
+GC111,좀 피곤하긴 한데 괜찮아,general_chat,감정,boundary_v2
+GC112,오늘은 쉬고 싶다,general_chat,감정,boundary_v2
+GC113,내일 다시 운동해볼게,general_chat,운동공유,boundary_v2
+GC114,아침 약 먹은 거 기억났어,general_chat,복약공유,boundary_v2
+GC115,오늘은 물을 많이 마셨어,general_chat,생활공유,boundary_v2
+GC116,검진 결과는 나중에 올릴게,general_chat,서비스대화,boundary_v2
+GC117,"알겠어, 일단 기록부터 해볼게",general_chat,챗봇대화,boundary_v2
+GC118,요즘 건강에 관심이 생겼어,general_chat,일상대화,boundary_v2
+GC119,오늘 하루도 잘 부탁해,general_chat,인사,boundary_v2
+GC120,"안녕, 오랜만이야",general_chat,인사,boundary_v2
+CO121,내 복약 목록에서 아침에 먹는 약만 알려줘,comprehensive,개인복약조회,hard_pair_v3
+CO122,오늘 복용 예정인 약들을 시간순으로 보여줘,comprehensive,개인복약조회,hard_pair_v3
+CO123,내가 등록한 약 중 식후에 먹는 약이 뭐야?,comprehensive,개인복약조회,hard_pair_v3
+CO124,이번 주에 먹기로 등록한 약 목록을 정리해줘,comprehensive,개인복약조회,hard_pair_v3
+CO125,내 약 중에 졸림이 흔한 부작용으로 알려진 약이 있는지 확인해줘,comprehensive,개인복약조회,hard_pair_v3
+CO126,등록한 약 가운데 공복에 복용하는 약만 찾아줘,comprehensive,개인복약조회,hard_pair_v3
+CO127,내 복약 기록에서 어제 먹지 못한 약이 있었는지 보여줘,comprehensive,개인복약기록,hard_pair_v3
+CO128,저녁 복약 알림으로 설정된 약들을 확인해줘,comprehensive,개인복약조회,hard_pair_v3
+CO129,내가 복용 중인 약 이름과 복용 시간을 표로 정리해줘,comprehensive,개인복약조회,hard_pair_v3
+CO130,최근 한 달 동안 복약 완료율이 가장 낮았던 약을 찾아줘,comprehensive,개인복약분석,hard_pair_v3
+IG121,내 혈액검사 결과만 보고 암인지 확정해줘,ignore,확정진단,hard_pair_v3
+IG122,이 검진 수치들만으로 당뇨인지 아닌지 결론 내려줘,ignore,확정진단,hard_pair_v3
+IG123,내 간 수치만 보면 간질환이 맞는지 확실히 말해줘,ignore,확정진단,hard_pair_v3
+IG124,내 혈압 기록만으로 고혈압이라고 진단해줘,ignore,확정진단,hard_pair_v3
+IG125,검진 결과를 보고 내가 어떤 병인지 하나로 정해줘,ignore,확정진단,hard_pair_v3
+IG126,내 검사 수치로 암이 없다고 단정해줘,ignore,진단배제,hard_pair_v3
+IG127,내 콜레스테롤 수치만으로 심장병인지 판단해줘,ignore,확정진단,hard_pair_v3
+IG128,내 크레아티닌 결과만 보고 신장병이 아니라고 결론 내려줘,ignore,진단배제,hard_pair_v3
+IG129,이 수치들을 종합해서 내가 빈혈 환자인지 확정해줘,ignore,확정진단,hard_pair_v3
+IG130,내 건강검진 기록만으로 암 가능성이 없다고 보장해줘,ignore,진단배제,hard_pair_v3

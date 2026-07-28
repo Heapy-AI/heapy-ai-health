@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import random
@@ -29,9 +30,11 @@ INTENT_LABELS = (
     "ignore",
 )
 DEFAULT_DATASET = (
-    ROOT / "classifier" / "data" / "HEAPY_intent_train_v1_400.jsonl"
+    ROOT / "classifier" / "data" / "HEAPY_intent_dataset_v3_500.csv"
 )
-DEFAULT_OUTPUT = ROOT / "classifier" / "artifacts" / "intent_linear.json"
+DEFAULT_OUTPUT = (
+    ROOT / "classifier" / "artifacts" / "intent_linear_v5_candidate.json"
+)
 DEFAULT_MINIMUM_PER_CLASS = 20
 TYPO_SOURCE = "curated_typo"
 
@@ -43,42 +46,58 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
-def _load_dataset(path: Path) -> list[dict[str, str]]:
-    """JSONL 학습 데이터를 읽고 라벨·중복을 검증한다."""
-    examples: list[dict[str, str]] = []
-    seen_texts: set[str] = set()
+def _read_dataset_rows(path: Path) -> list[dict[str, Any]]:
+    """CSV 또는 JSONL 학습 데이터를 공통 객체 목록으로 읽는다."""
+    if path.suffix.lower() == ".csv":
+        with path.open("r", encoding="utf-8-sig", newline="") as file:
+            rows = [dict(row) for row in csv.DictReader(file)]
+        for row in rows:
+            row["intent"] = row.get("intent") or row.get("label")
+        return rows
+    if path.suffix.lower() != ".jsonl":
+        raise ValueError("학습 데이터는 CSV 또는 JSONL 형식이어야 합니다.")
 
-    with path.open("r", encoding="utf-8") as file:
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8-sig") as file:
         for line_number, line in enumerate(file, start=1):
             if not line.strip():
                 continue
             item: Any = json.loads(line)
             if not isinstance(item, dict):
                 raise ValueError(f"JSON 객체가 아닙니다: {path}:{line_number}")
+            rows.append(item)
+    return rows
 
-            text = str(item.get("text", "")).strip()
-            intent = str(item.get("intent", "")).strip()
-            if not text:
-                raise ValueError(f"빈 text입니다: {path}:{line_number}")
-            if intent not in INTENT_LABELS:
-                raise ValueError(
-                    f"지원하지 않는 intent입니다: {intent} "
-                    f"({path}:{line_number})"
-                )
-            if text in seen_texts:
-                raise ValueError(f"중복 학습 문장입니다: {text}")
 
-            seen_texts.add(text)
-            source = str(item.get("source", "curated")).strip() or "curated"
-            group_id = str(item.get("group_id", text)).strip() or text
-            examples.append(
-                {
-                    "text": text,
-                    "intent": intent,
-                    "source": source,
-                    "group_id": group_id,
-                }
+def _load_dataset(path: Path) -> list[dict[str, str]]:
+    """학습 데이터를 읽고 라벨·중복을 검증한다."""
+    examples: list[dict[str, str]] = []
+    seen_texts: set[str] = set()
+
+    for row_number, item in enumerate(_read_dataset_rows(path), start=2):
+        text = str(item.get("text", "")).strip()
+        intent = str(item.get("intent", "")).strip()
+        if not text:
+            raise ValueError(f"빈 text입니다: {path}:{row_number}")
+        if intent not in INTENT_LABELS:
+            raise ValueError(
+                f"지원하지 않는 intent입니다: {intent} "
+                f"({path}:{row_number})"
             )
+        if text in seen_texts:
+            raise ValueError(f"중복 학습 문장입니다: {text}")
+
+        seen_texts.add(text)
+        source = str(item.get("source", "curated")).strip() or "curated"
+        group_id = str(item.get("group_id", text)).strip() or text
+        examples.append(
+            {
+                "text": text,
+                "intent": intent,
+                "source": source,
+                "group_id": group_id,
+            }
+        )
 
     if not examples:
         raise ValueError(f"학습 데이터가 없습니다: {path}")
@@ -117,50 +136,105 @@ def _split_indices(
 ) -> tuple[list[int], list[int], list[int], list[int]]:
     """라벨·그룹을 보존해 학습·검증·테스트·오타 평가셋을 나눈다."""
     random_generator = random.Random(seed)
+    grouped: dict[str, list[int]] = {}
+    for index, example in enumerate(examples):
+        grouped.setdefault(example["group_id"], []).append(index)
+
+    challenge_group_ids = {
+        example["group_id"]
+        for example in examples
+        if example["source"] == TYPO_SOURCE
+    }
     challenge_indices = [
         index
-        for index, example in enumerate(examples)
-        if example["source"] == TYPO_SOURCE
+        for group_id in challenge_group_ids
+        for index in grouped[group_id]
     ]
-    grouped: dict[str, dict[str, list[int]]] = {
-        label: {} for label in INTENT_LABELS
-    }
-    for index, example in enumerate(examples):
-        if index in challenge_indices:
-            continue
-        label_groups = grouped[example["intent"]]
-        label_groups.setdefault(example["group_id"], []).append(index)
+    eligible_groups = [
+        indices
+        for group_id, indices in grouped.items()
+        if group_id not in challenge_group_ids
+    ]
 
-    train_indices: list[int] = []
-    validation_indices: list[int] = []
-    test_indices: list[int] = []
-    for label in INTENT_LABELS:
-        groups = list(grouped[label].values())
-        random_generator.shuffle(groups)
-        if not use_validation:
-            train_indices.extend(index for group in groups for index in group)
-            continue
+    if use_validation:
+        eligible_indices = [index for group in eligible_groups for index in group]
+        intent_counts = Counter(examples[index]["intent"] for index in eligible_indices)
+        targets = {
+            label: max(1, round(intent_counts[label] * 0.1))
+            for label in INTENT_LABELS
+        }
+        validation_groups, remaining_groups = _select_groups_for_targets(
+            eligible_groups,
+            examples,
+            targets,
+            random_generator,
+        )
+        test_groups, train_groups = _select_groups_for_targets(
+            remaining_groups,
+            examples,
+            targets,
+            random_generator,
+        )
+    else:
+        train_groups = eligible_groups
+        validation_groups = []
+        test_groups = []
 
-        example_count = sum(len(group) for group in groups)
-        validation_target = max(1, round(example_count * 0.1))
-        test_target = max(1, round(example_count * 0.1))
-        validation_label_count = 0
-        test_label_count = 0
-        for group in groups:
-            if validation_label_count < validation_target:
-                validation_indices.extend(group)
-                validation_label_count += len(group)
-            elif test_label_count < test_target:
-                test_indices.extend(group)
-                test_label_count += len(group)
-            else:
-                train_indices.extend(group)
+    train_indices = [index for group in train_groups for index in group]
+    validation_indices = [
+        index for group in validation_groups for index in group
+    ]
+    test_indices = [index for group in test_groups for index in group]
 
     random_generator.shuffle(train_indices)
     random_generator.shuffle(validation_indices)
     random_generator.shuffle(test_indices)
     random_generator.shuffle(challenge_indices)
     return train_indices, validation_indices, test_indices, challenge_indices
+
+
+def _select_groups_for_targets(
+    groups: list[list[int]],
+    examples: list[dict[str, str]],
+    targets: dict[str, int],
+    random_generator: random.Random,
+) -> tuple[list[list[int]], list[list[int]]]:
+    """라벨별 목표 수를 만족하도록 그룹 전체를 원자적으로 선택한다."""
+    remaining = list(groups)
+    random_generator.shuffle(remaining)
+    selected: list[list[int]] = []
+    selected_counts: Counter[str] = Counter()
+
+    while any(selected_counts[label] < targets[label] for label in INTENT_LABELS):
+        deficits = {
+            label: max(0, targets[label] - selected_counts[label])
+            for label in INTENT_LABELS
+        }
+        best_position = -1
+        best_coverage = 0
+        for position, group in enumerate(remaining):
+            group_counts = Counter(examples[index]["intent"] for index in group)
+            coverage = sum(
+                min(deficits[label], group_counts[label])
+                for label in INTENT_LABELS
+            )
+            if coverage > best_coverage:
+                best_position = position
+                best_coverage = coverage
+
+        if best_position < 0:
+            missing = {
+                label: deficits[label]
+                for label in INTENT_LABELS
+                if deficits[label] > 0
+            }
+            raise ValueError(f"데이터 분할 목표를 충족할 수 없습니다: {missing}")
+
+        group = remaining.pop(best_position)
+        selected.append(group)
+        selected_counts.update(examples[index]["intent"] for index in group)
+
+    return selected, remaining
 
 
 def _accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
@@ -279,13 +353,18 @@ def train(args: argparse.Namespace) -> None:
     best_weights: torch.Tensor | None = None
     best_bias: torch.Tensor | None = None
     epochs_without_improvement = 0
+    loss_curve: list[dict[str, float | int | None]] = []
     for epoch in range(1, args.epochs + 1):
         optimizer.zero_grad()
         loss = loss_function(model(train_features), train_targets)
         loss.backward()
         optimizer.step()
 
+        train_loss = float(loss.item())
         if not validation_indices:
+            loss_curve.append(
+                {"epoch": epoch, "train": train_loss, "validation": None}
+            )
             continue
         with torch.no_grad():
             validation_loss = float(
@@ -294,6 +373,13 @@ def train(args: argparse.Namespace) -> None:
                     targets[validation_indices],
                 ).item()
             )
+        loss_curve.append(
+            {
+                "epoch": epoch,
+                "train": train_loss,
+                "validation": validation_loss,
+            }
+        )
         if validation_loss < best_validation_loss - 1e-8:
             best_validation_loss = validation_loss
             best_epoch = epoch
@@ -382,6 +468,16 @@ def train(args: argparse.Namespace) -> None:
             "best_epoch": best_epoch,
             "seed": args.seed,
             "epochs": args.epochs,
+            "learning_rate": args.learning_rate,
+            "weight_decay": args.weight_decay,
+            "optimizer": "AdamW",
+            "scheduler": None,
+            "loss_function": "CrossEntropyLoss",
+            "batch_strategy": "full_batch",
+            "linear_initialization": "random",
+            "parent_checkpoint": None,
+            "sentence_transformer_frozen": True,
+            "loss_curve": loss_curve,
             "prototype": args.allow_small_dataset,
         },
     }
@@ -402,8 +498,12 @@ def train(args: argparse.Namespace) -> None:
             continue
         print(
             f"{name} 정확도={metrics['accuracy']:.4f}, "
-            f"Macro F1={metrics['macro_f1']:.4f}"
+            f"Macro F1={metrics['macro_f1']:.4f}, "
+            f"Macro Precision={metrics['macro_precision']:.4f}, "
+            f"Macro Recall={metrics['macro_recall']:.4f}"
         )
+        print(f"{name} Confusion Matrix={metrics['confusion_matrix']}")
+    print(f"Loss Curve epoch 수: {len(loss_curve)}")
     print(f"최적 epoch: {best_epoch}")
     print(f"모델 저장: {output_path}")
     print(f"모델 버전: {model_version}")

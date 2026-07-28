@@ -30,7 +30,7 @@ Pinecone 연결과 namespace별 적재 수를 반환합니다.
 
 ## `POST /intent/classify`
 
-질문을 로컬 모델로 한 번 임베딩한 뒤 Linear/Softmax 분류기로 최상위 intent를 반환합니다.
+질문을 먼저 규칙 기반 Safety Guard로 확인하고, 통과한 질문만 로컬 모델로 한 번 임베딩한 뒤 Linear/Softmax 분류기로 최상위 intent를 반환합니다.
 
 요청:
 
@@ -38,7 +38,9 @@ Pinecone 연결과 namespace별 적재 수를 반환합니다.
 {"question":"최근 AST가 높은데 왜 그런가요?"}
 ```
 
-응답에는 `intent`, `confidence`, intent별 `probabilities`, `uncertain`, `model_version`이 포함됩니다. 학습된 모델 artifact가 없으면 `503`을 반환합니다.
+기존 필드인 `intent`, `confidence`, intent별 `probabilities`, `uncertain`, `model_version`은 유지합니다. 분류 출처 확인을 위해 `source`, `guard_triggered`, `guard_reason`, `matched_patterns`를 추가로 반환합니다.
+
+Safety Guard가 작동하면 `intent=ignore`, `source=safety_guard`, `confidence=1.0`, `uncertain=false`를 반환합니다. 규칙이 명시적인 의료적 결정 요청을 확정적으로 라우팅하므로 1.0을 사용하며, 일반적인 모델 confidence와는 의미가 다릅니다. Guard를 통과하면 `source=linear_classifier`입니다.
 
 ## `POST /search`
 
