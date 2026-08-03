@@ -1,7 +1,7 @@
 # KDCA 건강정보 재분류 + KCD-9 매칭 + disease VDB 빌드
 
 질병관리청 국가건강정보포털 건강정보(650건)를 **7개 카테고리로 재분류**하고, 질환 문서를
-**KCD-9 코드에 매칭**한 뒤, 이미지 속 표/기준 텍스트까지 병합해 **Pinecone용 disease VDB 청크**를 만든다.
+**KCD-9 코드에 매칭**한 뒤, 표·기준·이미지 속 텍스트는 선택적 OCR 단계에서 섹션에 병합해 **Pinecone용 disease VDB 청크**를 만든다.
 
 > ⚠️ **대용량 원천 데이터는 git에 포함되지 않는다.** 아래 "필요한 입력 데이터"를 직접 준비해야 실행된다.
 > 모든 경로는 상대경로라 어느 환경에서도 동작한다.
@@ -57,7 +57,7 @@ pip install google-genai          # 이미지 OCR(선택 단계)에서만 필요
 | KCD-9 마스터파일 `*.xlsx` (예: `제9차 …masterfile….xlsx`) | `data/` | build_kcd_dict |
 | KDCA API URL 목록 `*국가건강정보포털*API*.xlsx` | `data/disease_info/` | preprocess (원천 수집) |
 | (또는) 전처리 완료본 `*.json` 650건 | `preprocessed/disease_info/kdca/` | pipeline 입력 |
-| (캐시) 원본 XML | `preprocessed/disease_info/_kdca_raw_xml/` | preprocess 재실행 가속 |
+| (캐시) 원본 XML | `preprocessed/disease_info/_kdca_raw_xml/` | preprocess 재실행 가속 및 OCR/이미지 URL 참조 |
 
 **진입 방식 2가지**
 - **A. 원천부터**: `data/disease_info`에 API xlsx를 두고 `preprocess_kdca.py` 실행 → 650 JSON 생성
@@ -65,6 +65,8 @@ pip install google-genai          # 이미지 OCR(선택 단계)에서만 필요
 - **B. 전처리본부터**: 이미 `preprocessed/disease_info/kdca/*.json`(650건)을 받았다면 preprocess 생략하고 3단계부터 시작
 
 > 모든 명령은 **이 폴더(`preprocessed/script/kcd_reclassify/`)에서** 실행하면 된다(경로는 스크립트 기준 자동 계산).
+>
+> 참고: 현재 기본 전처리 흐름에서는 HTML 표를 본문에 직접 풀어넣지 않고 `[표 생략]`으로 축약한다. 표/기준 텍스트는 선택적 OCR 단계에서만 섹션에 병합된다.
 
 ---
 
@@ -76,6 +78,7 @@ cd preprocessed/script/kcd_reclassify
 # (A 진입 시에만) ① 원천 XML → 전처리 JSON 650건
 python ../preprocess_kdca.py
 #   → preprocessed/disease_info/kdca/*.json  (+ _kdca_raw_xml/ 캐시)
+#   ※ HTML 표는 전처리 단계에서 [표 생략]으로 축약되며, 표/기준 텍스트는 이후 OCR 단계에서만 병합된다.
 
 # ② KCD-9 딕셔너리 생성 (대표어+이명, 대분류 챕터 포함)
 python build_kcd_dict.py
@@ -113,7 +116,8 @@ KCD 매칭은 disease 248/411(60.3%), symptom 28/28(100%), 임베디드 30/81.
 ## 4. (선택) 이미지 속 텍스트 OCR 병합
 
 건강정보 그림/표(예: 검사 종류표, 질환 분류표)에는 본문에 없는 임상정보가 있다.
-Gemini 멀티모달로 OCR해 섹션에 병합할 수 있다.
+기본 전처리 단계에서는 표를 본문에 직접 풀어넣지 않고 `[표 생략]`으로 축약하며,
+Gemini 멀티모달 OCR로 추출한 표·기준 텍스트를 섹션에 병합할 수 있다.
 
 ```bash
 export GEMINI_API_KEY=<your-key>              # Windows: set GEMINI_API_KEY=...
