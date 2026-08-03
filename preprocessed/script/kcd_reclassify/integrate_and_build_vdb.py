@@ -21,7 +21,7 @@ import argparse, json, os, glob, re, sys, datetime
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # preprocessed/script
 sys.stdout.reconfigure(encoding="utf-8")
-from chunk_disease import chunk_sections, tbl_prefix   # 기존 청킹 재사용(ko-sroberta 토크나이저)
+from chunk_disease import chunk_sections  # 기존 청킹 재사용(ko-sroberta 토크나이저)
 from utils import extract_related_diseases
 
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
@@ -109,7 +109,7 @@ def main():
                 meta["content_type"] = "table"       # 팀원이 파인콘에서 표만 필터/랭킹 조정 가능
                 if tbl: meta["table_title"] = tbl
             rec = {"id": f"kdca-{sn}-{i}",
-                   "text": f"{disease} - {label}{tbl_prefix(tbl)}\n\n{body}",
+                   "text": f"{disease} - {label}\n\n{body}",
                    "metadata": meta}
             lines.append(json.dumps(rec, ensure_ascii=False))
             n_chunk += 1
