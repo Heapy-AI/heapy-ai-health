@@ -26,6 +26,7 @@ import argparse, io, json, os, re, ssl, sys, time, glob
 import xml.etree.ElementTree as ET
 
 import requests, urllib3
+from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 from PIL import Image
@@ -38,6 +39,9 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 XMLDIR = os.path.join(ROOT, "preprocessed", "disease_info", "_kdca_raw_xml")
 OUTPUT_JSON = os.path.join(ROOT, "output")            # 카테고리 조회용(재분류 결과)
 WORK = os.path.join(HERE, "image_ocr")
+
+load_dotenv(os.path.join(ROOT, ".env"))
+load_dotenv()
 IMGDIR = os.path.join(WORK, "img")
 EXF = os.path.join(WORK, "extractions.json")
 

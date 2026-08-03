@@ -200,7 +200,8 @@ health-ai/
 data/
 output/
 #preprocessed/
-#vdb/chunk/
+vdb/chunk/
+preprocessed/script/kcd_reclassify/image_ocr/img
 
 # 벡터DB 인덱스는 Git LFS로 추적합니다.
 vdb/chroma/  # 일반 Git 추적에서 제외하지 않음
