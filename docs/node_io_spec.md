@@ -21,7 +21,7 @@
 | `intent` | enum | A4 |
 | `guard_triggered` | bool | SG |
 | `guard_reason` | str | null | SG |
-| `sub_intents` | str[] | B1 |
+| `search_collections` | str[] | B1 |
 | `chunks` | Chunk[] \| null | 검색/캐시 |
 | `cache_hit` | bool | SC1 / BC1 |
 | `user_context` | object \| null | D2 |
@@ -65,9 +65,9 @@
 
 | 노드 | 입력 | 출력 |
 |---|---|---|
-| B1 Sub-intent 분류 | `resolved_query`, `intent` | `sub_intents` |
+| B1 검색 namespace 설정 | `intent` | `search_collections` |
 | SC1 / BC1 캐시 조회 | `query_embedding` | `cache_hit`, (히트 시) `chunks` |
-| C1 / B2 VDB 검색 | `query_embedding`, `sub_intents` | `chunks` |
+| C1 / B2 VDB 검색 | `query_embedding`, `search_collections` | `chunks` |
 | VCHK 응답 성공 여부 | `chunks` | `error` (실패 시) |
 | C1CHK / B3CHK 결과 유무 | `chunks` | (분기만) |
 | SC3 / BC3 캐시 저장 | `query_embedding`, `chunks` | (Redis 기록) |
@@ -89,7 +89,7 @@
 | C5 프롬프트 (chat) | `history`, `summary` | `prompt` |
 | L1 LLM 호출 | `prompt` | (스트림 시작) |
 | L2 / L3 스트림 전송 | (LLM 토큰) | (클라이언트로 청크 전송) |
-| B5 응답 검증 | (누적 응답) | (검증된 응답) |
+| B5 응답 검증 | 답변 초안, 청크 ID가 붙은 `chunks`, `intent`, Safety Guard 결과 | `grounded`, `citations`, `verification_method`, `verification_reason`, `grounding_errors`, `unsupported_claims` |
 
 ---
 

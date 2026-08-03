@@ -1,8 +1,30 @@
 from fastapi import APIRouter, HTTPException
-from app.core.config import COLLECTIONS, SEARCH_TOP_K
+from app.core.config import (
+    COLLECTIONS,
+    SEARCH_COLLECTIONS,
+    SEARCH_FINAL_TOP_K,
+    SEARCH_MAX_PER_COLLECTION,
+    SEARCH_MIN_SCORE,
+    SEARCH_TOP_K,
+    SEARCH_TOP_K_PER_COLLECTION,
+)
 from app.core.state import state
 from app.services.rag import cite, format_docs
-from app.schemas.health_chatbot import (AskRequest, SearchHit, SearchResponse, AskResponse)
+from app.services.search_result_merger import merge_search_results
+from app.services.intent_classifier import Intent
+from app.services.safety_guard import check_safety_guard
+from app.schemas.health_chatbot import (
+    AskRequest,
+    AskResponse,
+    CombinedAnswerChunk,
+    CombinedAskRequest,
+    CombinedAskResponse,
+    CombinedCitation,
+    CombinedSearchHit,
+    CombinedSearchResponse,
+    SearchHit,
+    SearchResponse,
+)
 
 
 router = APIRouter()
@@ -24,9 +46,92 @@ def _retrieve(collection: str, question: str):
     return state["vector_search"].search(collection, question, SEARCH_TOP_K)
 
 
+def _retrieve_combined(question: str):
+    """설정된 namespace를 병렬 검색하고 하나의 근거 목록으로 병합한다."""
+    vector_search = state["vector_search"]
+    query_vector = vector_search.embed_query(question)
+    search_result = vector_search.search_many_by_vector(
+        SEARCH_COLLECTIONS,
+        query_vector,
+        SEARCH_TOP_K_PER_COLLECTION,
+    )
+    if (
+        search_result.errors
+        and len(search_result.errors) == len(search_result.searched_collections)
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="모든 Pinecone namespace 검색에 실패했습니다.",
+        )
+
+    documents = merge_search_results(
+        search_result.documents,
+        final_top_k=SEARCH_FINAL_TOP_K,
+        max_per_collection=SEARCH_MAX_PER_COLLECTION,
+        min_score=SEARCH_MIN_SCORE,
+    )
+    return documents, search_result, query_vector
+
+
+def _select_grounding_verification(
+    question: str,
+    query_vector: list[float],
+) -> tuple[bool, str]:
+    """질문 위험도와 Intent에 따라 2차 LLM 검증 여부를 결정한다."""
+    guard_result = check_safety_guard(question)
+    if guard_result.triggered:
+        return True, f"safety_guard:{guard_result.reason}"
+
+    classifier = state.get("intent_classifier")
+    if classifier is None:
+        return True, "intent_classifier_unavailable"
+
+    prediction = classifier.predict(query_vector)
+    if prediction.uncertain:
+        return True, "intent_uncertain"
+    if prediction.intent in {Intent.COMPREHENSIVE, Intent.IGNORE}:
+        return True, f"intent:{prediction.intent.value}"
+    return False, f"intent:{prediction.intent.value}"
+
+
 def _to_sources(docs) -> list[str]:
     """검색 청크 메타에서 '라벨 · URL' 출처를 만들고 중복 제거·정렬한다."""
     return sorted({cite(d) for d in docs})
+
+
+def _to_answer_chunks(docs) -> list[CombinedAnswerChunk]:
+    """Gemini 문맥에 전달한 최종 Document를 원문 그대로 응답한다."""
+    return [
+        CombinedAnswerChunk(
+            collection=str(document.metadata.get("collection", "unknown")),
+            record_id=str(document.metadata.get("record_id", "")),
+            score=float(document.metadata.get("score", 0.0) or 0.0),
+            source=cite(document),
+            text=document.page_content,
+        )
+        for document in docs
+    ]
+
+
+def _to_citations(docs, citation_ids: list[str]) -> list[CombinedCitation]:
+    """검증을 통과한 인용 ID를 실제 최종 청크와 연결한다."""
+    citations: list[CombinedCitation] = []
+    for citation_id in citation_ids:
+        index = int(citation_id[1:]) - 1
+        if index < 0 or index >= len(docs):
+            continue
+        document = docs[index]
+        citations.append(
+            CombinedCitation(
+                citation_id=citation_id,
+                collection=str(document.metadata.get("collection", "unknown")),
+                record_id=str(document.metadata.get("record_id", "")),
+                score=float(document.metadata.get("score", 0.0) or 0.0),
+                source=cite(document),
+                text=document.page_content,
+            )
+        )
+    return citations
 
 
 # ── health check — 컬렉션별 인덱스 적재 여부 확인 ──
@@ -87,3 +192,73 @@ def ask(req: AskRequest):
     grounded = NOT_GROUNDED_MARK not in answer
     sources = _to_sources(docs) if grounded else []
     return AskResponse(answer=answer, sources=sources, grounded=grounded)
+
+
+@router.post("/search/combined", response_model=CombinedSearchResponse)
+def search_combined(req: CombinedAskRequest) -> CombinedSearchResponse:
+    """설정된 Pinecone namespace를 병렬 검색한 통합 결과를 반환한다."""
+    docs, search_result, _ = _retrieve_combined(req.question)
+    hits = [
+        CombinedSearchHit(
+            collection=str(document.metadata.get("collection", "unknown")),
+            score=float(document.metadata.get("score", 0.0) or 0.0),
+            source=cite(document),
+            text=document.page_content[:120],
+        )
+        for document in docs
+    ]
+    return CombinedSearchResponse(
+        query=req.question,
+        hits=hits,
+        searched_collections=search_result.searched_collections,
+        failed_collections=sorted(search_result.errors),
+    )
+
+
+@router.post("/ask/combined", response_model=CombinedAskResponse)
+def ask_combined(req: CombinedAskRequest) -> CombinedAskResponse:
+    """다중 namespace 검색 근거를 사용해 하나의 RAG 답변을 생성한다."""
+    docs, search_result, query_vector = _retrieve_combined(req.question)
+    failed_collections = sorted(search_result.errors)
+    if not docs:
+        return CombinedAskResponse(
+            answer=NOT_GROUNDED_MARK,
+            sources=[],
+            grounded=False,
+            chunks=[],
+            citations=[],
+            verification_method="citation_validation_failed",
+            verification_reason="no_search_results",
+            grounding_errors=["검색된 최종 청크가 없습니다."],
+            unsupported_claims=[],
+            searched_collections=search_result.searched_collections,
+            failed_collections=failed_collections,
+        )
+
+    verify_semantics, verification_reason = _select_grounding_verification(
+        req.question,
+        query_vector,
+    )
+    result = state["grounded_rag_service"].answer(
+        req.question,
+        docs,
+        verify_semantics=verify_semantics,
+    )
+    citations = _to_citations(docs, result.cited_chunk_ids)
+    return CombinedAskResponse(
+        answer=result.answer,
+        sources=(
+            sorted({citation.source for citation in citations})
+            if result.grounded
+            else []
+        ),
+        grounded=result.grounded,
+        chunks=_to_answer_chunks(docs),
+        citations=citations,
+        verification_method=result.verification_method,
+        verification_reason=verification_reason,
+        grounding_errors=result.grounding_errors,
+        unsupported_claims=result.unsupported_claims,
+        searched_collections=search_result.searched_collections,
+        failed_collections=failed_collections,
+    )

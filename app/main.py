@@ -1,12 +1,23 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
+from app.core.config import (
+    INTENT_MIN_CONFIDENCE,
+    INTENT_MODEL_PATH,
+    SEARCH_COLLECTIONS,
+    SEARCH_FINAL_TOP_K,
+    SEARCH_MAX_PER_COLLECTION,
+    SEARCH_MIN_SCORE,
+    SEARCH_TOP_K_PER_COLLECTION,
+)
 from app.core.state import state
+from app.routers import ask, chat, intent
+from app.services.chat_orchestrator import ChatOrchestrator
+from app.services.general_chat import build_general_chat_chain
+from app.services.grounded_rag import build_grounded_rag_service
+from app.services.intent_classifier import LinearIntentClassifier
 from app.services.rag import build_answer_chain
 from app.services.vector_search import build_pinecone_search_service
-from app.services.intent_classifier import LinearIntentClassifier
-from app.core.config import INTENT_MIN_CONFIDENCE, INTENT_MODEL_PATH
-from app.routers import ask, intent
 
 
 @asynccontextmanager
@@ -17,6 +28,10 @@ async def lifespan(app: FastAPI):
 
     state["vector_search"] = vector_search
     state["answer_chain"] = build_answer_chain()
+    grounded_rag_service = build_grounded_rag_service()
+    state["grounded_rag_service"] = grounded_rag_service
+    general_chat_chain = build_general_chat_chain()
+    state["general_chat_chain"] = general_chat_chain
     state["backend"] = vector_search.backend_name
     state["embed_model"] = vector_search.embed_model
     state["indexed_chunks"] = counts
@@ -38,6 +53,18 @@ async def lifespan(app: FastAPI):
             f"{INTENT_MODEL_PATH}"
         )
 
+    state["chat_orchestrator"] = ChatOrchestrator(
+        vector_search=vector_search,
+        intent_classifier=state["intent_classifier"],
+        grounded_rag_service=grounded_rag_service,
+        general_chat_chain=general_chat_chain,
+        search_collections=SEARCH_COLLECTIONS,
+        top_k_per_collection=SEARCH_TOP_K_PER_COLLECTION,
+        final_top_k=SEARCH_FINAL_TOP_K,
+        max_per_collection=SEARCH_MAX_PER_COLLECTION,
+        min_score=SEARCH_MIN_SCORE,
+    )
+
     print(
         f"[lifespan] 벡터 백엔드 준비 완료 - "
         f"backend={vector_search.backend_name}, model={vector_search.embed_model}"
@@ -49,6 +76,7 @@ async def lifespan(app: FastAPI):
     state.clear()                            # 종료 시 정리
 
 app = FastAPI(title="HEAPY RAG 서빙", version="1.0", lifespan=lifespan)
+app.include_router(chat.router)
 app.include_router(ask.router)
 app.include_router(intent.router)
 

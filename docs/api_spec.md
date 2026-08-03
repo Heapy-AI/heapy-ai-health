@@ -28,9 +28,32 @@ Pinecone 연결과 namespace별 적재 수를 반환합니다.
 
 등록된 namespace 중 하나라도 0건이면 `ready=false`입니다.
 
+## `POST /chat`
+
+MVP 통합 챗봇 엔드포인트입니다. Safety Guard를 먼저 실행하고, 통과한 질문은 동일한 질문 임베딩으로 Intent v6를 분류합니다. 분류 결과에 따라 다음 경로를 실행합니다.
+
+| Intent | 처리 경로 |
+|---|---|
+| `simple_lookup` | 설정된 Pinecone namespace 병렬 검색 → 간단 RAG 답변 → 인용 검사 |
+| `comprehensive` | 설정된 Pinecone namespace 병렬 검색 → 상세 RAG 답변 → 별도 의미 근거 검증 |
+| `general_chat` | Pinecone 검색 없이 Gemini 일반 대화 |
+| `ignore` | Pinecone 및 Gemini 호출 없이 고정 답변 |
+
+Safety Guard가 작동하면 Intent 모델과 임베딩을 실행하지 않고 바로 `ignore` 고정 응답을 반환합니다. `simple_lookup`과 `comprehensive`는 Intent 분류에 사용한 질문 임베딩을 Pinecone 검색에 재사용합니다.
+
+요청:
+
+```json
+{"question":"건강검진에서 AST가 높게 나왔는데 왜 그런가요?"}
+```
+
+응답에는 Intent 분류 정보, 답변, 실제 검색 청크, 검증된 인용 및 namespace 처리 상태가 함께 포함됩니다. `grounded`는 RAG 경로에서만 `true` 또는 `false`이며 검색하지 않는 `general_chat`과 `ignore`는 `null`입니다. 현재 MVP는 개인 건강·복약 RDB가 연결되지 않았으므로 `comprehensive`도 `personal_context_used=false`입니다.
+
 ## `POST /intent/classify`
 
 질문을 먼저 규칙 기반 Safety Guard로 확인하고, 통과한 질문만 로컬 모델로 한 번 임베딩한 뒤 Linear/Softmax 분류기로 최상위 intent를 반환합니다.
+
+현재 기본 체크포인트는 `classifier/artifacts/intent-v6/best_model.json`이며, 환경변수 `INTENT_MODEL_PATH`로 다른 버전을 선택할 수 있습니다.
 
 요청:
 
@@ -94,6 +117,109 @@ Pinecone 검색 청크를 근거로 Gemini 답변을 생성합니다.
 
 검색 청크에 근거가 없으면 `지식베이스에 근거 없음`, `grounded=false`를 반환합니다.
 
+## `POST /search/combined`
+
+질문을 한 번 임베딩하고 `SEARCH_COLLECTIONS`에 설정된 Pinecone namespace를 병렬 검색합니다. 결과를 중복 제거·점수 정렬·컬렉션 편중 제한 후 반환하며 Gemini는 호출하지 않습니다.
+
+요청:
+
+```json
+{"question":"공복혈당과 복용 약의 관계를 알려줘"}
+```
+
+응답:
+
+```json
+{
+  "query": "공복혈당과 복용 약의 관계를 알려줘",
+  "hits": [
+    {
+      "collection": "health_checkup_info",
+      "score": 0.93,
+      "source": "건강검진 판정기준 · https://...",
+      "text": "공복혈당은 일정 시간 금식한 뒤..."
+    }
+  ],
+  "searched_collections": ["health_checkup_info", "disease_info"],
+  "failed_collections": []
+}
+```
+
+## `POST /ask/combined`
+
+`/search/combined`와 동일한 병렬 검색·병합 결과에 `C1`, `C2` 순서의 청크 ID를 붙여 Gemini 답변을 생성합니다. 모든 답변은 각 건강정보 주장에 `[C1]` 형식의 인용을 요구하고 서버가 인용 ID를 검사합니다. `comprehensive`, `ignore`, Safety Guard 감지, Intent 저신뢰 또는 분류기 미준비 상황에서는 별도 Gemini 검증 단계가 답변 주장과 인용 청크의 의미 일치 여부까지 확인합니다. 검색 결과가 없거나 필수 검증에 실패하면 답변을 통과시키지 않고 `grounded=false`를 반환합니다.
+
+요청:
+
+```json
+{"question":"공복혈당과 복용 약의 관계를 알려줘"}
+```
+
+응답에는 기존 `answer`, `sources`, `grounded`와 함께 답변 생성 문맥에 전달한 최종 실제 청크 `chunks`, 검증을 통과한 실제 인용 `citations`, 검증 실패 원인, namespace 처리 상태가 포함됩니다. `chunks[].text`와 `citations[].text`는 미리보기가 아닌 전체 청크 본문입니다.
+
+```json
+{
+  "answer": "공복혈당은 일정 시간 금식한 뒤 측정합니다. [C1]\n\n이 답변은 의료 진단이 아닌 정보 제공 목적입니다.",
+  "sources": ["건강검진 판정기준 · https://..."],
+  "grounded": true,
+  "chunks": [
+    {
+      "collection": "health_checkup_info",
+      "record_id": "FASTING_GLUCOSE",
+      "score": 0.93,
+      "source": "건강검진 판정기준 · https://...",
+      "text": "공복혈당은 일정 시간 금식한 뒤 혈액 속 포도당 농도를..."
+    }
+  ],
+  "citations": [
+    {
+      "citation_id": "C1",
+      "collection": "health_checkup_info",
+      "record_id": "FASTING_GLUCOSE",
+      "score": 0.93,
+      "source": "건강검진 판정기준 · https://...",
+      "text": "공복혈당은 일정 시간 금식한 뒤 혈액 속 포도당 농도를..."
+    }
+  ],
+  "verification_method": "citation_only",
+  "verification_reason": "intent:simple_lookup",
+  "grounding_errors": [],
+  "unsupported_claims": [],
+  "searched_collections": ["health_checkup_info", "disease_info"],
+  "failed_collections": []
+}
+```
+
+`chunks`는 Gemini에 제공한 전체 최종 문맥이고, `citations`는 답변 본문이 실제로 인용했으며 해당 요청의 필수 검증을 통과한 청크다. `grounded=true`는 다음 조건을 모두 만족할 때만 반환한다.
+
+- 답변 본문에 하나 이상의 유효한 `[C숫자]` 인용이 있음
+- 본문 인용과 구조화 출력의 인용 목록이 일치함
+- 존재하지 않는 청크 ID가 없음
+- 강화 검증 대상이면 별도 검증 결과 모든 건강정보 주장이 인용 청크로 뒷받침됨
+
+조건부 검증 정책은 다음과 같다.
+
+| 조건 | `verification_method` | Gemini 호출 |
+|---|---|---:|
+| `simple_lookup`, `general_chat` | `citation_only` | 1회 |
+| `comprehensive`, `ignore` | `llm_verified` | 2회 |
+| Safety Guard 감지 | `llm_verified` | 2회 |
+| Intent `uncertain=true` | `llm_verified` | 2회 |
+| Intent 분류기 미준비 | `llm_verified` | 2회 |
+| 인용 형식 또는 근거 검증 실패 | `citation_validation_failed` 또는 `llm_verification_failed` | 단계에 따라 1~2회 |
+
+`verification_reason`은 `intent:simple_lookup`, `intent:comprehensive`, `safety_guard:medication_decision`, `intent_uncertain`, `intent_classifier_unavailable`처럼 정책 선택 근거를 반환한다.
+
+다중 검색 기본 설정은 구조 검증용이며 전체 데이터 적재 후 평가를 통해 조정합니다.
+
+```text
+SEARCH_COLLECTIONS=health_checkup_info,disease_info
+SEARCH_TOP_K_PER_COLLECTION=3
+SEARCH_FINAL_TOP_K=6
+SEARCH_MAX_PER_COLLECTION=2
+SEARCH_MIN_SCORE=0.0
+```
+
 ## 오류
 
 | 상태 | 조건 |
@@ -101,6 +227,8 @@ Pinecone 검색 청크를 근거로 Gemini 답변을 생성합니다.
 | `400` | 등록되지 않은 collection |
 | `422` | 요청 필드 누락 또는 형식 오류 |
 | `503` | 학습된 intent 모델 artifact 없음 |
+| `503` | 다중 검색 대상 namespace가 모두 실패 |
+| `503` | 통합 챗봇 오케스트레이터가 준비되지 않음 |
 | `500` | Pinecone, 임베딩 모델 또는 Gemini 호출 오류 |
 
 ## collection과 namespace

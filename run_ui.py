@@ -13,6 +13,8 @@ HEAPY 건강정보 RAG — Gradio UI 실행 스크립트
 
 import sys
 
+import gradio as gr
+
 # Windows 콘솔(cp949)에서 이모지 print 시 UnicodeEncodeError 방지
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -40,5 +42,6 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         share=False,
-        show_error=True
+        show_error=True,
+        theme=gr.themes.Soft(),
     )

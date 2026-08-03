@@ -45,6 +45,12 @@ SIMPLE_LOOKUP_EXAMPLE = {
     "answer": "혈압은 심장이 수축할 때의 수축기혈압(SBP)과 이완할 때의 "
               "이완기혈압(DBP)으로 측정되며, 혈관에 가해지는 압력을 나타냅니다.",
     "sources": ["health_checkup_info:SBP"],
+    "citations": [
+        {"citation_id": "C1", "record_id": "SBP", "collection": "health_checkup_info"}
+    ],
+    "grounded": True,
+    "verification_method": "citation_only",
+    "verification_reason": "intent:simple_lookup",
     # 개인 데이터 없음. cache_hit 여부 등 메타를 붙일 수도 있음(선택).
     "meta": {"cache_hit": True}
 }
@@ -59,6 +65,13 @@ COMPREHENSIVE_EXAMPLE = {
     "answer": "당신의 혈압은 수축기 145 / 이완기 92 mmHg로 정상범위를 초과했습니다. "
               "지속되면 고혈압으로 진행될 수 있어 생활습관 관리가 필요합니다.",
     "sources": ["health_checkup_info:SBP", "disease_info:고혈압"],
+    "citations": [
+        {"citation_id": "C1", "record_id": "SBP", "collection": "health_checkup_info"},
+        {"citation_id": "C2", "record_id": "고혈압", "collection": "disease_info"},
+    ],
+    "grounded": True,
+    "verification_method": "llm_verified",
+    "verification_reason": "intent:comprehensive",
     "personal_data": {
         # RDB(개인 검진)에서 온 값. 캐시 안 함.
         "items": [
@@ -72,7 +85,10 @@ COMPREHENSIVE_EXAMPLE = {
         "type": "mission_suggestion",          # 예: 미션 유도
         "hook": "관련 혈압 관리 미션을 만들어드릴까요?"
     },
-    "meta": {"cache_hit": False, "sub_intents": ["health_checkup_info", "disease_info"]}
+    "meta": {
+        "cache_hit": False,
+        "search_collections": ["health_checkup_info", "disease_info"],
+    }
 }
 
 

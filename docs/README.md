@@ -15,6 +15,8 @@ Heapy AI health care의 요청 처리 파이프라인 설계 자료 모음이다
 
 핵심 설계 결정은 다음과 같다. 파이프라인은 단일 State 객체를 노드에서 노드로 흘려보내며, 각 노드는 필요한 필드를 읽고 결과 필드를 채운다. VDB 검색 결과(청크)는 캐시하지만 개인 데이터(RDB)는 캐시하지 않는다. 요약은 응답 완료 후 백그라운드에서 갱신하여 다음 턴이 로드한다.
 
+현재 MVP는 `POST /chat`에서 Safety Guard → Intent v6 → 네 가지 응답 경로를 연결한다. `simple_lookup`과 `comprehensive`는 Pinecone 다중 namespace 병렬 검색을 사용하고, `general_chat`은 검색 없는 Gemini 대화, `ignore`는 고정 응답을 사용한다. 세션·검색 캐시·개인 RDB·스트리밍·히스토리 저장은 전체 설계에는 포함되지만 아직 통합 엔드포인트에 연결되지 않았다.
+
 ## 문서 구성
 
 읽는 순서대로
@@ -28,6 +30,8 @@ Heapy AI health care의 요청 처리 파이프라인 설계 자료 모음이다
 4. **[State 설계 문서](./pipeline-state-design.md)** — 왜 이런 구조인지, State 라이프사이클, 직렬화 경계 등 설계 배경. 구현 중 "왜 이렇게 했지" 싶을 때 참조.
 
 5. **[응답 설계 문서](.response_schema.py)** - intent 4개 분기별 최종 응답 JSON 구조와 예시. 어떤 분기에 어떤 필드(personal_data, next_action 등)가 들어가는지 정의. 파이프라인이 클라이언트에 내보내는 계약이므로, 백엔드뿐 아니라 프론트 개발자도 참조한다.
+
+6. **[다중 컬렉션 병렬 검색 방법론](./multi_collection_parallel_retrieval.md)** — Sub-intent 분류기 없이 여러 Pinecone namespace를 병렬 검색하고 결과를 병합하는 기준. 검색 상수는 전체 데이터 적재 후 평가를 통해 확정한다.
 ```
 docs/
 ├── README.md                    (진입점)
@@ -36,6 +40,7 @@ docs/
 ├── node-io-spec.md              (노드 입출력 표)
 ├── node_stubs.py                (함수 시그니처 + 예시 + fixture)
 ├── response_schema.py           (응답 스키마 + 예시 + fixture)
+├── multi_collection_parallel_retrieval.md (다중 namespace 검색 방법론)
 └── pipeline-state-design.md     (설계 배경)
 ```
 ## 분업 가이드

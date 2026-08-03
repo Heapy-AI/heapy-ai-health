@@ -5,17 +5,19 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.documents import Document
 
 from app.core.config import (
-    COLLECTIONS,
     EMBED_MODEL,
     PINECONE_API_KEY,
     PINECONE_DIMENSION,
     PINECONE_INDEX_NAME,
     PINECONE_METRIC,
+    SEARCH_COLLECTIONS,
 )
 
 
@@ -24,6 +26,15 @@ def _read_value(value: Any, key: str, default: Any = None) -> Any:
     if isinstance(value, Mapping):
         return value.get(key, default)
     return getattr(value, key, default)
+
+
+@dataclass(frozen=True)
+class MultiCollectionSearchResult:
+    """다중 namespace 검색 결과와 부분 실패 정보를 함께 보존한다."""
+
+    documents: list[Document]
+    searched_collections: list[str]
+    errors: dict[str, str]
 
 
 class PineconeSearchService:
@@ -111,6 +122,7 @@ class PineconeSearchService:
 
             metadata["record_id"] = str(_read_value(match, "id", ""))
             metadata["score"] = float(_read_value(match, "score", 0.0) or 0.0)
+            metadata["collection"] = collection
             documents.append(Document(page_content=page_content, metadata=metadata))
         return documents
 
@@ -119,13 +131,77 @@ class PineconeSearchService:
         query_vector = self.embed_query(question)
         return self.search_by_vector(collection, query_vector, top_k)
 
+    def search_many_by_vector(
+        self,
+        collections: tuple[str, ...] | list[str],
+        query_vector: list[float],
+        top_k_per_collection: int,
+    ) -> MultiCollectionSearchResult:
+        """동일한 질문 벡터로 여러 namespace를 병렬 검색한다."""
+        unique_collections = list(dict.fromkeys(collections))
+        if not unique_collections:
+            return MultiCollectionSearchResult([], [], {})
+        if top_k_per_collection <= 0:
+            raise ValueError("top_k_per_collection은 1 이상이어야 합니다.")
+        if len(query_vector) != PINECONE_DIMENSION:
+            raise ValueError(
+                f"질문 임베딩 차원이 올바르지 않습니다: "
+                f"{len(query_vector)} != {PINECONE_DIMENSION}"
+            )
+
+        documents_by_collection: dict[str, list[Document]] = {}
+        errors: dict[str, str] = {}
+        worker_count = min(len(unique_collections), 8)
+
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            future_to_collection = {
+                executor.submit(
+                    self.search_by_vector,
+                    collection,
+                    query_vector,
+                    top_k_per_collection,
+                ): collection
+                for collection in unique_collections
+            }
+            for future in as_completed(future_to_collection):
+                collection = future_to_collection[future]
+                try:
+                    documents_by_collection[collection] = future.result()
+                except Exception as exc:  # Pinecone namespace별 부분 실패를 보존한다.
+                    errors[collection] = f"{type(exc).__name__}: {exc}"
+
+        documents = [
+            document
+            for collection in unique_collections
+            for document in documents_by_collection.get(collection, [])
+        ]
+        return MultiCollectionSearchResult(
+            documents=documents,
+            searched_collections=unique_collections,
+            errors=errors,
+        )
+
+    def search_many(
+        self,
+        collections: tuple[str, ...] | list[str],
+        question: str,
+        top_k_per_collection: int,
+    ) -> MultiCollectionSearchResult:
+        """질문을 한 번 임베딩한 뒤 여러 namespace를 검색한다."""
+        query_vector = self.embed_query(question)
+        return self.search_many_by_vector(
+            collections,
+            query_vector,
+            top_k_per_collection,
+        )
+
     def counts(self) -> dict[str, int]:
         """namespace별 적재 벡터 수를 반환한다."""
         stats = self._index.describe_index_stats()
         namespaces = _read_value(stats, "namespaces", {}) or {}
         result: dict[str, int] = {}
 
-        for collection in COLLECTIONS:
+        for collection in SEARCH_COLLECTIONS:
             namespace = _read_value(namespaces, collection, {})
             result[collection] = int(
                 _read_value(namespace, "vector_count", 0) or 0
