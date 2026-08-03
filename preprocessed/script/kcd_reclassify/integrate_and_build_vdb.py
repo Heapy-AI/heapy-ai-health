@@ -21,7 +21,7 @@ import argparse, json, os, glob, re, sys, datetime
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # preprocessed/script
 sys.stdout.reconfigure(encoding="utf-8")
-from chunk_disease import chunk_sections            # 기존 청킹 재사용(ko-sroberta 토크나이저)
+from chunk_disease import chunk_sections, tbl_prefix   # 기존 청킹 재사용(ko-sroberta 토크나이저)
 from utils import extract_related_diseases
 
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
@@ -87,7 +87,7 @@ def main():
         if cats: n_cat += 1
         if kcd_code: n_kcd += 1
 
-        for i, (label, body) in enumerate(chunk_sections(d["sections"])):
+        for i, (label, body, tbl) in enumerate(chunk_sections(d["sections"])):
             meta = {
                 "primary_key": disease,
                 "doc_type": "disease",
@@ -105,7 +105,12 @@ def main():
             if kcd_name: meta["kcd_primary_name"] = kcd_name
             if kcd_codes: meta["kcd_codes"] = kcd_codes
             if rel: meta["related_diseases"] = rel
-            rec = {"id": f"kdca-{sn}-{i}", "text": f"{disease} - {label}\n\n{body}", "metadata": meta}
+            if tbl is not None:
+                meta["content_type"] = "table"       # 팀원이 파인콘에서 표만 필터/랭킹 조정 가능
+                if tbl: meta["table_title"] = tbl
+            rec = {"id": f"kdca-{sn}-{i}",
+                   "text": f"{disease} - {label}{tbl_prefix(tbl)}\n\n{body}",
+                   "metadata": meta}
             lines.append(json.dumps(rec, ensure_ascii=False))
             n_chunk += 1
 

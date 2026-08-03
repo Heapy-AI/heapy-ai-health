@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """KDCA 건강정보 이미지 → Gemini 멀티모달 OCR → extractions.json
 
-원본 XML(_kdca_raw_xml)의 이미지/첨부 URL(cntntsCl의 CNTNTS_CL_CN가 순수 URL인 블록)을
+원본 XML(_kdca_raw_xml)의 이미지/첨부 URL(CNTNTS_CL_CN이 순수 URL인 블록 + HTML 안 <img src>)을
 대상 섹션 기준으로 모아 내려받고, Gemini로 표/기준/수치 등 텍스트 정보를 추출한다.
 결과는 downstream 통합 스크립트(integrate_image_text.py)가 쓰는 포맷으로 저장.
 
@@ -42,6 +42,8 @@ IMGDIR = os.path.join(WORK, "img")
 EXF = os.path.join(WORK, "extractions.json")
 
 FILE_URL = re.compile(r"^\s*https?://\S+\s*$")
+# 표/본문 HTML 안에 박힌 <img src>도 수집 대상(스킴 제한으로 base64 data URI는 자동 제외)
+IMG_SRC = re.compile(r"""(?is)<img[^>]*\bsrc=(?:"(https?://[^"]+)"|'(https?://[^']+)')""")
 MAXDIM = 1600
 
 # 기본 대상 섹션(정보밀도 높은 곳) — --sections 로 덮어쓰기 가능
@@ -103,13 +105,18 @@ def collect_targets(sections, scope):
         for cl in root.iter("cntntsCl"):
             nm = (cl.findtext("CNTNTS_CL_NM") or "").strip()
             cn = (cl.findtext("CNTNTS_CL_CN") or "").strip()
-            if not (cn and FILE_URL.match(cn)):
+            if not cn:
+                continue
+            # 순수 URL 블록(첨부파일) + HTML 안에 박힌 <img src> 둘 다 수집
+            urls = [cn.strip()] if FILE_URL.match(cn) else [a or b for a, b in IMG_SRC.findall(cn)]
+            if not urls:
                 continue
             if scope == "all" or norm(nm) in target_secs:
-                k = sec_ord.get(nm, 0); sec_ord[nm] = k + 1
-                items.append({"sn": sn, "disease": disease_of.get(sn, "?"),
-                              "section": nm, "order": k, "url": cn,
-                              "category": cat_of.get(sn, "?")})
+                for u in urls:
+                    k = sec_ord.get(nm, 0); sec_ord[nm] = k + 1
+                    items.append({"sn": sn, "disease": disease_of.get(sn, "?"),
+                                  "section": nm, "order": k, "url": u,
+                                  "category": cat_of.get(sn, "?")})
     return items
 
 
