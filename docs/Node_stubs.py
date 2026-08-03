@@ -36,7 +36,7 @@ class Role(str, Enum):
 
 
 class Collection(str, Enum):
-    """VDB collection. sub_intents는 이 값들의 목록이다."""
+    """병렬 검색 대상으로 설정할 VDB collection."""
     HEALTH_CHECKUP = "health_checkup_info"      # 검사 항목 정의/해석 (단순조회·종합분석)
     DISEASE = "disease_info"                     # 질환 설명, 증상
     MEDICATION = "medication_info"               # 약물 정보, 부작용, 상호작용
@@ -259,18 +259,11 @@ def a4_classify_intent(query_embedding: list[float]) -> Intent:
 # 검색 (simple / comprehensive 공통 패턴)
 # ============================================================
 
-def b1_classify_subintent(resolved_query: str, intent: Intent) -> list[Collection]:
-    """comprehensive 전용. 다중 선택. 반환: sub_intents = 검색할 collection 목록
+def b1_load_search_collections(intent: Intent) -> list[Collection]:
+    """검색 intent이면 설정된 전체 VDB collection 목록을 반환한다.
 
-    [예시 — comprehensive 쿼리별 collection 선택]
-      Q3 "Metformin이랑 철분제 같이 먹어도 돼?" -> [MEDICATION]
-         (+ 개인 복용금지 목록은 RDB에서 별도 조회)
-      Q4 "최근 AST가 높은데 왜?"               -> [HEALTH_CHECKUP, DISEASE]
-         (+ 개인 검진 수치는 RDB에서 조회)
-      Q5 "요즘 피곤한데 뭐가 원인일까?"          -> [HEALTH_CHECKUP, DISEASE, LIFESTYLE]
-         (+ 개인 검진 + 생활 데이터는 RDB에서 조회)
-    ※ VDB collection 선택과 별개로, 어떤 RDB 개인 데이터를 조회할지도
-      sub_intent에 따라 D2에서 결정 (필요한 테이블만 조회).
+    Sub-intent 분류기는 사용하지 않는다. 개인 데이터 조회 대상은 VDB 검색
+    namespace와 분리해 D2에서 결정한다.
     """
     ...
 
@@ -281,9 +274,9 @@ def cache_lookup(query_embedding: list[float]) -> tuple[bool, list[Chunk] | None
 
 def vdb_search(
     query_embedding: list[float],
-    collections: list[Collection] | None = None,  # comprehensive만 지정, simple은 기본 collection
+    collections: list[Collection] | None = None,
 ) -> list[Chunk] | None:
-    """C1 / B2 VDB 검색 (top-k). 캐시 미스 시 실행.
+    """C1 / B2 다중 namespace 병렬 검색·병합. 캐시 미스 시 실행.
     반환: chunks — 인프라 실패 시 None, 결과 없음 시 [] (위 상태 규약 준수)"""
     ...
 

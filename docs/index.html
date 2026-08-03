@@ -106,7 +106,7 @@ flowchart LR
   end
 
   subgraph COMPREHENSIVE["Comprehensive RAG+LLM"]
-    B1{"Sub-intent 분류<br>(다중 선택 가능)"}
+    B1["검색 namespace 설정<br>(전체 대상)"]
     BC1{"쿼리 임베딩<br>캐시 조회"}
     BC2["캐시 HIT<br>(유사도 ≥ threshold)"]
     B2["VDB 검색 RAG"]
@@ -138,7 +138,7 @@ flowchart LR
     L1CHK{"LLM 호출 <br>성공여부"}
     L2["토큰 스트림 생성"]
     L3["청크 단위 전송<br>(SSE/WebSocket)"]
-    B5["응답 검증<br>(누적 후)"]
+    B5["조건부 응답 검증<br>(인용 ID / 주장 근거)"]
   end
 
   subgraph ERRHANDLE["에러/타임아웃 처리"]
@@ -148,7 +148,7 @@ flowchart LR
   end
 
   subgraph MONITOR["로깅/모니터링"]
-    LOG1["분류결과 로그<br>(intent, 확률, sub-intent)"]
+    LOG1["분류·검색 로그<br>(intent, 확률, namespace)"]
     LOG2["검증/에러 로그<br>(검증결과, 에러유형, 재시도횟수)"]
     LOG3["캐시/스트리밍 로그<br>(hit율, TTFT, 토큰속도)"]
   end
@@ -200,7 +200,7 @@ flowchart LR
   C1CHK -- "없음(일반대화 전환)" --> C5
   C2 -- "짧은 프롬프트" --> L1
 
-  B1 -- "콜렉션 list<br>[건강검진,질병정보,복약]" --> BC1
+  B1 -- "SEARCH_COLLECTIONS" --> BC1
   BC1 -. 조회 .-> QCACHE
   BC1 -- HIT --> BC2
   BC2 -- 청크 재사용 --> B4

@@ -23,7 +23,7 @@ Healpy AI health care의 요청 처리 파이프라인에서 노드 간에 흐�
 | `intent` | 열거형 | A4 | simple_lookup / comprehensive / general_chat / ignore |
 | `guard_triggered` | 불리언 | SG | 의료 Safety Guard 작동 여부 |
 | `guard_reason` | 문자열 또는 없음 | SG | definitive_diagnosis / medication_decision / medical_visit_decision |
-| `sub_intents` | 문자열 목록 | B1 | 다중 선택 가능. 검색 대상 콜렉션과 매핑 |
+| `search_collections` | 문자열 목록 | B1 | 설정으로 고정한 병렬 검색 대상 namespace |
 | `chunks` | 청크 목록 또는 없음 | 검색/캐시 노드 | 검색 결과 청크. 아래 "chunks 상태 규약" 참조 |
 | `cache_hit` | 불리언 | SC1 또는 BC1 | 캐시 히트 여부 |
 | `user_context` | 객체 또는 없음 | D2 | RDB에서 조합한 개인 컨텍스트 (comprehensive 경로만) |
@@ -89,9 +89,9 @@ VDB 검색으로 확보한 개별 지식 청크를 표현한다.
 
 | 노드 | 입력 | 출력 | 비고 |
 |---|---|---|---|
-| B1 Sub-intent 분류 | `resolved_query`, `intent` | `sub_intents` | comprehensive만. 콜렉션 목록으로 매핑 |
+| B1 검색 namespace 설정 | `intent` | `search_collections` | Sub-intent 분류 없이 설정된 전체 검색 대상 사용 |
 | SC1 / BC1 캐시 조회 | `query_embedding` | `cache_hit`, (히트 시)`chunks` | 유사도 ≥ 임계값이면 히트 |
-| C1 / B2 VDB 검색 | `query_embedding`, `sub_intents` | `chunks` | 캐시 미스 시 실행. top-k |
+| C1 / B2 VDB 검색 | `query_embedding`, `search_collections` | `chunks` | 캐시 미스 시 namespace 병렬 검색·병합 |
 | VCHK 응답 성공 여부 | `chunks` | `error`(실패 시) | 없음이면 인프라 실패 → 에러 분기 |
 | C1CHK / B3CHK 검색결과 유무 | `chunks` | (분기만) | 빈 목록이면 general_chat 전환 |
 | SC3 / BC3 캐시 저장 | `query_embedding`, `chunks` | (QCACHE 기록) | TTL과 함께 저장 |
@@ -113,7 +113,7 @@ VDB 검색으로 확보한 개별 지식 청크를 표현한다.
 | C5 프롬프트 구성 (chat) | `history`, `summary` | `prompt` | 자유 대화 |
 | L1 LLM 호출 | `prompt` | (스트림 시작) | 스트리밍 모드 |
 | L2 / L3 스트림 전송 | (LLM 토큰) | (출력으로 청크 전송) | 토큰 단위 전송 |
-| B5 응답 검증 | (누적 응답) | (검증된 응답) | 누적 완료 후 스키마·안전성 검증 |
+| B5 응답 검증 | 답변 초안, 청크 ID가 붙은 `chunks`, `intent`, Safety Guard 결과 | `grounded`, `citations`, `verification_method`, `verification_reason`, `grounding_errors`, `unsupported_claims` | 모든 요청은 인용 ID 검사, 위험·개인화·저신뢰 요청은 추가 주장-청크 의미 검증 |
 
 ## State 라이프사이클
 

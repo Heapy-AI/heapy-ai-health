@@ -3,6 +3,7 @@ from fastapi import FastAPI
 
 from app.core.state import state
 from app.services.rag import build_answer_chain
+from app.services.grounded_rag import build_grounded_rag_service
 from app.services.vector_search import build_pinecone_search_service
 from app.services.intent_classifier import LinearIntentClassifier
 from app.core.config import INTENT_MIN_CONFIDENCE, INTENT_MODEL_PATH
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
 
     state["vector_search"] = vector_search
     state["answer_chain"] = build_answer_chain()
+    state["grounded_rag_service"] = build_grounded_rag_service()
     state["backend"] = vector_search.backend_name
     state["embed_model"] = vector_search.embed_model
     state["indexed_chunks"] = counts

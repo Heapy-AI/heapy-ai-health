@@ -28,6 +28,8 @@ Heapy AI health care의 요청 처리 파이프라인 설계 자료 모음이다
 4. **[State 설계 문서](./pipeline-state-design.md)** — 왜 이런 구조인지, State 라이프사이클, 직렬화 경계 등 설계 배경. 구현 중 "왜 이렇게 했지" 싶을 때 참조.
 
 5. **[응답 설계 문서](.response_schema.py)** - intent 4개 분기별 최종 응답 JSON 구조와 예시. 어떤 분기에 어떤 필드(personal_data, next_action 등)가 들어가는지 정의. 파이프라인이 클라이언트에 내보내는 계약이므로, 백엔드뿐 아니라 프론트 개발자도 참조한다.
+
+6. **[다중 컬렉션 병렬 검색 방법론](./multi_collection_parallel_retrieval.md)** — Sub-intent 분류기 없이 여러 Pinecone namespace를 병렬 검색하고 결과를 병합하는 기준. 검색 상수는 전체 데이터 적재 후 평가를 통해 확정한다.
 ```
 docs/
 ├── README.md                    (진입점)
@@ -36,6 +38,7 @@ docs/
 ├── node-io-spec.md              (노드 입출력 표)
 ├── node_stubs.py                (함수 시그니처 + 예시 + fixture)
 ├── response_schema.py           (응답 스키마 + 예시 + fixture)
+├── multi_collection_parallel_retrieval.md (다중 namespace 검색 방법론)
 └── pipeline-state-design.md     (설계 배경)
 ```
 ## 분업 가이드

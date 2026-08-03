@@ -19,9 +19,14 @@ def cite(document) -> str:
 
 
 def format_docs(documents) -> str:
-    """검색 청크를 출처와 함께 LLM 프롬프트 문자열로 만든다."""
+    """검색 청크를 컬렉션·점수·출처와 함께 프롬프트로 만든다."""
     return "\n\n".join(
-        f"[{cite(document)}] {document.page_content}"
+        (
+            f"[컬렉션: {document.metadata.get('collection', 'unknown')}]\n"
+            f"[유사도: {float(document.metadata.get('score', 0.0) or 0.0):.4f}]\n"
+            f"[출처: {cite(document)}]\n"
+            f"{document.page_content}"
+        )
         for document in documents
     )
 
