@@ -15,6 +15,8 @@ Heapy AI health care의 요청 처리 파이프라인 설계 자료 모음이다
 
 핵심 설계 결정은 다음과 같다. 파이프라인은 단일 State 객체를 노드에서 노드로 흘려보내며, 각 노드는 필요한 필드를 읽고 결과 필드를 채운다. VDB 검색 결과(청크)는 캐시하지만 개인 데이터(RDB)는 캐시하지 않는다. 요약은 응답 완료 후 백그라운드에서 갱신하여 다음 턴이 로드한다.
 
+현재 MVP는 `POST /chat`에서 Safety Guard → Intent v6 → 네 가지 응답 경로를 연결한다. `simple_lookup`과 `comprehensive`는 Pinecone 다중 namespace 병렬 검색을 사용하고, `general_chat`은 검색 없는 Gemini 대화, `ignore`는 고정 응답을 사용한다. 세션·검색 캐시·개인 RDB·스트리밍·히스토리 저장은 전체 설계에는 포함되지만 아직 통합 엔드포인트에 연결되지 않았다.
+
 ## 문서 구성
 
 읽는 순서대로

@@ -28,6 +28,27 @@ Pinecone 연결과 namespace별 적재 수를 반환합니다.
 
 등록된 namespace 중 하나라도 0건이면 `ready=false`입니다.
 
+## `POST /chat`
+
+MVP 통합 챗봇 엔드포인트입니다. Safety Guard를 먼저 실행하고, 통과한 질문은 동일한 질문 임베딩으로 Intent v6를 분류합니다. 분류 결과에 따라 다음 경로를 실행합니다.
+
+| Intent | 처리 경로 |
+|---|---|
+| `simple_lookup` | 설정된 Pinecone namespace 병렬 검색 → 간단 RAG 답변 → 인용 검사 |
+| `comprehensive` | 설정된 Pinecone namespace 병렬 검색 → 상세 RAG 답변 → 별도 의미 근거 검증 |
+| `general_chat` | Pinecone 검색 없이 Gemini 일반 대화 |
+| `ignore` | Pinecone 및 Gemini 호출 없이 고정 답변 |
+
+Safety Guard가 작동하면 Intent 모델과 임베딩을 실행하지 않고 바로 `ignore` 고정 응답을 반환합니다. `simple_lookup`과 `comprehensive`는 Intent 분류에 사용한 질문 임베딩을 Pinecone 검색에 재사용합니다.
+
+요청:
+
+```json
+{"question":"건강검진에서 AST가 높게 나왔는데 왜 그런가요?"}
+```
+
+응답에는 Intent 분류 정보, 답변, 실제 검색 청크, 검증된 인용 및 namespace 처리 상태가 함께 포함됩니다. `grounded`는 RAG 경로에서만 `true` 또는 `false`이며 검색하지 않는 `general_chat`과 `ignore`는 `null`입니다. 현재 MVP는 개인 건강·복약 RDB가 연결되지 않았으므로 `comprehensive`도 `personal_context_used=false`입니다.
+
 ## `POST /intent/classify`
 
 질문을 먼저 규칙 기반 Safety Guard로 확인하고, 통과한 질문만 로컬 모델로 한 번 임베딩한 뒤 Linear/Softmax 분류기로 최상위 intent를 반환합니다.
@@ -207,6 +228,7 @@ SEARCH_MIN_SCORE=0.0
 | `422` | 요청 필드 누락 또는 형식 오류 |
 | `503` | 학습된 intent 모델 artifact 없음 |
 | `503` | 다중 검색 대상 namespace가 모두 실패 |
+| `503` | 통합 챗봇 오케스트레이터가 준비되지 않음 |
 | `500` | Pinecone, 임베딩 모델 또는 Gemini 호출 오류 |
 
 ## collection과 namespace

@@ -88,3 +88,44 @@ class CombinedAskResponse(AskResponse):
     unsupported_claims: list[str]
     searched_collections: list[str]
     failed_collections: list[str]
+
+
+class ChatRequest(BaseModel):
+    """최상위 Intent부터 자동 분기하는 통합 챗봇 요청."""
+
+    question: str = Field(..., min_length=1, description="사용자 질문")
+
+    @field_validator("question")
+    @classmethod
+    def _validate_question(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("질문은 비어 있을 수 없습니다.")
+        return normalized
+
+
+class ChatResponse(BaseModel):
+    """Intent 분류와 선택된 처리 경로의 통합 응답."""
+
+    question: str
+    intent: str
+    confidence: float
+    probabilities: dict[str, float]
+    uncertain: bool
+    model_version: str
+    intent_source: str
+    guard_triggered: bool
+    guard_reason: str | None
+    matched_patterns: list[str]
+    answer: str
+    sources: list[str]
+    grounded: bool | None
+    chunks: list[CombinedAnswerChunk]
+    citations: list[CombinedCitation]
+    verification_method: str
+    verification_reason: str
+    grounding_errors: list[str]
+    unsupported_claims: list[str]
+    searched_collections: list[str]
+    failed_collections: list[str]
+    personal_context_used: bool
