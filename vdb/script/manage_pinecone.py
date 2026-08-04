@@ -7,6 +7,7 @@
     python vdb/script/manage_pinecone.py create-index
     python vdb/script/manage_pinecone.py ingest --collection health_checkup_info
     python vdb/script/manage_pinecone.py ingest --collection health_checkup_info --delete-stale
+    python vdb/script/manage_pinecone.py ingest-precomputed --source data/eyak/eyak --collection medication_info
     python vdb/script/manage_pinecone.py search --collection health_checkup_info --query "정상B가 뭐야?"
     python vdb/script/manage_pinecone.py stats
 """
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -395,6 +397,15 @@ def _manifest_path(index_name: str, collection: str) -> Path:
     )
 
 
+def _precomputed_checkpoint_path(index_name: str, collection: str) -> Path:
+    """사전 계산 벡터 적재의 재시작 위치를 저장할 경로를 반환한다."""
+    return (
+        MANIFEST_ROOT
+        / _safe_path_part(index_name)
+        / f"{_safe_path_part(collection)}.precomputed.json"
+    )
+
+
 def _load_manifest(index_name: str, collection: str) -> dict[str, str]:
     """마지막 성공 적재 상태의 ID별 본문 해시를 읽는다."""
     path = _manifest_path(index_name, collection)
@@ -489,6 +500,258 @@ def _retry(operation_name: str, operation) -> Any:
                 flush=True,
             )
             time.sleep(delay)
+
+
+def _load_precomputed_package(source_dir: Path) -> tuple[Any, dict[str, Any], str]:
+    """검증된 사전 계산 임베딩 패키지의 로더와 manifest를 읽는다."""
+    source_dir = source_dir.resolve()
+    loader_path = source_dir / "load_records.py"
+    manifest_path = source_dir / "manifest.json"
+    if not loader_path.is_file() or not manifest_path.is_file():
+        raise FileNotFoundError(
+            "사전 계산 패키지에는 load_records.py와 manifest.json이 필요합니다: "
+            f"{source_dir}"
+        )
+
+    manifest_bytes = manifest_path.read_bytes()
+    manifest = json.loads(manifest_bytes)
+    embedding = manifest.get("embedding", {})
+    if (
+        embedding.get("model") != EMBED_MODEL
+        or int(embedding.get("dimension", 0)) != EMBED_DIMENSION
+        or str(embedding.get("distance_metric", "")).lower() != METRIC
+        or str(embedding.get("dtype", "")).lower() != "float32"
+        or embedding.get("normalized") is not True
+    ):
+        raise ValueError(
+            "사전 계산 패키지가 현재 인덱스 규격과 호환되지 않습니다: "
+            f"model={embedding.get('model')}, "
+            f"dimension={embedding.get('dimension')}, "
+            f"metric={embedding.get('distance_metric')}, "
+            f"dtype={embedding.get('dtype')}, "
+            f"normalized={embedding.get('normalized')}"
+        )
+
+    spec = importlib.util.spec_from_file_location(
+        "heapy_precomputed_record_loader",
+        loader_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"사전 계산 패키지 로더를 불러올 수 없습니다: {loader_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not hasattr(module, "validate_package") or not hasattr(
+        module,
+        "iter_matrix_records",
+    ):
+        raise ValueError(
+            "load_records.py에 validate_package와 iter_matrix_records가 필요합니다."
+        )
+
+    validation = module.validate_package(check_checksums=True)
+    expected_count = int(manifest.get("records", {}).get("document_count", 0))
+    if int(validation.get("documents", 0)) != expected_count:
+        raise ValueError(
+            "패키지 검증 문서 수가 manifest와 다릅니다: "
+            f"{validation.get('documents')} != {expected_count}"
+        )
+    manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    return module, manifest, manifest_sha256
+
+
+def _load_precomputed_checkpoint(
+    index_name: str,
+    collection: str,
+    manifest_sha256: str,
+    total_records: int,
+    force: bool,
+) -> int:
+    """동일한 패키지의 마지막 성공 upsert 다음 위치를 반환한다."""
+    if force:
+        return 0
+    path = _precomputed_checkpoint_path(index_name, collection)
+    if not path.is_file():
+        return 0
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("source_manifest_sha256") != manifest_sha256:
+        raise ValueError(
+            "기존 체크포인트와 현재 패키지가 다릅니다. 전체를 다시 올리려면 "
+            "--force를 사용하세요."
+        )
+    if int(payload.get("total_records", 0)) != total_records:
+        raise ValueError("기존 체크포인트와 현재 패키지의 레코드 수가 다릅니다.")
+    next_index = int(payload.get("next_index", 0))
+    if not 0 <= next_index <= total_records:
+        raise ValueError(f"체크포인트 위치가 올바르지 않습니다: {next_index}")
+    return next_index
+
+
+def _save_precomputed_checkpoint(
+    index_name: str,
+    collection: str,
+    source_dir: Path,
+    manifest_sha256: str,
+    total_records: int,
+    next_index: int,
+) -> None:
+    """사전 계산 벡터의 마지막 성공 위치를 원자적으로 기록한다."""
+    path = _precomputed_checkpoint_path(index_name, collection)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    payload = {
+        "index_name": index_name,
+        "namespace": collection,
+        "embedding_model": EMBED_MODEL,
+        "dimension": EMBED_DIMENSION,
+        "source_dir": str(source_dir.resolve()),
+        "source_manifest_sha256": manifest_sha256,
+        "total_records": total_records,
+        "next_index": next_index,
+    }
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    try:
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                os.replace(temporary, path)
+                return
+            except PermissionError:
+                if attempt == MAX_ATTEMPTS:
+                    raise
+                time.sleep(0.1 * attempt)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _build_precomputed_vector(record: Mapping[str, Any], collection: str) -> dict[str, Any]:
+    """사전 계산 레코드를 HEAPY 검색 메타데이터 규격으로 변환한다."""
+    record_id = str(record.get("id", "")).strip()
+    text = str(record.get("text", "")).strip()
+    vector = record.get("embedding")
+    if not record_id or not text or vector is None:
+        raise ValueError("사전 계산 레코드에 id, text, embedding이 필요합니다.")
+    if len(vector) != EMBED_DIMENSION:
+        raise ValueError(
+            f"임베딩 차원이 올바르지 않습니다: {record_id} "
+            f"({len(vector)} != {EMBED_DIMENSION})"
+        )
+
+    raw_metadata = record.get("metadata", {})
+    if not isinstance(raw_metadata, Mapping):
+        raise ValueError(f"metadata는 JSON 객체여야 합니다: {record_id}")
+    metadata = {
+        str(key): normalized
+        for key, value in raw_metadata.items()
+        if (normalized := _normalize_metadata_value(value)) is not None
+    }
+    metadata.update(
+        {
+            "chunk_text": text,
+            "collection": collection,
+            "source_file": "documents.jsonl",
+            "embedding_model": EMBED_MODEL,
+        }
+    )
+    metadata_bytes = len(
+        json.dumps(metadata, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    )
+    if metadata_bytes > MAX_METADATA_BYTES:
+        raise ValueError(
+            f"메타데이터가 40KB를 초과합니다: {record_id} ({metadata_bytes} bytes)"
+        )
+    values = vector.tolist() if hasattr(vector, "tolist") else list(vector)
+    return {"id": record_id, "values": values, "metadata": metadata}
+
+
+def ingest_precomputed(
+    source: Path,
+    collection: str,
+    batch_size: int,
+    limit: int | None,
+    dry_run: bool,
+    force: bool,
+    timeout_seconds: int,
+    index_name_override: str | None,
+) -> None:
+    """검증된 기존 임베딩을 재계산 없이 Pinecone namespace에 적재한다."""
+    source_dir = source if source.is_absolute() else ROOT / source
+    loader, manifest, manifest_sha256 = _load_precomputed_package(source_dir)
+    total_records = int(manifest["records"]["document_count"])
+    print(f"패키지 검증 완료: {total_records}건, {EMBED_DIMENSION}차원, {METRIC}")
+    print(f"대상 namespace: {collection}")
+    if dry_run:
+        preview = next(loader.iter_matrix_records(validate=False))
+        vector = _build_precomputed_vector(preview, collection)
+        print("dry-run 완료: Pinecone 연결·upsert를 수행하지 않았습니다.")
+        print(
+            json.dumps(
+                {
+                    "id": vector["id"],
+                    "dimension": len(vector["values"]),
+                    "metadata_keys": sorted(vector["metadata"]),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
+    client, index_name = _create_client(index_name_override)
+    index = _get_ready_index(client, index_name, timeout_seconds)
+    next_index = _load_precomputed_checkpoint(
+        index_name,
+        collection,
+        manifest_sha256,
+        total_records,
+        force,
+    )
+    stop_index = total_records
+    if limit is not None:
+        stop_index = min(next_index + limit, total_records)
+    if next_index >= stop_index:
+        print(f"적재할 신규 레코드가 없습니다: {next_index}/{total_records}")
+        return
+
+    batch: list[dict[str, Any]] = []
+    batch_next_index = next_index
+    for index_number, record in enumerate(loader.iter_matrix_records(validate=False)):
+        if index_number < next_index:
+            continue
+        if index_number >= stop_index:
+            break
+        batch.append(_build_precomputed_vector(record, collection))
+        batch_next_index = index_number + 1
+        if len(batch) < batch_size and batch_next_index < stop_index:
+            continue
+
+        payload = batch
+        _retry(
+            "upsert",
+            lambda payload=payload: index.upsert(
+                vectors=payload,
+                namespace=collection,
+                show_progress=False,
+            ),
+        )
+        _save_precomputed_checkpoint(
+            index_name,
+            collection,
+            source_dir,
+            manifest_sha256,
+            total_records,
+            batch_next_index,
+        )
+        print(f"  upsert {batch_next_index}/{total_records}", flush=True)
+        batch = []
+
+    print(
+        f"사전 계산 벡터 적재 완료: index={index_name}, "
+        f"namespace={collection}, 진행={batch_next_index}/{total_records}"
+    )
 
 
 def ingest(
@@ -714,6 +977,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="manifest 해시와 관계없이 모든 청크를 다시 임베딩·upsert",
     )
 
+    precomputed_parser = subparsers.add_parser(
+        "ingest-precomputed",
+        help="검증된 기존 임베딩을 재계산 없이 namespace에 적재",
+    )
+    precomputed_parser.add_argument(
+        "--source",
+        required=True,
+        type=Path,
+        help="load_records.py와 manifest.json이 있는 패키지 폴더",
+    )
+    precomputed_parser.add_argument(
+        "--collection",
+        required=True,
+        type=_collection_argument,
+        help="Pinecone namespace 이름",
+    )
+    precomputed_parser.add_argument(
+        "--batch-size",
+        type=_batch_size,
+        default=DEFAULT_BATCH_SIZE,
+        help=f"upsert 배치 크기(기본값: {DEFAULT_BATCH_SIZE}, 최대: 100)",
+    )
+    precomputed_parser.add_argument(
+        "--limit",
+        type=_positive_int,
+        help="이번 실행에서 추가로 적재할 최대 레코드 수",
+    )
+    precomputed_parser.add_argument("--dry-run", action="store_true")
+    precomputed_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="기존 진행 위치를 무시하고 처음부터 다시 upsert",
+    )
+
     search_parser = subparsers.add_parser("search", help="로컬 임베딩 벡터 검색")
     search_parser.add_argument(
         "--collection",
@@ -743,6 +1040,17 @@ def main() -> int:
                 limit=args.limit,
                 dry_run=args.dry_run,
                 delete_stale=args.delete_stale,
+                force=args.force,
+                timeout_seconds=args.timeout_seconds,
+                index_name_override=args.index_name,
+            )
+        elif args.command == "ingest-precomputed":
+            ingest_precomputed(
+                source=args.source,
+                collection=args.collection,
+                batch_size=args.batch_size,
+                limit=args.limit,
+                dry_run=args.dry_run,
                 force=args.force,
                 timeout_seconds=args.timeout_seconds,
                 index_name_override=args.index_name,

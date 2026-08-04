@@ -32,7 +32,7 @@ class ResponseType(str, Enum):
 
 # 공통 필드 (모든 응답 공유)
 #   type    : ResponseType — 어느 분기로 처리됐는지
-#   answer  : str          — 사용자에게 보이는 본문 (스트리밍되는 실제 텍스트)
+#   answer  : str          — 인용 라벨을 제거한 사용자 표시용 본문
 #   sources : list[str]    — 근거 청크 ID 목록 (검색 없는 분기는 빈 목록)
 
 
@@ -49,8 +49,20 @@ SIMPLE_LOOKUP_EXAMPLE = {
         {"citation_id": "C1", "record_id": "SBP", "collection": "health_checkup_info"}
     ],
     "grounded": True,
-    "verification_method": "citation_only",
+    "verification_method": "prevalidated_post_audit",
     "verification_reason": "intent:simple_lookup",
+    "grounding_plan": {
+        "answerable": True,
+        "facts": [
+            {
+                "statement": "혈압은 수축기혈압과 이완기혈압으로 측정됩니다.",
+                "cited_chunk_ids": ["C1"],
+            }
+        ],
+        "reason": "검색 청크가 정의 질문에 직접 답합니다.",
+    },
+    "audit_status": "passed",
+    "audit_summary": "최종 답변이 승인된 근거 계획을 준수했습니다.",
     # 개인 데이터 없음. cache_hit 여부 등 메타를 붙일 수도 있음(선택).
     "meta": {"cache_hit": True}
 }
@@ -70,8 +82,20 @@ COMPREHENSIVE_EXAMPLE = {
         {"citation_id": "C2", "record_id": "고혈압", "collection": "disease_info"},
     ],
     "grounded": True,
-    "verification_method": "llm_verified",
+    "verification_method": "prevalidated_post_audit",
     "verification_reason": "intent:comprehensive",
+    "grounding_plan": {
+        "answerable": True,
+        "facts": [
+            {
+                "statement": "혈압 기록이 설정된 정상범위를 초과합니다.",
+                "cited_chunk_ids": ["C1", "C2"],
+            }
+        ],
+        "reason": "검색 근거와 개인 기록을 함께 확인할 수 있습니다.",
+    },
+    "audit_status": "passed",
+    "audit_summary": "최종 답변이 승인된 근거 계획을 준수했습니다.",
     "personal_data": {
         # RDB(개인 검진)에서 온 값. 캐시 안 함.
         "items": [
@@ -128,3 +152,6 @@ IGNORE_EXAMPLE = {
 # personal_data   |   X    |      O        |     X        |   X
 # next_action     |   X    |   O(선택,미정) |     X        |   X
 # meta            | 선택   |    선택        |    선택       |  선택
+# grounding_plan  |   O    |      O        |     X        |   X
+# audit_status    |   O    |      O        | 비대상       | 비대상
+# audit_summary   |   O    |      O        |     X        |   X

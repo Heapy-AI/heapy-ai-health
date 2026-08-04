@@ -227,10 +227,13 @@ def ask_combined(req: CombinedAskRequest) -> CombinedAskResponse:
             grounded=False,
             chunks=[],
             citations=[],
-            verification_method="citation_validation_failed",
+            verification_method="plan_rejected",
             verification_reason="no_search_results",
             grounding_errors=["검색된 최종 청크가 없습니다."],
             unsupported_claims=[],
+            grounding_plan=None,
+            audit_status="not_run",
+            audit_summary="근거 계획을 생성하지 않았습니다.",
             searched_collections=search_result.searched_collections,
             failed_collections=failed_collections,
         )
@@ -259,6 +262,13 @@ def ask_combined(req: CombinedAskRequest) -> CombinedAskResponse:
         verification_reason=verification_reason,
         grounding_errors=result.grounding_errors,
         unsupported_claims=result.unsupported_claims,
+        grounding_plan=(
+            result.grounding_plan.model_dump(mode="json")
+            if result.grounding_plan is not None
+            else None
+        ),
+        audit_status=result.audit_status,
+        audit_summary=result.audit_summary,
         searched_collections=search_result.searched_collections,
         failed_collections=failed_collections,
     )

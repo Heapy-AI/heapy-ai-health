@@ -12,13 +12,14 @@ data/ 원천 데이터
   → Pinecone dense index
   → namespace별 검색
   → FastAPI /search, /ask
-  → Gradio UI
+  → FastAPI 시연용 웹 앱
 ```
 
 | 컬렉션 | Pinecone namespace | 적재 대상 |
 |---|---|---:|
 | 건강검진정보 | `health_checkup_info` | 30건 |
 | 질병정보 | `disease_info` | 54,330건 |
+| 복약정보 | `medication_info` | 43,330건 |
 
 `disease_info`는 JSONL 108,662행에서 ID 중복과 Base64 이미지 청크를 제외한 수치입니다.
 
@@ -119,6 +120,15 @@ python vdb/script/manage_pinecone.py ingest `
   --force
 ```
 
+이미 임베딩된 e약은요 compact 패키지는 재임베딩하지 않고 직접 적재합니다.
+
+```powershell
+python vdb/script/manage_pinecone.py ingest-precomputed `
+  --source data/eyak/eyak `
+  --collection medication_info `
+  --batch-size 100
+```
+
 ## 서버 실행
 
 FastAPI:
@@ -127,8 +137,12 @@ FastAPI:
 uvicorn app.main:app --reload
 ```
 
-- API: <http://localhost:8000>
+- 웹 앱: <http://localhost:8000>
 - Swagger: <http://localhost:8000/docs>
+
+별도의 프론트엔드 개발 서버 없이 FastAPI가 시연용 웹 앱을 함께 제공합니다.
+웹 앱은 통합 챗봇 `POST /chat/stream`을 사용하며 Intent, 근거 검증, 출처 정보를
+시각적으로 확인할 수 있습니다. 현재 복약 데이터는 검토 중 상태로 표시됩니다.
 
 Gradio:
 
@@ -138,11 +152,15 @@ python run_ui.py
 
 - UI: <http://localhost:7860>
 
+Gradio 화면은 검색 품질 점검용으로 유지하며, 실제 MVP 시연은 FastAPI 웹 앱을
+사용합니다.
+
 ## API
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | `GET` | `/health` | Pinecone namespace별 적재 수 확인 |
+| `POST` | `/chat/stream` | SSE 기반 통합 챗봇 토큰 스트리밍 |
 | `POST` | `/search` | 로컬 질문 임베딩 후 Pinecone 검색 |
 | `POST` | `/ask` | 검색 청크 기반 Gemini 답변 |
 

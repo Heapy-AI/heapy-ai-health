@@ -86,6 +86,9 @@ class CombinedAskResponse(AskResponse):
     verification_reason: str
     grounding_errors: list[str]
     unsupported_claims: list[str]
+    grounding_plan: dict | None
+    audit_status: str
+    audit_summary: str
     searched_collections: list[str]
     failed_collections: list[str]
 
@@ -102,6 +105,21 @@ class ChatRequest(BaseModel):
         if not normalized:
             raise ValueError("질문은 비어 있을 수 없습니다.")
         return normalized
+
+
+class GroundingPlanFactResponse(BaseModel):
+    """선검증된 단일 근거 사실."""
+
+    statement: str
+    cited_chunk_ids: list[str]
+
+
+class GroundingPlanResponse(BaseModel):
+    """최종 답변 스트리밍 전에 승인된 근거 계획."""
+
+    answerable: bool
+    facts: list[GroundingPlanFactResponse]
+    reason: str
 
 
 class ChatResponse(BaseModel):
@@ -126,6 +144,9 @@ class ChatResponse(BaseModel):
     verification_reason: str
     grounding_errors: list[str]
     unsupported_claims: list[str]
+    grounding_plan: GroundingPlanResponse | None
+    audit_status: str
+    audit_summary: str
     searched_collections: list[str]
     failed_collections: list[str]
     personal_context_used: bool
