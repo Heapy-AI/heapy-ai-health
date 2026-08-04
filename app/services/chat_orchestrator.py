@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
 from langchain_core.documents import Document
@@ -60,9 +61,24 @@ class ChatOrchestrationResult:
     verification_reason: str = "not_applicable"
     grounding_errors: list[str] = field(default_factory=list)
     unsupported_claims: list[str] = field(default_factory=list)
+    grounding_plan: dict | None = None
+    audit_status: str = "not_applicable"
+    audit_summary: str = ""
     searched_collections: list[str] = field(default_factory=list)
     failed_collections: list[str] = field(default_factory=list)
     personal_context_used: bool = False
+
+
+@dataclass(frozen=True)
+class ChatStreamEvent:
+    """스트리밍 토큰 또는 검증 완료 결과 이벤트.
+
+    작성자: 김진우
+    """
+
+    event: str
+    text: str = ""
+    result: ChatOrchestrationResult | None = None
 
 
 class ChatOrchestrator:
@@ -110,6 +126,39 @@ class ChatOrchestrator:
         if prediction.intent is Intent.GENERAL_CHAT:
             return self._build_general_chat_response(question, prediction)
         return self._build_rag_response(question, query_embedding, prediction)
+
+    def stream_answer(self, question: str) -> Iterator[ChatStreamEvent]:
+        """Intent 경로에 따라 LLM 토큰과 검증 완료 결과를 순서대로 전달한다.
+
+        작성자: 김진우
+        """
+        guard_result = check_safety_guard(question)
+        if guard_result.triggered:
+            yield from self._stream_fixed_result(
+                self._build_guard_response(guard_result)
+            )
+            return
+
+        if self._intent_classifier is None:
+            raise IntentClassifierUnavailableError(
+                "학습된 intent 모델이 없어 챗봇 경로를 선택할 수 없습니다."
+            )
+
+        query_embedding = self._vector_search.embed_query(question)
+        prediction = self._intent_classifier.predict(query_embedding)
+        if prediction.intent is Intent.IGNORE:
+            yield from self._stream_fixed_result(
+                self._build_ignore_response(prediction)
+            )
+            return
+        if prediction.intent is Intent.GENERAL_CHAT:
+            yield from self._stream_general_chat_response(question, prediction)
+            return
+        yield from self._stream_rag_response(
+            question,
+            query_embedding,
+            prediction,
+        )
 
     def _build_guard_response(
         self,
@@ -177,30 +226,41 @@ class ChatOrchestrator:
             verification_reason="intent:general_chat",
         )
 
+    def _stream_general_chat_response(
+        self,
+        question: str,
+        prediction: IntentPrediction,
+    ) -> Iterator[ChatStreamEvent]:
+        """검색 없는 일반 대화의 Gemini 토큰을 전달한다.
+
+        작성자: 김진우
+        """
+        answer_parts: list[str] = []
+        for token in self._general_chat_chain.stream({"question": question}):
+            text = str(token)
+            if not text:
+                continue
+            answer_parts.append(text)
+            yield ChatStreamEvent(event="token", text=text)
+
+        result = ChatOrchestrationResult(
+            **self._prediction_fields(prediction),
+            answer="".join(answer_parts).strip(),
+            grounded=None,
+            verification_method="not_applicable",
+            verification_reason="intent:general_chat",
+        )
+        yield ChatStreamEvent(event="complete", result=result)
+
     def _build_rag_response(
         self,
         question: str,
         query_embedding: list[float],
         prediction: IntentPrediction,
     ) -> ChatOrchestrationResult:
-        search_result = self._vector_search.search_many_by_vector(
-            self._search_collections,
-            query_embedding,
-            self._top_k_per_collection,
+        documents, searched_collections, failed_collections = (
+            self._search_rag_documents(query_embedding)
         )
-        if (
-            search_result.errors
-            and len(search_result.errors) == len(search_result.searched_collections)
-        ):
-            raise SearchUnavailableError("모든 Pinecone namespace 검색에 실패했습니다.")
-
-        documents = merge_search_results(
-            search_result.documents,
-            final_top_k=self._final_top_k,
-            max_per_collection=self._max_per_collection,
-            min_score=self._min_score,
-        )
-        failed_collections = sorted(search_result.errors)
         verification_reason = (
             "intent_uncertain"
             if prediction.uncertain
@@ -211,10 +271,12 @@ class ChatOrchestrator:
                 **self._prediction_fields(prediction),
                 answer=NOT_GROUNDED_ANSWER,
                 grounded=False,
-                verification_method="citation_validation_failed",
+                verification_method="plan_rejected",
                 verification_reason="no_search_results",
                 grounding_errors=["검색된 최종 청크가 없습니다."],
-                searched_collections=search_result.searched_collections,
+                audit_status="not_run",
+                audit_summary="근거 계획을 생성하지 않았습니다.",
+                searched_collections=searched_collections,
                 failed_collections=failed_collections,
             )
 
@@ -236,7 +298,124 @@ class ChatOrchestrator:
             verification_reason=verification_reason,
             grounding_errors=grounded_result.grounding_errors,
             unsupported_claims=grounded_result.unsupported_claims,
-            searched_collections=search_result.searched_collections,
+            grounding_plan=(
+                grounded_result.grounding_plan.model_dump(mode="json")
+                if grounded_result.grounding_plan is not None
+                else None
+            ),
+            audit_status=grounded_result.audit_status,
+            audit_summary=grounded_result.audit_summary,
+            searched_collections=searched_collections,
             failed_collections=failed_collections,
             personal_context_used=False,
         )
+
+    def _stream_rag_response(
+        self,
+        question: str,
+        query_embedding: list[float],
+        prediction: IntentPrediction,
+    ) -> Iterator[ChatStreamEvent]:
+        """근거 계획 승인 후 최종 답변을 스트리밍하고 감사 결과를 반환한다.
+
+        작성자: 김진우
+        """
+        documents, searched_collections, failed_collections = (
+            self._search_rag_documents(query_embedding)
+        )
+        if not documents:
+            result = ChatOrchestrationResult(
+                **self._prediction_fields(prediction),
+                answer=NOT_GROUNDED_ANSWER,
+                grounded=False,
+                verification_method="plan_rejected",
+                verification_reason="no_search_results",
+                grounding_errors=["검색된 최종 청크가 없습니다."],
+                audit_status="not_run",
+                audit_summary="근거 계획을 생성하지 않았습니다.",
+                searched_collections=searched_collections,
+                failed_collections=failed_collections,
+            )
+            yield from self._stream_fixed_result(result)
+            return
+
+        verify_semantics = (
+            prediction.intent is Intent.COMPREHENSIVE or prediction.uncertain
+        )
+        verification_reason = (
+            "intent_uncertain"
+            if prediction.uncertain
+            else f"intent:{prediction.intent.value}"
+        )
+        for event in self._grounded_rag_service.stream_answer(
+            question,
+            documents,
+            verify_semantics=verify_semantics,
+        ):
+            if isinstance(event, str):
+                yield ChatStreamEvent(event="token", text=event)
+                continue
+            result = ChatOrchestrationResult(
+                **self._prediction_fields(prediction),
+                answer=event.answer,
+                grounded=event.grounded,
+                documents=documents,
+                cited_chunk_ids=event.cited_chunk_ids,
+                verification_method=event.verification_method,
+                verification_reason=verification_reason,
+                grounding_errors=event.grounding_errors,
+                unsupported_claims=event.unsupported_claims,
+                grounding_plan=(
+                    event.grounding_plan.model_dump(mode="json")
+                    if event.grounding_plan is not None
+                    else None
+                ),
+                audit_status=event.audit_status,
+                audit_summary=event.audit_summary,
+                searched_collections=searched_collections,
+                failed_collections=failed_collections,
+                personal_context_used=False,
+            )
+            yield ChatStreamEvent(event="complete", result=result)
+
+    def _search_rag_documents(
+        self,
+        query_embedding: list[float],
+    ) -> tuple[list[Document], list[str], list[str]]:
+        """설정된 namespace를 검색하고 최종 문맥 청크를 병합한다.
+
+        작성자: 김진우
+        """
+        search_result = self._vector_search.search_many_by_vector(
+            self._search_collections,
+            query_embedding,
+            self._top_k_per_collection,
+        )
+        if (
+            search_result.errors
+            and len(search_result.errors) == len(search_result.searched_collections)
+        ):
+            raise SearchUnavailableError("모든 Pinecone namespace 검색에 실패했습니다.")
+
+        documents = merge_search_results(
+            search_result.documents,
+            final_top_k=self._final_top_k,
+            max_per_collection=self._max_per_collection,
+            min_score=self._min_score,
+        )
+        return (
+            documents,
+            search_result.searched_collections,
+            sorted(search_result.errors),
+        )
+
+    @staticmethod
+    def _stream_fixed_result(
+        result: ChatOrchestrationResult,
+    ) -> Iterator[ChatStreamEvent]:
+        """LLM을 사용하지 않는 확정 응답을 동일한 이벤트 계약으로 전달한다.
+
+        작성자: 김진우
+        """
+        yield ChatStreamEvent(event="token", text=result.answer)
+        yield ChatStreamEvent(event="complete", result=result)

@@ -260,8 +260,7 @@ def create_ui():
                 ask_btn.click(ask_question, [ask_input, ask_col], [ask_output, ask_json])
                 ask_input.submit(ask_question, [ask_input, ask_col], [ask_output, ask_json])
 
-        gr.Markdown("---\n**API**: `http://localhost:8000` · **UI 포트**: `7860`\n\n"
-                    "⚠️ 이 답변은 의료 진단이 아닌 정보 제공 목적입니다.")
+        gr.Markdown("---\n**API**: `http://localhost:8000` · **UI 포트**: `7860`")
     return demo
 
 

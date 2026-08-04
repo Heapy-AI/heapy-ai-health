@@ -5,6 +5,13 @@
 - 검색 저장소: Pinecone
 - 임베딩 모델: `jhgan/ko-sroberta-multitask` 로컬 768차원
 
+## `GET /`
+
+HEAPY 챗봇 MVP 시연용 웹 앱을 반환합니다. 웹 앱은 별도 프론트엔드 서버 없이
+FastAPI와 함께 실행되며 `POST /chat/stream`을 호출합니다. 현재 적재·검토가 끝나지 않은
+복약정보는 화면에서 `검토 중`으로 표시하며, 실제 API 응답에 포함된 Intent·근거
+검증·출처만 답변 정보 패널에 노출합니다.
+
 ## `GET /health`
 
 Pinecone 연결과 namespace별 적재 수를 반환합니다.
@@ -34,8 +41,8 @@ MVP 통합 챗봇 엔드포인트입니다. Safety Guard를 먼저 실행하고,
 
 | Intent | 처리 경로 |
 |---|---|
-| `simple_lookup` | 설정된 Pinecone namespace 병렬 검색 → 간단 RAG 답변 → 인용 검사 |
-| `comprehensive` | 설정된 Pinecone namespace 병렬 검색 → 상세 RAG 답변 → 별도 의미 근거 검증 |
+| `simple_lookup` | Pinecone 병렬 검색 → 근거 계획 선검증 → 최종 답변 생성 → 사후 감사 |
+| `comprehensive` | Pinecone 병렬 검색 → 강화 근거 계획 선검증 → 최종 답변 생성 → 사후 감사 |
 | `general_chat` | Pinecone 검색 없이 Gemini 일반 대화 |
 | `ignore` | Pinecone 및 Gemini 호출 없이 고정 답변 |
 
@@ -48,6 +55,54 @@ Safety Guard가 작동하면 Intent 모델과 임베딩을 실행하지 않고 �
 ```
 
 응답에는 Intent 분류 정보, 답변, 실제 검색 청크, 검증된 인용 및 namespace 처리 상태가 함께 포함됩니다. `grounded`는 RAG 경로에서만 `true` 또는 `false`이며 검색하지 않는 `general_chat`과 `ignore`는 `null`입니다. 현재 MVP는 개인 건강·복약 RDB가 연결되지 않았으므로 `comprehensive`도 `personal_context_used=false`입니다.
+
+## `POST /chat/stream`
+
+`POST /chat`과 동일한 질문 분류·검색·검증 흐름을 실행하면서 응답을
+`text/event-stream` 형식으로 반환합니다. 요청 JSON은 동일합니다.
+
+```json
+{"question":"공복혈당 정상 수치는 어떻게 되나요?"}
+```
+
+이벤트는 다음 순서로 전달됩니다.
+
+| 이벤트 | 데이터 | 설명 |
+|---|---|---|
+| `token` | `{"text":"생성된 문자열"}` | Gemini가 생성한 답변 조각 |
+| `complete` | `ChatResponse` 전체 JSON | 스트리밍 본문과 근거 계획·사후 감사 메타데이터 |
+| `error` | `{"message":"안내 문구"}` | 스트림 시작 이후 발생한 처리 오류 |
+
+```text
+event: token
+data: {"text":"공복혈당은 "}
+
+event: token
+data: {"text":"금식 후 측정합니다."}
+
+event: complete
+data: {"question":"...","answer":"...","grounded":true,...}
+```
+
+RAG 경로는 검색 청크에서 `grounding_plan`을 먼저 생성하고 청크 ID와 답변 가능성을
+검사합니다. 계획이 승인된 경우에만 최종 사용자 답변을 스트리밍합니다. 스트리밍이
+끝나면 승인된 계획과 실제 답변을 다시 대조한 사후 감사를 수행하며, 결과는
+`audit_status`, `audit_summary`, `unsupported_claims`에 기록합니다.
+
+사후 감사 결과는 이미 표시한 답변 본문을 교체하지 않습니다. 정상 완료 시
+`complete.answer`는 모든 `token.text`를 순서대로 연결한 문자열과 동일해야 합니다.
+근거 연결은 본문 인용 라벨 대신 `grounding_plan`, `citations`, `chunks`에서 확인합니다.
+
+`general_chat`은 Gemini 토큰을 스트리밍합니다. `ignore`와 Safety Guard 응답은
+LLM을 호출하지 않으며 고정 문구를 하나의 `token` 이벤트로 전달한 뒤 즉시
+`complete` 이벤트를 전송합니다. 기존 `POST /chat`은 비스트리밍 클라이언트와의
+호환을 위해 유지합니다.
+
+웹 앱은 서버의 SSE 수신 속도와 화면 표시 속도를 분리합니다. 수신한 문자열을
+기본 28ms/글자 간격으로 표시하고 쉼표와 문장 끝에서 각각 조금 더 기다립니다.
+표시 대기 문자열이 길면 한 번에 두 글자씩 처리하며, `complete`를 먼저 받더라도
+표시 대기열을 모두 비운 뒤 사후 감사 카드를 추가합니다. 이 지연은
+화면의 가독성을 위한 것으로 서버 LLM 호출이나 근거 검증 시간을 늘리지 않습니다.
 
 ## `POST /intent/classify`
 
@@ -147,7 +202,11 @@ Pinecone 검색 청크를 근거로 Gemini 답변을 생성합니다.
 
 ## `POST /ask/combined`
 
-`/search/combined`와 동일한 병렬 검색·병합 결과에 `C1`, `C2` 순서의 청크 ID를 붙여 Gemini 답변을 생성합니다. 모든 답변은 각 건강정보 주장에 `[C1]` 형식의 인용을 요구하고 서버가 인용 ID를 검사합니다. `comprehensive`, `ignore`, Safety Guard 감지, Intent 저신뢰 또는 분류기 미준비 상황에서는 별도 Gemini 검증 단계가 답변 주장과 인용 청크의 의미 일치 여부까지 확인합니다. 검색 결과가 없거나 필수 검증에 실패하면 답변을 통과시키지 않고 `grounded=false`를 반환합니다.
+`/search/combined`와 동일한 병렬 검색·병합 결과에 `C1`, `C2` 순서의 청크 ID를 붙이고,
+답변에 사용할 사실과 근거 ID를 `grounding_plan`으로 먼저 확정합니다. 계획이 승인되면
+해당 사실만 사용해 최종 답변을 생성하고, 생성 후 계획 이탈 여부를 사후 감사합니다.
+검색 결과가 없거나 계획 선검증에 실패하면 답변 생성을 시작하지 않고
+`지식베이스에 근거 없음`을 반환합니다.
 
 요청:
 
@@ -159,7 +218,7 @@ Pinecone 검색 청크를 근거로 Gemini 답변을 생성합니다.
 
 ```json
 {
-  "answer": "공복혈당은 일정 시간 금식한 뒤 측정합니다. [C1]\n\n이 답변은 의료 진단이 아닌 정보 제공 목적입니다.",
+  "answer": "공복혈당은 일정 시간 금식한 뒤 측정합니다.",
   "sources": ["건강검진 판정기준 · https://..."],
   "grounded": true,
   "chunks": [
@@ -181,8 +240,17 @@ Pinecone 검색 청크를 근거로 Gemini 답변을 생성합니다.
       "text": "공복혈당은 일정 시간 금식한 뒤 혈액 속 포도당 농도를..."
     }
   ],
-  "verification_method": "citation_only",
+  "verification_method": "prevalidated_post_audit",
   "verification_reason": "intent:simple_lookup",
+  "grounding_plan": {
+    "answerable": true,
+    "facts": [
+      {"statement": "공복혈당은 일정 시간 금식한 뒤 측정합니다.", "cited_chunk_ids": ["C1"]}
+    ],
+    "reason": "검색 청크가 질문에 직접 답합니다."
+  },
+  "audit_status": "passed",
+  "audit_summary": "최종 답변이 승인된 근거 계획을 준수했습니다.",
   "grounding_errors": [],
   "unsupported_claims": [],
   "searched_collections": ["health_checkup_info", "disease_info"],
@@ -190,30 +258,28 @@ Pinecone 검색 청크를 근거로 Gemini 답변을 생성합니다.
 }
 ```
 
-`chunks`는 Gemini에 제공한 전체 최종 문맥이고, `citations`는 답변 본문이 실제로 인용했으며 해당 요청의 필수 검증을 통과한 청크다. `grounded=true`는 다음 조건을 모두 만족할 때만 반환한다.
+`chunks`는 근거 계획에 제공한 전체 최종 문맥이고, `citations`는 승인된 계획의 사실과
+연결된 청크다. 사용자 표시용 `answer`에는 인용 라벨이 포함되지 않는다.
+`grounded=true`는 근거 계획이 답변 가능 상태이고 모든 사실에 유효한 청크 ID가
+연결된 경우 반환한다. 사후 감사 실패는 `audit_status=failed`로 기록하지만 이미
+스트리밍된 본문을 다른 문장으로 교체하지 않는다.
 
-- 답변 본문에 하나 이상의 유효한 `[C숫자]` 인용이 있음
-- 본문 인용과 구조화 출력의 인용 목록이 일치함
-- 존재하지 않는 청크 ID가 없음
-- 강화 검증 대상이면 별도 검증 결과 모든 건강정보 주장이 인용 청크로 뒷받침됨
+검증·감사 정책은 다음과 같다.
 
-조건부 검증 정책은 다음과 같다.
-
-| 조건 | `verification_method` | Gemini 호출 |
-|---|---|---:|
-| `simple_lookup`, `general_chat` | `citation_only` | 1회 |
-| `comprehensive`, `ignore` | `llm_verified` | 2회 |
-| Safety Guard 감지 | `llm_verified` | 2회 |
-| Intent `uncertain=true` | `llm_verified` | 2회 |
-| Intent 분류기 미준비 | `llm_verified` | 2회 |
-| 인용 형식 또는 근거 검증 실패 | `citation_validation_failed` 또는 `llm_verification_failed` | 단계에 따라 1~2회 |
+| 조건 | 처리 |
+|---|---|
+| `simple_lookup` | 기본 근거 계획 선검증 → 최종 답변 → 사후 감사 |
+| `comprehensive`, Intent 저신뢰 | 강화 근거 계획 선검증 → 최종 답변 → 사후 감사 |
+| 계획 거절 | 최종 생성 없이 근거 없음 고정 응답 |
+| `general_chat` | Safety Guard 통과 후 일반 대화 스트리밍, 감사 비대상 |
+| `ignore`, Safety Guard | LLM 없이 고정 응답, 감사 비대상 |
 
 `verification_reason`은 `intent:simple_lookup`, `intent:comprehensive`, `safety_guard:medication_decision`, `intent_uncertain`, `intent_classifier_unavailable`처럼 정책 선택 근거를 반환한다.
 
 다중 검색 기본 설정은 구조 검증용이며 전체 데이터 적재 후 평가를 통해 조정합니다.
 
 ```text
-SEARCH_COLLECTIONS=health_checkup_info,disease_info
+SEARCH_COLLECTIONS=health_checkup_info,disease_info,medication_info
 SEARCH_TOP_K_PER_COLLECTION=3
 SEARCH_FINAL_TOP_K=6
 SEARCH_MAX_PER_COLLECTION=2
@@ -241,3 +307,4 @@ SEARCH_MIN_SCORE=0.0
 |---|---|
 | `disease_info` | `disease_info` |
 | `health_checkup_info` | `health_checkup_info` |
+| `medication_info` | `medication_info` |

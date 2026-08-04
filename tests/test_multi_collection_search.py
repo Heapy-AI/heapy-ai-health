@@ -272,10 +272,10 @@ class CombinedSearchEndpointTest(unittest.TestCase):
                 self.documents = documents
                 self.verify_semantics = verify_semantics
                 return GroundedAnswerResult(
-                    answer="검색 근거 기반 답변 [C1]",
+                    answer="검색 근거 기반 답변",
                     grounded=True,
                     cited_chunk_ids=["C1"],
-                    verification_method="citation_only",
+                    verification_method="prevalidated_post_audit",
                     grounding_errors=[],
                     unsupported_claims=[],
                 )
@@ -302,7 +302,10 @@ class CombinedSearchEndpointTest(unittest.TestCase):
         self.assertEqual(response.citations[0].text, full_text)
         self.assertEqual(grounded_rag_service.documents[0].page_content, full_text)
         self.assertFalse(grounded_rag_service.verify_semantics)
-        self.assertEqual(response.verification_method, "citation_only")
+        self.assertEqual(
+            response.verification_method,
+            "prevalidated_post_audit",
+        )
         self.assertEqual(response.verification_reason, "intent:simple_lookup")
 
     def test_comprehensive_intent_enables_semantic_verification(self) -> None:

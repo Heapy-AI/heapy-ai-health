@@ -72,12 +72,24 @@ class FakeGroundedRagService:
         self.call_count += 1
         self.verify_semantics = verify_semantics
         return GroundedAnswerResult(
-            answer="검색 근거 기반 답변 [C1]",
+            answer="검색 근거 기반 답변",
             grounded=True,
             cited_chunk_ids=["C1"],
-            verification_method=(
-                "llm_verified" if verify_semantics else "citation_only"
-            ),
+            verification_method="prevalidated_post_audit",
+            grounding_errors=[],
+            unsupported_claims=[],
+        )
+
+    def stream_answer(self, question, documents, *, verify_semantics):
+        self.call_count += 1
+        self.verify_semantics = verify_semantics
+        yield "검색 근거 "
+        yield "기반 답변"
+        yield GroundedAnswerResult(
+            answer="검색 근거 기반 답변",
+            grounded=True,
+            cited_chunk_ids=["C1"],
+            verification_method="prevalidated_post_audit",
             grounding_errors=[],
             unsupported_claims=[],
         )
@@ -90,6 +102,11 @@ class FakeGeneralChatChain:
     def invoke(self, values):
         self.call_count += 1
         return "오늘도 무리하지 말고 천천히 해봐요."
+
+    def stream(self, values):
+        self.call_count += 1
+        yield "오늘도 무리하지 말고 "
+        yield "천천히 해봐요."
 
 
 def _document() -> Document:
@@ -127,6 +144,47 @@ def _build_orchestrator(
 
 
 class ChatOrchestratorTest(unittest.TestCase):
+    def test_simple_lookup_streams_tokens_then_complete_result(self) -> None:
+        orchestrator, vector_search, grounded_rag, _ = _build_orchestrator(
+            Intent.SIMPLE_LOOKUP,
+            documents=[_document()],
+        )
+
+        events = list(orchestrator.stream_answer("공복혈당이 뭐야?"))
+
+        self.assertEqual([event.event for event in events], ["token", "token", "complete"])
+        self.assertEqual(
+            "".join(event.text for event in events[:-1]),
+            events[-1].result.answer,
+        )
+        self.assertTrue(events[-1].result.grounded)
+        self.assertEqual(vector_search.embed_count, 1)
+        self.assertFalse(grounded_rag.verify_semantics)
+
+    def test_general_chat_uses_chain_stream(self) -> None:
+        orchestrator, vector_search, _, general_chat = _build_orchestrator(
+            Intent.GENERAL_CHAT
+        )
+
+        events = list(orchestrator.stream_answer("오늘 너무 지쳐"))
+
+        self.assertEqual("".join(event.text for event in events[:-1]), "오늘도 무리하지 말고 천천히 해봐요.")
+        self.assertEqual(events[-1].event, "complete")
+        self.assertEqual(general_chat.call_count, 1)
+        self.assertEqual(vector_search.search_count, 0)
+
+    def test_ignore_stream_does_not_call_llm(self) -> None:
+        orchestrator, _, grounded_rag, general_chat = _build_orchestrator(
+            Intent.IGNORE
+        )
+
+        events = list(orchestrator.stream_answer("오늘 환율 알려줘"))
+
+        self.assertEqual(events[0].text, GENERAL_IGNORE_ANSWER)
+        self.assertEqual(events[-1].result.answer, GENERAL_IGNORE_ANSWER)
+        self.assertEqual(grounded_rag.call_count, 0)
+        self.assertEqual(general_chat.call_count, 0)
+
     def test_simple_lookup_reuses_one_embedding_and_searches(self) -> None:
         orchestrator, vector_search, grounded_rag, general_chat = (
             _build_orchestrator(Intent.SIMPLE_LOOKUP, documents=[_document()])
