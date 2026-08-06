@@ -37,7 +37,10 @@ sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 XMLDIR = os.path.join(ROOT, "preprocessed", "disease_info", "_kdca_raw_xml")
-OUTPUT_JSON = os.path.join(ROOT, "output")            # 카테고리 조회용(재분류 결과)
+OUTPUT_JSON_CANDIDATES = [
+    os.path.join(ROOT, "preprocessed", "disease_info", "kdca_reclassify"),
+    os.path.join(ROOT, "output"),
+]  # 카테고리 조회용(재분류 결과)
 WORK = os.path.join(HERE, "image_ocr")
 
 load_dotenv(os.path.join(ROOT, ".env"))
@@ -87,13 +90,16 @@ def collect_targets(sections, scope):
     """대상 (sn, disease, section, order, url) 목록 생성."""
     # 카테고리/질환명 조회
     cat_of, disease_of = {}, {}
-    for f in glob.glob(os.path.join(OUTPUT_JSON, "*.json")):
-        try:
-            d = json.load(open(f, encoding="utf-8"))
-        except Exception:
+    for base in OUTPUT_JSON_CANDIDATES:
+        if not os.path.isdir(base):
             continue
-        cat_of[str(d.get("cntnts_sn"))] = d.get("category")
-        disease_of[str(d.get("cntnts_sn"))] = d.get("disease")
+        for f in glob.glob(os.path.join(base, "*.json")):
+            try:
+                d = json.load(open(f, encoding="utf-8"))
+            except Exception:
+                continue
+            cat_of[str(d.get("cntnts_sn"))] = d.get("category")
+            disease_of[str(d.get("cntnts_sn"))] = d.get("disease")
 
     target_secs = {norm(s) for s in sections}
     items = []
