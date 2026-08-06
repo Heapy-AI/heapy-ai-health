@@ -24,12 +24,6 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.services.chat_orchestrator import (  # noqa: E402
-    GENERAL_IGNORE_ANSWER,
-    SAFETY_IGNORE_ANSWER,
-)
-from app.services.grounded_rag import NOT_GROUNDED_ANSWER  # noqa: E402
-
 from tests.eval import metrics as M  # noqa: E402
 from tests.eval.golden_dataset import (  # noqa: E402
     DEFAULT_DATASET,
@@ -43,13 +37,6 @@ from tests.eval.instrumentation import (  # noqa: E402
     build_instrumented_orchestrator,
     build_shared_services,
 )
-
-ABSTENTION_ANSWERS = {
-    NOT_GROUNDED_ANSWER,
-    GENERAL_IGNORE_ANSWER,
-    SAFETY_IGNORE_ANSWER,
-}
-
 
 def _json_safe(value):
     """NaN/Infinity를 null로 바꿔 표준 JSON으로 저장한다."""
@@ -87,10 +74,6 @@ def _candidate_records(raw_search) -> list[dict]:
         key=lambda d: -float(d.metadata.get("score", 0.0) or 0.0),
     )
     return [_document_record(doc, rank) for rank, doc in enumerate(ranked, start=1)]
-
-
-def _is_abstention(answer: str, grounded) -> bool:
-    return M.is_abstention(answer, grounded)
 
 
 def evaluate_one(

@@ -132,6 +132,19 @@ class AggregationTest(unittest.TestCase):
 
 
 class AbstentionTest(unittest.TestCase):
+    def test_constants_match_application_responses(self) -> None:
+        """앱의 고정 거절 문구가 바뀌면 거절 지표가 조용히 틀어지므로 함께 검사한다."""
+        from app.services.chat_orchestrator import (
+            GENERAL_IGNORE_ANSWER,
+            SAFETY_IGNORE_ANSWER,
+        )
+        from app.services.grounded_rag import NOT_GROUNDED_ANSWER
+
+        self.assertEqual(
+            M.ABSTENTION_ANSWERS,
+            {NOT_GROUNDED_ANSWER, GENERAL_IGNORE_ANSWER, SAFETY_IGNORE_ANSWER},
+        )
+
     def test_fixed_refusal_answers_count_as_abstention(self) -> None:
         self.assertTrue(M.is_abstention("지식베이스에 근거 없음", True))
         self.assertTrue(M.is_abstention("정상 답변", False))

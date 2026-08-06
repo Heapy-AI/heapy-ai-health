@@ -186,6 +186,7 @@ def build_summary(records: list[dict], ragas_scores: dict[str, dict]) -> dict:
     answerable = [r for r in ok if r["gold"]["answerable"]]
     unanswerable = [r for r in ok if not r["gold"]["answerable"]]
     rag_routed = [r for r in ok if r["intent"] in ("simple_lookup", "comprehensive")]
+    answered = [r for r in ok if not r["metrics"]["is_abstention"]]
 
     deterministic_keys = [
         "hit@1", "hit@3", "hit@5", "mrr@10", "ndcg@10", "map",
@@ -221,6 +222,10 @@ def build_summary(records: list[dict], ragas_scores: dict[str, dict]) -> dict:
         ("split", lambda r: r["gold"]["split"]),
         ("intent", lambda r: r["intent"]),
         ("answerable", lambda r: "answerable" if r["gold"]["answerable"] else "unanswerable"),
+        (
+            "response_type",
+            lambda r: "abstained" if r["metrics"]["is_abstention"] else "answered",
+        ),
         ("question_type", lambda r: r["gold"]["question_type"]),
     ):
         buckets: dict[str, list[dict]] = defaultdict(list)
@@ -256,6 +261,7 @@ def build_summary(records: list[dict], ragas_scores: dict[str, dict]) -> dict:
             "answerable": len(answerable),
             "unanswerable": len(unanswerable),
             "rag_routed": len(rag_routed),
+            "answered": len(answered),
             "ragas_scored": len([r for r in ok if r["question_id"] in ragas_scores]),
         },
         "overall": {
@@ -265,6 +271,10 @@ def build_summary(records: list[dict], ragas_scores: dict[str, dict]) -> dict:
         "answerable_only": {
             **deterministic_block(answerable),
             **ragas_block(answerable),
+        },
+        "answered_only": {
+            **deterministic_block(answered),
+            **ragas_block(answered),
         },
         "unanswerable_only": deterministic_block(unanswerable),
         "intent": {
@@ -450,50 +460,85 @@ def build_report(meta: dict, summary: dict, ragas_summary: dict | None) -> str:
         add("")
 
     # ------------------------------------------------------------------
+    answered = summary["answered_only"]
+    answered_n = summary["counts"]["answered"]
+    abstained_n = counts["ok"] - answered_n
+
     add("## 2. 핵심 성능 요약")
     add("")
-    add("| 지표 | 정의 | 전체 | 답변가능 질문만 |")
-    add("|---|---|---:|---:|")
     add(
-        f"| **근거충실도** | 답변 주장이 검색 문맥으로 뒷받침되는 비율 (ragas faithfulness) "
-        f"| {_fmt(overall.get('faithfulness'))} | {_fmt(answerable.get('faithfulness'))} |"
+        f"| 지표 | 정의 | 전체 ({counts['ok']}건) | 답변가능 질문 ({counts['answerable']}건) "
+        f"| 실제 답변 생성 ({answered_n}건) |"
     )
-    add(
-        f"| **정답일치율** | 참조 정답과의 사실·의미 일치도 (ragas answer_correctness) "
-        f"| {_fmt(overall.get('answer_correctness'))} | {_fmt(answerable.get('answer_correctness'))} |"
-    )
-    add(
-        f"| **근거재현율** | 정답 문서를 문맥에 회수한 비율 (문서ID 기준) "
-        f"| {_fmt(overall.get('context_recall_id'))} | {_fmt(answerable.get('context_recall_id'))} |"
-    )
-    add(
-        f"| 근거재현율 (ragas) | 참조 정답 문장이 문맥에서 재구성 가능한 비율 "
-        f"| {_fmt(overall.get('context_recall'))} | {_fmt(answerable.get('context_recall'))} |"
-    )
-    add(
-        f"| **근거정밀도** | 회수 문맥 중 정답 문서 비율 (문서ID 기준) "
-        f"| {_fmt(overall.get('context_precision_id'))} | {_fmt(answerable.get('context_precision_id'))} |"
-    )
-    add(
-        f"| 근거정밀도 (ragas) | 관련 청크가 상위에 배치된 정도 "
-        f"| {_fmt(overall.get('llm_context_precision_with_reference'))} "
-        f"| {_fmt(answerable.get('llm_context_precision_with_reference'))} |"
-    )
-    add(
-        f"| **출처ID일치율** | LLM이 인용한 청크가 정답 문서인 비율 "
-        f"| {_fmt(overall.get('citation_accuracy'))} | {_fmt(answerable.get('citation_accuracy'))} |"
-    )
+    add("|---|---|---:|---:|---:|")
+    for label, definition, key in (
+        (
+            "**근거충실도**",
+            "답변 주장이 검색 문맥으로 뒷받침되는 비율 (ragas faithfulness)",
+            "faithfulness",
+        ),
+        (
+            "**정답일치율**",
+            "참조 정답과의 사실·의미 일치도 (ragas answer_correctness)",
+            "answer_correctness",
+        ),
+        (
+            "**근거재현율**",
+            "정답 문서를 문맥에 회수한 비율 (문서ID 기준)",
+            "context_recall_id",
+        ),
+        (
+            "근거재현율 (ragas)",
+            "참조 정답 문장이 문맥에서 재구성 가능한 비율",
+            "context_recall",
+        ),
+        (
+            "**근거정밀도**",
+            "회수 문맥 중 정답 문서 비율 (문서ID 기준)",
+            "context_precision_id",
+        ),
+        (
+            "근거정밀도 (ragas)",
+            "관련 청크가 상위에 배치된 정도",
+            "llm_context_precision_with_reference",
+        ),
+        (
+            "**출처ID일치율**",
+            "LLM이 인용한 청크가 정답 문서인 비율",
+            "citation_accuracy",
+        ),
+        (
+            "답변–정답 임베딩 유사도",
+            "답변과 참조 정답의 코사인 유사도 (ko-sroberta)",
+            "answer_semantic_similarity",
+        ),
+    ):
+        add(
+            f"| {label} | {definition} | {_fmt(overall.get(key))} "
+            f"| {_fmt(answerable.get(key))} | {_fmt(answered.get(key))} |"
+        )
     add(
         f"| **TTFB (p50)** | 요청→첫 토큰 지연 "
-        f"| {_fmt_ms(latency['first_token_ms']['p50'])} ms | — |"
+        f"| {_fmt_ms(latency['first_token_ms']['p50'])} ms | — | — |"
     )
     add(
         f"| TTFB (p95) | 요청→첫 토큰 지연 상위 5% "
-        f"| {_fmt_ms(latency['first_token_ms']['p95'])} ms | — |"
+        f"| {_fmt_ms(latency['first_token_ms']['p95'])} ms | — | — |"
     )
     add(
         f"| 종단 지연 (p50) | 요청→사후 감사 완료 "
-        f"| {_fmt_ms(latency['end_to_end_ms']['p50'])} ms | — |"
+        f"| {_fmt_ms(latency['end_to_end_ms']['p50'])} ms | — | — |"
+    )
+    add("")
+    add(
+        f"> **해석 주의** — 전체 평균에는 시스템이 \"지식베이스에 근거 없음\"으로 거절한 "
+        f"{abstained_n}건이 포함됩니다. ragas는 이 거절 문구를 문맥으로 뒷받침되지 않는 "
+        f"주장으로 채점하므로(근거충실도 "
+        f"{_fmt(summary['groups']['response_type'].get('abstained', {}).get('faithfulness'))}), "
+        f"전체 평균이 크게 낮아집니다. **실제로 답변을 생성한 {answered_n}건만 보면 "
+        f"근거충실도 {_fmt(answered.get('faithfulness'))}** — 즉 답변을 내놓을 때는 "
+        f"거의 예외 없이 검색 문맥에 근거합니다. 현재 시스템의 약점은 "
+        f"*환각*이 아니라 *과도한 거절*이며, 그 원인은 검색 단계입니다(9장)."
     )
     add("")
 
@@ -618,14 +663,23 @@ def build_report(meta: dict, summary: dict, ragas_summary: dict | None) -> str:
     add("## 5. 생성 품질과 근거 검증")
     add("")
     grounding = summary["grounding"]
-    add("| 항목 | 값 |")
+    add(f"| 항목 | 전체 ({counts['ok']}건) | 실제 답변 생성 ({answered_n}건) |")
+    add("|---|---:|---:|")
+    for label, key, percent in (
+        ("근거충실도 (ragas faithfulness)", "faithfulness", False),
+        ("정답일치율 (ragas answer_correctness)", "answer_correctness", False),
+        ("답변-정답 임베딩 코사인 유사도", "answer_semantic_similarity", False),
+        ("답변-정답 문자 bigram F1", "answer_char_f1", False),
+        ("답변-정답 어절 F1", "answer_token_f1", False),
+        ("짧은 정답 포함율 (≤40자 참조답)", "reference_coverage", True),
+    ):
+        add(
+            f"| {label} | {_fmt(overall.get(key), percent=percent)} "
+            f"| {_fmt(answered.get(key), percent=percent)} |"
+        )
+    add("")
+    add("| 근거 검증 계층 | 값 |")
     add("|---|---:|")
-    add(f"| 근거충실도 (ragas faithfulness) | {_fmt(overall.get('faithfulness'))} |")
-    add(f"| 정답일치율 (ragas answer_correctness) | {_fmt(overall.get('answer_correctness'))} |")
-    add(f"| 답변-정답 임베딩 코사인 유사도 | {_fmt(overall.get('answer_semantic_similarity'))} |")
-    add(f"| 답변-정답 문자 bigram F1 | {_fmt(overall.get('answer_char_f1'))} |")
-    add(f"| 답변-정답 어절 F1 | {_fmt(overall.get('answer_token_f1'))} |")
-    add(f"| 짧은 정답 포함율 (≤40자 참조답) | {_fmt(overall.get('reference_coverage'), percent=True)} |")
     add(f"| 근거 확보(grounded) 비율 | {_fmt(grounding['grounded_rate'], percent=True)} |")
     add(f"| 시스템 사후감사 통과율 | {_fmt(grounding['audit_pass_rate'], percent=True)} |")
     add(f"| 미근거 주장 검출 비율 | {_fmt(grounding['unsupported_claim_rate'], percent=True)} |")
@@ -707,7 +761,18 @@ def build_report(meta: dict, summary: dict, ragas_summary: dict | None) -> str:
         lines.extend(_group_table(summary["groups"][group_name], quality_columns, header))
         add("")
 
-    add("### 8.5 질문유형별 (상위 12개)")
+    add("### 8.5 응답 유형별 (답변 생성 vs 거절)")
+    add("")
+    lines.extend(
+        _group_table(summary["groups"]["response_type"], quality_columns, "응답 유형")
+    )
+    add("")
+    add("> `abstained`의 근거충실도·정답일치율이 0에 가까운 것은 품질 문제가 아니라")
+    add("> ragas가 \"지식베이스에 근거 없음\"이라는 거절 문구를 채점한 결과입니다.")
+    add("> 이 행은 **거절이 얼마나 자주 발생하는지**를 보는 용도로 읽어야 합니다.")
+    add("")
+
+    add("### 8.6 질문유형별 (상위 12개)")
     add("")
     top_types = dict(list(summary["groups"]["question_type"].items())[:12])
     lines.extend(_group_table(top_types, quality_columns, "질문유형"))
