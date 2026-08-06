@@ -35,3 +35,118 @@ class AskResponse(BaseModel):
     answer: str                              # 지식베이스 근거 답변(없으면 "지식베이스에 근거 없음")
     sources: list[str]                       # 출처 목록(["AIHub 전문 의학지식 데이터 · https://...", ...])
     grounded: bool                           # 근거로 답했는지(False면 회피)
+
+
+class CombinedAskRequest(BaseModel):
+    """서버가 설정된 모든 namespace를 검색하는 요청."""
+
+    question: str = Field(..., min_length=1, description="건강 정보에 대한 질문")
+
+
+class CombinedSearchHit(BaseModel):
+    """다중 컬렉션 검색 결과 한 건."""
+
+    collection: str
+    score: float
+    source: str
+    text: str
+
+
+class CombinedSearchResponse(BaseModel):
+    """병렬 검색 결과와 namespace별 처리 상태."""
+
+    query: str
+    hits: list[CombinedSearchHit]
+    searched_collections: list[str]
+    failed_collections: list[str]
+
+
+class CombinedAnswerChunk(BaseModel):
+    """답변 생성 문맥에 실제로 전달된 최종 청크."""
+
+    collection: str
+    record_id: str
+    score: float
+    source: str
+    text: str
+
+
+class CombinedCitation(CombinedAnswerChunk):
+    """답변 본문이 실제로 인용하고 검증한 청크."""
+
+    citation_id: str
+
+
+class CombinedAskResponse(AskResponse):
+    """병렬 검색 기반 답변, 최종 청크와 namespace별 처리 상태."""
+
+    chunks: list[CombinedAnswerChunk]
+    citations: list[CombinedCitation]
+    verification_method: str
+    verification_reason: str
+    grounding_errors: list[str]
+    unsupported_claims: list[str]
+    grounding_plan: dict | None
+    audit_status: str
+    audit_summary: str
+    searched_collections: list[str]
+    failed_collections: list[str]
+
+
+class ChatRequest(BaseModel):
+    """최상위 Intent부터 자동 분기하는 통합 챗봇 요청."""
+
+    question: str = Field(..., min_length=1, description="사용자 질문")
+
+    @field_validator("question")
+    @classmethod
+    def _validate_question(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("질문은 비어 있을 수 없습니다.")
+        return normalized
+
+
+class GroundingPlanFactResponse(BaseModel):
+    """선검증된 단일 근거 사실."""
+
+    statement: str
+    cited_chunk_ids: list[str]
+
+
+class GroundingPlanResponse(BaseModel):
+    """최종 답변 스트리밍 전에 승인된 근거 계획."""
+
+    answerable: bool
+    facts: list[GroundingPlanFactResponse]
+    reason: str
+
+
+class ChatResponse(BaseModel):
+    """Intent 분류와 선택된 처리 경로의 통합 응답."""
+
+    question: str
+    intent: str
+    confidence: float
+    probabilities: dict[str, float]
+    uncertain: bool
+    model_version: str
+    intent_source: str
+    guard_triggered: bool
+    guard_reason: str | None
+    matched_patterns: list[str]
+    answer: str
+    sources: list[str]
+    grounded: bool | None
+    chunks: list[CombinedAnswerChunk]
+    citations: list[CombinedCitation]
+    verification_method: str
+    verification_reason: str
+    grounding_errors: list[str]
+    unsupported_claims: list[str]
+    grounding_plan: GroundingPlanResponse | None
+    audit_status: str
+    audit_summary: str
+    searched_collections: list[str]
+    failed_collections: list[str]
+    personal_context_used: bool

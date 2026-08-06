@@ -1,44 +1,100 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from langchain_huggingface import HuggingFaceEmbeddings
+from pathlib import Path
 
-from app.core.config import EMBED_MODEL, COLLECTIONS
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from app.core.config import (
+    INTENT_MIN_CONFIDENCE,
+    INTENT_MODEL_PATH,
+    SEARCH_COLLECTIONS,
+    SEARCH_FINAL_TOP_K,
+    SEARCH_MAX_PER_COLLECTION,
+    SEARCH_MIN_SCORE,
+    SEARCH_TOP_K_PER_COLLECTION,
+)
 from app.core.state import state
-from app.services.rag import build_all_vectorstores, build_chain
-from app.routers import ask
+from app.routers import ask, chat, intent
+from app.services.chat_orchestrator import ChatOrchestrator
+from app.services.general_chat import build_general_chat_chain
+from app.services.grounded_rag import build_grounded_rag_service
+from app.services.intent_classifier import LinearIntentClassifier
+from app.services.rag import build_answer_chain
+from app.services.vector_search import build_pinecone_search_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """서버 시작 시 1회: 임베딩 로드 → 컬렉션별 Chroma 열기/구축 → RAG 체인 구성.
+    """서버 시작 시 로컬 임베딩 모델과 Pinecone 검색을 준비한다."""
+    vector_search = build_pinecone_search_service()
+    counts = vector_search.counts()
 
-    무거운 준비는 여기서 끝내고, 요청은 가볍게 invoke 만 하도록 만듭니다.
-    """
-    embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
-    vectorstores = build_all_vectorstores(embeddings)   # {"disease_info": Chroma, "health_checkup_info": Chroma, ...}
-
-    retrievers = {
-        name: vs.as_retriever(search_kwargs={"k": 3})   # 검색기: 관련 청크 상위 3개
-        for name, vs in vectorstores.items()
-    }
-    chains = {
-        name: build_chain(retriever)
-        for name, retriever in retrievers.items()
-    }
-
-    state["vectorstores"] = vectorstores
-    state["retrievers"] = retrievers
-    state["chains"] = chains
+    state["vector_search"] = vector_search
+    state["answer_chain"] = build_answer_chain()
+    grounded_rag_service = build_grounded_rag_service()
+    state["grounded_rag_service"] = grounded_rag_service
+    general_chat_chain = build_general_chat_chain()
+    state["general_chat_chain"] = general_chat_chain
+    state["backend"] = vector_search.backend_name
+    state["embed_model"] = vector_search.embed_model
+    state["indexed_chunks"] = counts
     state["ready"] = True
 
-    for name, vs in vectorstores.items():
-        print(f"[lifespan] '{name}' 인덱스 준비 완료 — 청크 {vs._collection.count()}개")
+    if INTENT_MODEL_PATH.is_file():
+        state["intent_classifier"] = LinearIntentClassifier.from_file(
+            INTENT_MODEL_PATH,
+            INTENT_MIN_CONFIDENCE,
+        )
+        print(
+            f"[lifespan] intent 분류기 준비 완료 - "
+            f"version={state['intent_classifier'].model_version}"
+        )
+    else:
+        state["intent_classifier"] = None
+        print(
+            f"[lifespan] intent 모델 없음 - 학습 후 배치 필요: "
+            f"{INTENT_MODEL_PATH}"
+        )
+
+    state["chat_orchestrator"] = ChatOrchestrator(
+        vector_search=vector_search,
+        intent_classifier=state["intent_classifier"],
+        grounded_rag_service=grounded_rag_service,
+        general_chat_chain=general_chat_chain,
+        search_collections=SEARCH_COLLECTIONS,
+        top_k_per_collection=SEARCH_TOP_K_PER_COLLECTION,
+        final_top_k=SEARCH_FINAL_TOP_K,
+        max_per_collection=SEARCH_MAX_PER_COLLECTION,
+        min_score=SEARCH_MIN_SCORE,
+    )
+
+    print(
+        f"[lifespan] 벡터 백엔드 준비 완료 - "
+        f"backend={vector_search.backend_name}, model={vector_search.embed_model}"
+    )
+    for name, count in counts.items():
+        print(f"[lifespan] '{name}' 청크 {count}개")
 
     yield                                    # 여기서부터 요청을 받습니다
     state.clear()                            # 종료 시 정리
 
 app = FastAPI(title="HEAPY RAG 서빙", version="1.0", lifespan=lifespan)
+app.include_router(chat.router)
 app.include_router(ask.router)
+app.include_router(intent.router)
+
+WEB_ROOT = Path(__file__).resolve().parent / "web"
+app.mount("/assets", StaticFiles(directory=WEB_ROOT / "assets"), name="web-assets")
+
+
+@app.get("/", include_in_schema=False)
+def web_app() -> FileResponse:
+    """HEAPY 챗봇 시연용 웹 앱을 반환한다.
+
+    작성자: 김진우
+    """
+    return FileResponse(WEB_ROOT / "index.html")
 
 # 실행 명령어: uvicorn app.main:app --reload
 # Gradio UI 실행: python run_ui.py
