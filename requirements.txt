@@ -1,12 +1,11 @@
 fastapi
 uvicorn[standard]
-pypdf
 langchain
-langchain-community
 langchain-huggingface
-langchain-chroma
 langchain-google-genai
 sentence-transformers
+torch
 python-dotenv
 gradio
 requests
+pinecone==9.1.0
