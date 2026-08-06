@@ -198,7 +198,6 @@ health-ai/
 
 # 대용량 데이터/전처리 산출물 (재생성 가능 → 커밋 제외)
 data/
-output/
 #preprocessed/
 vdb/chunk/
 preprocessed/script/kcd_reclassify/image_ocr/img
