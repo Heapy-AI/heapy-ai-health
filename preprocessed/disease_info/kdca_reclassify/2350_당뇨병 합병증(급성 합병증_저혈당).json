@@ -1,0 +1,77 @@
+{
+ "disease": "당뇨병 합병증(급성 합병증_저혈당)",
+ "cntnts_sn": 2350,
+ "superclass": "건강문제",
+ "source": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoMain.do",
+ "source_label": "질병관리청 국가건강정보포털",
+ "review_status": "SOURCE_VERIFIED",
+ "sections": [
+  {
+   "name": "개요",
+   "content": "저혈당은 약물치료를 받는 당뇨병 환자가 가장 흔히 겪는 합병증입니다. 저혈당이 발생하면 혈당을 효과적으로 조절하기 어렵습니다. 또한 저혈당이 반복적으로 생기면 뇌혈관질환과 심혈관질환 및 치매 등의 발생 위험이 증가하며, 심한 경우 사망할 수도 있습니다. 그러므로 당뇨병 환자는 저혈당을 예방하고, 저혈당이 발생했을 때 적절히 대처할 수 있어야 합니다."
+  },
+  {
+   "name": "증상",
+   "content": "저혈당이 발생하면 자율신경계의 기능이 올라가 생기는 증상과 중추신경계에 포도당이 부족해 생기는 증상 및 징후가 나타날 수 있습니다.\n\n1. 자율신경계 관련 증상\n· 맥박수 증가\n· 손떨림\n· 불안감\n· 식은땀 흘림\n· 공복감\n\n2. 중추신경계 관련 증상\n· 쇠약\n· 피로\n· 어지럼\n· 의식의 변화"
+  },
+  {
+   "name": "진단 및 검사",
+   "content": "저혈당이 의심되는 경우 환자가 혈당을 측정할 수 있다면 정확한 진단을 위해 혈당측정기로 혈당 수치를 확인합니다. 환자가 혈당을 측정하기 어렵다면 먼저 저혈당에 대한 처치를 한 뒤 혈당을 측정합니다."
+  },
+  {
+   "name": "치료",
+   "content": "측정한 혈당 수치가 70 mg/dL 미만이고 의식이 있는 환자는 15~20 g의 포도당을 섭취하고 15분 간 휴식을 취한 뒤 혈당을 측정합니다. 혈당이 정상 범위로 회복되지 않았다면 포도당 섭취를 반복합니다.\n\n포도당 15~20 g에 해당하는 음식은 다음과 같습니다.\n· 설탕(15 g)이나 꿀 (15 mL) 1큰숟가락\n· 요구르트 1개(100 mL)\n· 주스나 청량음료(175 mL)\n· 사탕 3~4개\n\n초콜릿이나 아이스크림처럼 지방이 함유된 음식은 흡수 속도가 느려 혈당이 빨리 올라가지 않을 수 있으므로 저혈당에 대한 처치로 적절하지 않습니다. 환자가 스스로 처치할 수 없거나 의식이 없는 경우에는 음식을 먹이면 안 되고, 정맥주사를 통해 포도당을 주입해야 합니다."
+  },
+  {
+   "name": "위험요인 및 예방",
+   "content": "1. 위험요인\n\n저혈당은 다음과 같은 상황에서 발생할 수 있습니다.\n· 당뇨병약의 투여 용량, 시간 및 방법 등이 부적절한 경우[특히 인슐린이나 설포닐유레아(sulfonylurea)와 같이 상대적으로 저혈당 발생 위험이 높은 약물을 투여하는 경우]\n· 식사를 불규칙하게 하는 경우\n· 신체활동이 평소보다 많은 경우\n· 과도한 음주를 하는 경우\n\n또한 다음과 같은 병력이 있는 경우에는 중증 저혈당이 발생할 수 있으므로 주의해야 합니다.\n· 이전에 중증 저혈당이 있었던 경우\n· 진행된 당뇨병 합병증이 있는 경우\n· 다른 만성질환이나 중증 질환이 있는 경우\n· 혈당을 엄격하게 조절하는 경우\n· 고령이나 소아청소년 환자\n· 당뇨병을 오래 전에 진단받은 경우\n\n2. 예방\n저혈당을 예방하려면 저혈당의 위험인자가 있는지 확인해 교정해야 합니다. 평소에 혈당을 자주 측정하고, 규칙적으로 식사와 운동을 하며, 약물을 처방에 따라 올바르게 투약해야 합니다. 필요한 경우 의료진과 상의해 약물을 조절할 수 있습니다.\n또한 환자는 저혈당이 발생할 경우에 대비해 저혈당의 증상 및 징후와 대처 방법을 잘 알고 있어야 합니다. 저혈당이 생길 위험이 높다면 항상 포도당이 포함된 음식을 가지고 다니는 것이 좋습니다."
+  },
+  {
+   "name": "참고문헌",
+   "content": "1. 대한당뇨병학회 진료지침위원회. (2021). 2021 당뇨병 진료지침 (제7판). 서울: 대한당뇨병학회.\n\n2. 대한당뇨병학회. (2018). 당뇨병학 (제5판). 서울: 범문에듀케이션. \n3. Umpierrez, G., & Korytkowski, M. (2016). Diabetic emergencies - ketoacidosis, hyperglycaemic hyperosmolar state and hypoglycaemia. Nature reviews. Endocrinology, 12(4), 222–232. doi.org/10.1038/nrendo.2016.15."
+  }
+ ],
+ "dedup_removed_sections": 0,
+ "has_image_text": false,
+ "category": "disease",
+ "category_confidence": "high",
+ "category_source": "rule:정의+자기치료",
+ "kcd_matches": [
+  {
+   "code": "E16.1",
+   "level": "세",
+   "korean_name": "기타 저혈당",
+   "match_type": "substring",
+   "matched_query": "저혈당"
+  },
+  {
+   "code": "E16.18",
+   "level": "세세",
+   "korean_name": "기타 저혈당",
+   "match_type": "substring",
+   "matched_query": "저혈당"
+  },
+  {
+   "code": "E74",
+   "level": "소",
+   "korean_name": "저혈당 NOS",
+   "match_type": "substring",
+   "matched_query": "저혈당"
+  },
+  {
+   "code": "R79",
+   "level": "소",
+   "korean_name": "저혈당 NOS",
+   "match_type": "substring",
+   "matched_query": "저혈당"
+  },
+  {
+   "code": "R40",
+   "level": "소",
+   "korean_name": "저혈당성 혼수",
+   "match_type": "substring",
+   "matched_query": "저혈당"
+  }
+ ],
+ "embedded_disease_chunks": []
+}
