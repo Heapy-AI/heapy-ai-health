@@ -21,6 +21,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 ROOT = Path(__file__).resolve().parents[2]   # preprocessed/script/ → repo 루트
 PRE = ROOT / "preprocessed" / "disease_info"
 OUT = ROOT / "vdb" / "chunk" / "disease_info"
+ALLOWED_KDCA_CATEGORIES = {"disease", "symptom"}
 
 BUDGET = 105      # 큰 섹션 분할 목표 토큰
 MERGE_MAX = 125   # 작은 섹션 병합 상한
@@ -30,7 +31,7 @@ _tok = AutoTokenizer.from_pretrained("jhgan/ko-sroberta-multitask")
 def ntok(t: str) -> int:
     return len(_tok.encode(t, add_special_tokens=False))
 
-
+"""
 # ---------------- AIHub: 병합만 ----------------
 def chunk_aihub() -> tuple[int, Counter]:
     src = PRE / "aihub"
@@ -59,9 +60,39 @@ def chunk_aihub() -> tuple[int, Counter]:
         stat[jf.stem] = len(out_lines)
         total += len(out_lines)
     return total, stat
-
+"""
 
 # ---------------- KDCA: 크기 적응형 ----------------
+def _iter_kdca_docs() -> list[dict]:
+    """KCD 재분류 결과(output/*.json)가 있으면 그 기준으로 disease/symptom 문서만 사용한다."""
+    reclass_dir = ROOT / "output"
+    if reclass_dir.exists():
+        docs = []
+        for jf in sorted(reclass_dir.glob("*.json")):
+            try:
+                doc = json.loads(jf.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            category = str(doc.get("category") or "").strip()
+            if category in ALLOWED_KDCA_CATEGORIES:
+                docs.append(doc)
+        if docs:
+            return docs
+
+    # fallback: 원본 전처리본(카테고리 필드가 있으면 그 기준, 없으면 전부 포함)
+    docs = []
+    for jf in sorted((PRE / "kdca").glob("*.json")):
+        try:
+            doc = json.loads(jf.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        category = str(doc.get("category") or "").strip()
+        if category and category not in ALLOWED_KDCA_CATEGORIES:
+            continue
+        docs.append(doc)
+    return docs
+
+
 def split_sents(text: str) -> list[str]:
     parts = []
     for line in text.split("\n"):
@@ -120,12 +151,11 @@ def chunk_sections(sections: list[dict]) -> list[tuple[str, str]]:
 
 
 def chunk_kdca() -> tuple[int, Counter]:
-    src = PRE / "kdca"
     per_super: dict[str, list[str]] = {}
     stat = Counter()
     total = 0
-    for jf in sorted(src.glob("*.json")):
-        doc = json.loads(jf.read_text(encoding="utf-8"))
+    docs = _iter_kdca_docs()
+    for doc in docs:
         disease, sn = doc["disease"], doc["cntnts_sn"]
         sc = doc.get("superclass") or "기타"
         for i, (label, body) in enumerate(chunk_sections(doc["sections"])):
@@ -140,6 +170,7 @@ def chunk_kdca() -> tuple[int, Counter]:
                     "source": doc["source"],
                     "source_label": doc["source_label"],
                     "review_status": doc["review_status"],
+                    "category": doc.get("category"),
                 },
             }
             per_super.setdefault(sc, []).append(json.dumps(rec, ensure_ascii=False))
@@ -155,9 +186,11 @@ def chunk_kdca() -> tuple[int, Counter]:
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     a_total = k_total = 0
+    """
     if (PRE / "aihub").exists():
         a_total, a_stat = chunk_aihub()
         print(f"AIHub 청크: {a_total:,} (진료과 {len([k for k in a_stat])}개)")
+    """
     if (PRE / "kdca").exists():
         k_total, k_stat = chunk_kdca()
         print(f"KDCA 청크: {k_total:,}")
