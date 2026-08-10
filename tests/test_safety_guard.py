@@ -28,6 +28,34 @@ class SafetyGuardTest(unittest.TestCase):
                 self.assertEqual(result.reason, reason)
                 self.assertTrue(result.matched_patterns)
 
+    def test_self_applicability_requests_are_blocked(self) -> None:
+        """멀티턴 재작성이 복원하는 자기 적용 질문을 차단한다."""
+        cases = (
+            "저는 고혈압 진단 기준에 해당되나요?",
+            "제가 당뇨병에 해당하는지 알려주세요",
+            "내가 고혈압인가요?",
+            "제가 빈혈 맞나요?",
+        )
+
+        for text in cases:
+            with self.subTest(text=text):
+                result = check_safety_guard(text)
+                self.assertTrue(result.triggered)
+                self.assertEqual(result.reason, "definitive_diagnosis")
+
+    def test_general_applicability_questions_still_pass(self) -> None:
+        """1인칭이 없는 일반 지식 질문은 막지 않는다."""
+        cases = (
+            "고혈압 진단 기준에 해당되는 수치는 무엇인가요?",
+            "당뇨병에 해당하는 사람은 어떤 검사를 받나요?",
+            "빈혈은 어떤 질환인가요?",
+        )
+
+        for text in cases:
+            with self.subTest(text=text):
+                result = check_safety_guard(text)
+                self.assertFalse(result.triggered)
+
     def test_lookup_and_personal_analysis_requests_pass(self) -> None:
         cases = (
             "오늘 내 복약 목록에서 저녁 약만 보여줘",

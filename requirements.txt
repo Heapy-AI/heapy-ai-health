@@ -9,3 +9,4 @@ python-dotenv
 gradio
 requests
 pinecone==9.1.0
+pytest #멀티턴

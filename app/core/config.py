@@ -1,4 +1,4 @@
-# 설정을 한 곳에 모은다(바꾸면 전체 반영) - 03·04강 '설정 주도'
+# 설정을 한 곳에 모은다(바꾸면 전체 반영)
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -57,6 +57,26 @@ def _non_negative_float_env(name: str, default: float) -> float:
     if value < 0.0:
         raise RuntimeError(f"{name}은 0 이상의 실수여야 합니다.")
     return value
+
+# 멀티턴: 클라이언트가 보낸 직전 대화를 몇 턴까지 질문 재작성에 사용할지.
+# 서버는 대화를 저장하지 않으므로 이 값이 문맥 창의 전부다.
+CHAT_HISTORY_MAX_TURNS = _positive_int_env("CHAT_HISTORY_MAX_TURNS", 6)
+CHAT_HISTORY_MAX_CHARS = _positive_int_env("CHAT_HISTORY_MAX_CHARS", 600)
+QUERY_REWRITE_ENABLED = os.environ.get("QUERY_REWRITE_ENABLED", "1").strip() not in {
+    "0",
+    "false",
+    "False",
+}
+
+# 슬라이딩 윈도(CHAT_HISTORY_MAX_TURNS) 밖으로 밀려나는 대화를 압축해 유지한다.
+# 요약도 서버에 저장하지 않고 클라이언트가 들고 매 요청에 실어 보낸다.
+CONVERSATION_SUMMARY_ENABLED = os.environ.get(
+    "CONVERSATION_SUMMARY_ENABLED", "1"
+).strip() not in {"0", "false", "False"}
+CONVERSATION_SUMMARY_MAX_CHARS = _positive_int_env(
+    "CONVERSATION_SUMMARY_MAX_CHARS",
+    400,
+)
 
 _intent_model_value = os.environ.get(
     "INTENT_MODEL_PATH",

@@ -1,4 +1,4 @@
-/** HEAPY 웹 앱 상호작용. 작성자: 김진우 */
+/** HEAPY 웹 앱 상호작용. 작성자: 김진우 , 고수연(멀티턴 정보 추가)*/
 const elements = {
   form: document.querySelector("#chatForm"),
   input: document.querySelector("#questionInput"),
@@ -49,6 +49,21 @@ const STREAM_CHARACTER_DELAY_MS = 28;
 const STREAM_COMMA_DELAY_MS = 70;
 const STREAM_SENTENCE_DELAY_MS = 130;
 let isRequesting = false;
+
+// 서버는 대화를 저장하지 않는다. 멀티턴 문맥은 이 배열이 전부이며,
+// 매 요청에 최근 턴만 실어 보낸다. "새 대화"·새로고침 시 함께 사라진다.
+const HISTORY_MAX_TURNS = 6;
+const HISTORY_MAX_CHARS = 600;
+let conversationHistory = [];
+// 창 밖으로 밀려난 대화의 압축본. 서버가 갱신해 돌려주면 그대로 보관한다.
+let conversationSummary = "";
+
+function recordTurn(role, content) {
+  const text = String(content || "").trim();
+  if (!text) return;
+  conversationHistory.push({ role, content: text.slice(0, HISTORY_MAX_CHARS) });
+  conversationHistory = conversationHistory.slice(-HISTORY_MAX_TURNS);
+}
 
 function selectRandomRecommendations(count) {
   const shuffled = [...recommendationPool];
@@ -507,6 +522,19 @@ function updateInsight(data) {
   const monitorSection = appendAuditSection(body, "모니터링 정보");
   const monitorList = document.createElement("div");
   monitorList.className = "audit-monitor-list";
+  if (data.query_rewritten) {
+    addMonitorItem(monitorList, "질문 재작성", data.search_question || "—");
+    addMonitorItem(monitorList, "재작성 사유", data.rewrite_reason || "—");
+  } else {
+    addMonitorItem(monitorList, "질문 재작성", "없음 (단독 질문)");
+  }
+  if (data.conversation_summary) {
+    addMonitorItem(
+      monitorList,
+      data.summary_updated ? "대화 요약 (갱신됨)" : "대화 요약",
+      data.conversation_summary,
+    );
+  }
   addMonitorItem(monitorList, "응답 경로", data.intent_source === "safety_guard" ? "Safety Guard" : "Intent v6");
   addMonitorItem(monitorList, "검증 방식", formatVerification(data.verification_method));
   addMonitorItem(monitorList, "검증 사유", data.verification_reason);
@@ -603,6 +631,7 @@ async function consumeChatStream(response) {
     await tokenPacer.drain();
     appendAssistantMessage(completePayload);
     updateInsight(completePayload);
+    return completePayload;
   } catch (error) {
     tokenPacer.cancel();
     throw error;
@@ -625,13 +654,24 @@ async function submitQuestion(question) {
     const response = await fetch("/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: normalized }),
+      body: JSON.stringify({
+        question: normalized,
+        history: conversationHistory,
+        summary: conversationSummary,
+      }),
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(parseError(response, payload));
     }
-    await consumeChatStream(response);
+    const payload = await consumeChatStream(response);
+    // 사용자가 실제로 입력한 원문을 남긴다. 재작성된 질문 대신 원문을 두어야
+    // 다음 턴 재작성이 대화를 왜곡 없이 볼 수 있다. 실패한 턴은 기록하지 않는다.
+    recordTurn("user", normalized);
+    recordTurn("assistant", payload?.answer);
+    if (typeof payload?.conversation_summary === "string") {
+      conversationSummary = payload.conversation_summary;
+    }
   } catch (error) {
     appendErrorMessage(error instanceof Error ? error.message : "알 수 없는 오류가 발생했어요.");
     setInsightError();
@@ -651,6 +691,8 @@ function resetConversation() {
   elements.auditCardList.replaceChildren();
   elements.auditCountBadge.className = "quality-badge neutral";
   elements.auditCountBadge.textContent = "0건";
+  conversationHistory = [];
+  conversationSummary = "";
   renderSuggestionCards();
   elements.input.value = "";
   resizeInput();

@@ -1,8 +1,15 @@
 # app/schemas/health_chatbot.py
 """건강관리 챗봇 요청/응답 Pydantic 모델 (FastAPI가 자동 검증·응답 형식 고정)"""
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.config import COLLECTIONS
+from app.core.config import (
+    CHAT_HISTORY_MAX_CHARS,
+    CHAT_HISTORY_MAX_TURNS,
+    COLLECTIONS,
+    CONVERSATION_SUMMARY_MAX_CHARS,
+)
 
 
 # ── /search, /ask 공용 요청 모델 ──
@@ -93,10 +100,40 @@ class CombinedAskResponse(AskResponse):
     failed_collections: list[str]
 
 
+class ChatTurn(BaseModel):
+    """클라이언트가 보관하는 직전 대화 한 턴.
+
+    서버는 대화를 저장하지 않는다. 멀티턴 문맥은 요청마다 클라이언트가 실어 보낸다.
+    """
+
+    role: Literal["user", "assistant"] = Field(..., description="발화 주체")
+    content: str = Field(..., description="발화 내용")
+
+    @field_validator("content")
+    @classmethod
+    def _trim_content(cls, value: str) -> str:
+        return value.strip()[:CHAT_HISTORY_MAX_CHARS]
+
+
 class ChatRequest(BaseModel):
     """최상위 Intent부터 자동 분기하는 통합 챗봇 요청."""
 
     question: str = Field(..., min_length=1, description="사용자 질문")
+    history: list[ChatTurn] = Field(
+        default_factory=list,
+        description=(
+            "직전 대화(오래된 순). 후속 질문의 대명사·생략을 해소하는 데만 사용하며 "
+            f"최근 {CHAT_HISTORY_MAX_TURNS}턴까지 반영합니다."
+        ),
+    )
+
+    summary: str = Field(
+        default="",
+        description=(
+            "창 밖으로 밀려난 이전 대화의 요약. 서버가 응답으로 돌려준 값을 "
+            "클라이언트가 보관했다가 다음 요청에 그대로 실어 보냅니다."
+        ),
+    )
 
     @field_validator("question")
     @classmethod
@@ -105,6 +142,18 @@ class ChatRequest(BaseModel):
         if not normalized:
             raise ValueError("질문은 비어 있을 수 없습니다.")
         return normalized
+
+    @field_validator("summary")
+    @classmethod
+    def _limit_summary(cls, value: str) -> str:
+        return value.strip()[:CONVERSATION_SUMMARY_MAX_CHARS]
+
+    @field_validator("history")
+    @classmethod
+    def _limit_history(cls, value: list[ChatTurn]) -> list[ChatTurn]:
+        """빈 발화를 버리고 최근 N턴만 남긴다."""
+        turns = [turn for turn in value if turn.content]
+        return turns[-CHAT_HISTORY_MAX_TURNS:]
 
 
 class GroundingPlanFactResponse(BaseModel):
@@ -150,3 +199,9 @@ class ChatResponse(BaseModel):
     searched_collections: list[str]
     failed_collections: list[str]
     personal_context_used: bool
+    original_question: str = ""
+    search_question: str = ""
+    query_rewritten: bool = False
+    rewrite_reason: str = ""
+    conversation_summary: str = ""
+    summary_updated: bool = False

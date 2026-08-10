@@ -1,11 +1,12 @@
 """최상위 Intent에 따라 챗봇 처리 경로를 실행하는 오케스트레이터.
 
 작성자: 김진우
+수정: 고수연 (멀티턴 추가)
 """
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from langchain_core.documents import Document
 
@@ -19,6 +20,16 @@ from app.services.intent_classifier import (
     Intent,
     IntentPrediction,
     LinearIntentClassifier,
+)
+from app.services.conversation_summary import (
+    ConversationSummarizer,
+    SummaryUpdateResult,
+    select_evicted_turns,
+)
+from app.services.query_rewriter import (
+    QueryRewriteResult,
+    QueryRewriter,
+    normalize_history,
 )
 from app.services.safety_guard import GuardResult, check_safety_guard
 from app.services.search_result_merger import merge_search_results
@@ -67,6 +78,14 @@ class ChatOrchestrationResult:
     searched_collections: list[str] = field(default_factory=list)
     failed_collections: list[str] = field(default_factory=list)
     personal_context_used: bool = False
+    original_question: str = ""
+    search_question: str = ""
+    query_rewritten: bool = False
+    rewrite_reason: str = ""
+    rewrite_error: str | None = None
+    conversation_summary: str = ""
+    summary_updated: bool = False
+    summary_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -96,6 +115,8 @@ class ChatOrchestrator:
         final_top_k: int,
         max_per_collection: int,
         min_score: float,
+        query_rewriter: QueryRewriter | None = None,
+        conversation_summarizer: ConversationSummarizer | None = None,
     ) -> None:
         self._vector_search = vector_search
         self._intent_classifier = intent_classifier
@@ -106,28 +127,84 @@ class ChatOrchestrator:
         self._final_top_k = final_top_k
         self._max_per_collection = max_per_collection
         self._min_score = min_score
+        self._query_rewriter = query_rewriter
+        self._conversation_summarizer = conversation_summarizer
 
-    def answer(self, question: str) -> ChatOrchestrationResult:
-        """질문을 한 번 분류하고 선택된 Intent 경로의 최종 응답을 반환한다."""
+    def _prepare_question(
+        self, question: str, history, summary: str = ""
+    ) -> QueryRewriteResult:
+        """직전 대화나 요약이 있으면 질문을 독립형으로 재작성한다."""
+        if self._query_rewriter is None or not (history or summary):
+            return QueryRewriteResult(
+                question=question,
+                original_question=question,
+                rewritten=False,
+                reason="멀티턴 재작성을 사용하지 않았습니다.",
+            )
+        return self._query_rewriter.rewrite(question, history, summary)
+
+    def answer(
+        self, question: str, history=(), summary: str = ""
+    ) -> ChatOrchestrationResult:
+        """질문에 답하고, 창 밖으로 밀려난 대화를 요약에 반영해 함께 돌려준다."""
+        result = self._answer_core(question, history, summary)
+        return self._with_summary(result, question, history, summary)
+
+    def _answer_core(
+        self, question: str, history, summary: str
+    ) -> ChatOrchestrationResult:
+        """Safety Guard·재작성·Intent 분기를 거쳐 응답을 만든다."""
+        # 재작성이 위험 표현을 지우더라도 막을 수 있도록 원문을 먼저 검사한다.
         guard_result = check_safety_guard(question)
         if guard_result.triggered:
-            return self._build_guard_response(guard_result)
+            return self._build_guard_response(guard_result, question, question)
+
+        rewrite = self._prepare_question(question, history, summary)
+        # 재작성으로 비로소 드러나는 위험 표현("그럼 저는 해당되나요?")을 잡는다.
+        if rewrite.rewritten:
+            rewritten_guard = check_safety_guard(rewrite.question)
+            if rewritten_guard.triggered:
+                return self._build_guard_response(
+                    rewritten_guard, question, rewrite.question, rewrite
+                )
 
         if self._intent_classifier is None:
             raise IntentClassifierUnavailableError(
                 "학습된 intent 모델이 없어 챗봇 경로를 선택할 수 없습니다."
             )
 
-        query_embedding = self._vector_search.embed_query(question)
+        query_embedding = self._vector_search.embed_query(rewrite.question)
         prediction = self._intent_classifier.predict(query_embedding)
 
         if prediction.intent is Intent.IGNORE:
-            return self._build_ignore_response(prediction)
+            return self._build_ignore_response(prediction, rewrite)
         if prediction.intent is Intent.GENERAL_CHAT:
-            return self._build_general_chat_response(question, prediction)
-        return self._build_rag_response(question, query_embedding, prediction)
+            return self._build_general_chat_response(
+                rewrite.question, prediction, rewrite
+            )
+        return self._build_rag_response(
+            rewrite.question, query_embedding, prediction, rewrite
+        )
 
-    def stream_answer(self, question: str) -> Iterator[ChatStreamEvent]:
+    def stream_answer(
+        self, question: str, history=(), summary: str = ""
+    ) -> Iterator[ChatStreamEvent]:
+        """토큰을 흘려보낸 뒤, 완료 이벤트에 갱신된 요약을 실어 보낸다.
+
+        요약 갱신은 스트리밍이 끝난 뒤에 수행하므로 TTFB에 영향을 주지 않는다.
+        """
+        for event in self._stream_core(question, history, summary):
+            if event.event != "complete" or event.result is None:
+                yield event
+                continue
+            yield ChatStreamEvent(
+                event="complete",
+                result=self._with_summary(event.result, question, history, summary),
+            )
+
+    def _stream_core(
+        self, question: str, history, summary: str
+    ) -> Iterator[ChatStreamEvent]:
         """Intent 경로에 따라 LLM 토큰과 검증 완료 결과를 순서대로 전달한다.
 
         작성자: 김진우
@@ -135,34 +212,108 @@ class ChatOrchestrator:
         guard_result = check_safety_guard(question)
         if guard_result.triggered:
             yield from self._stream_fixed_result(
-                self._build_guard_response(guard_result)
+                self._build_guard_response(guard_result, question, question)
             )
             return
+
+        rewrite = self._prepare_question(question, history, summary)
+        if rewrite.rewritten:
+            rewritten_guard = check_safety_guard(rewrite.question)
+            if rewritten_guard.triggered:
+                yield from self._stream_fixed_result(
+                    self._build_guard_response(
+                        rewritten_guard, question, rewrite.question, rewrite
+                    )
+                )
+                return
 
         if self._intent_classifier is None:
             raise IntentClassifierUnavailableError(
                 "학습된 intent 모델이 없어 챗봇 경로를 선택할 수 없습니다."
             )
 
-        query_embedding = self._vector_search.embed_query(question)
+        query_embedding = self._vector_search.embed_query(rewrite.question)
         prediction = self._intent_classifier.predict(query_embedding)
         if prediction.intent is Intent.IGNORE:
             yield from self._stream_fixed_result(
-                self._build_ignore_response(prediction)
+                self._build_ignore_response(prediction, rewrite)
             )
             return
         if prediction.intent is Intent.GENERAL_CHAT:
-            yield from self._stream_general_chat_response(question, prediction)
+            yield from self._stream_general_chat_response(
+                rewrite.question, prediction, rewrite
+            )
             return
         yield from self._stream_rag_response(
-            question,
+            rewrite.question,
             query_embedding,
             prediction,
+            rewrite,
         )
+
+    def _with_summary(
+        self,
+        result: ChatOrchestrationResult,
+        question: str,
+        history,
+        summary: str,
+    ) -> ChatOrchestrationResult:
+        """이번 턴을 포함해 창 밖으로 밀려난 대화를 요약에 반영한다."""
+        previous = (summary or "").strip()
+        if self._conversation_summarizer is None:
+            return replace(
+                result,
+                conversation_summary=previous,
+                summary_updated=False,
+                summary_reason="대화 요약을 사용하지 않습니다.",
+            )
+
+        turns = normalize_history(history)
+        turns = turns + normalize_history(
+            [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": result.answer},
+            ]
+        )
+        update: SummaryUpdateResult = self._conversation_summarizer.update(
+            previous, select_evicted_turns(turns)
+        )
+        return replace(
+            result,
+            conversation_summary=update.summary,
+            summary_updated=update.updated,
+            summary_reason=update.reason,
+        )
+
+    @staticmethod
+    def _rewrite_fields(
+        rewrite: QueryRewriteResult | None,
+        original_question: str = "",
+        search_question: str = "",
+    ) -> dict:
+        """멀티턴 재작성 메타데이터를 응답에 싣는다."""
+        if rewrite is None:
+            return {
+                "original_question": original_question,
+                "search_question": search_question or original_question,
+                "query_rewritten": False,
+                "rewrite_reason": "",
+                "rewrite_error": None,
+            }
+        return {
+            "original_question": rewrite.original_question,
+            "search_question": rewrite.question,
+            "query_rewritten": rewrite.rewritten,
+            "rewrite_reason": rewrite.reason,
+            "rewrite_error": rewrite.error,
+        }
 
     def _build_guard_response(
         self,
         guard_result: GuardResult,
+        original_question: str = "",
+        search_question: str = "",
+        rewrite: QueryRewriteResult | None = None,
     ) -> ChatOrchestrationResult:
         probabilities = {label: 0.0 for label in INTENT_LABELS}
         probabilities[Intent.IGNORE.value] = 1.0
@@ -184,6 +335,7 @@ class ChatOrchestrator:
             grounded=None,
             verification_method="fixed_response",
             verification_reason=f"safety_guard:{guard_result.reason}",
+            **self._rewrite_fields(rewrite, original_question, search_question),
         )
 
     @staticmethod
@@ -203,9 +355,11 @@ class ChatOrchestrator:
     def _build_ignore_response(
         self,
         prediction: IntentPrediction,
+        rewrite: QueryRewriteResult | None = None,
     ) -> ChatOrchestrationResult:
         return ChatOrchestrationResult(
             **self._prediction_fields(prediction),
+            **self._rewrite_fields(rewrite),
             answer=GENERAL_IGNORE_ANSWER,
             grounded=None,
             verification_method="fixed_response",
@@ -216,10 +370,12 @@ class ChatOrchestrator:
         self,
         question: str,
         prediction: IntentPrediction,
+        rewrite: QueryRewriteResult | None = None,
     ) -> ChatOrchestrationResult:
         answer = str(self._general_chat_chain.invoke({"question": question})).strip()
         return ChatOrchestrationResult(
             **self._prediction_fields(prediction),
+            **self._rewrite_fields(rewrite, question, question),
             answer=answer,
             grounded=None,
             verification_method="not_applicable",
@@ -230,6 +386,7 @@ class ChatOrchestrator:
         self,
         question: str,
         prediction: IntentPrediction,
+        rewrite: QueryRewriteResult | None = None,
     ) -> Iterator[ChatStreamEvent]:
         """검색 없는 일반 대화의 Gemini 토큰을 전달한다.
 
@@ -245,6 +402,7 @@ class ChatOrchestrator:
 
         result = ChatOrchestrationResult(
             **self._prediction_fields(prediction),
+            **self._rewrite_fields(rewrite, question, question),
             answer="".join(answer_parts).strip(),
             grounded=None,
             verification_method="not_applicable",
@@ -257,6 +415,7 @@ class ChatOrchestrator:
         question: str,
         query_embedding: list[float],
         prediction: IntentPrediction,
+        rewrite: QueryRewriteResult | None = None,
     ) -> ChatOrchestrationResult:
         documents, searched_collections, failed_collections = (
             self._search_rag_documents(query_embedding)
@@ -269,6 +428,7 @@ class ChatOrchestrator:
         if not documents:
             return ChatOrchestrationResult(
                 **self._prediction_fields(prediction),
+                **self._rewrite_fields(rewrite, question, question),
                 answer=NOT_GROUNDED_ANSWER,
                 grounded=False,
                 verification_method="plan_rejected",
@@ -290,6 +450,7 @@ class ChatOrchestrator:
         )
         return ChatOrchestrationResult(
             **self._prediction_fields(prediction),
+            **self._rewrite_fields(rewrite, question, question),
             answer=grounded_result.answer,
             grounded=grounded_result.grounded,
             documents=documents,
@@ -315,6 +476,7 @@ class ChatOrchestrator:
         question: str,
         query_embedding: list[float],
         prediction: IntentPrediction,
+        rewrite: QueryRewriteResult | None = None,
     ) -> Iterator[ChatStreamEvent]:
         """근거 계획 승인 후 최종 답변을 스트리밍하고 감사 결과를 반환한다.
 
@@ -326,6 +488,7 @@ class ChatOrchestrator:
         if not documents:
             result = ChatOrchestrationResult(
                 **self._prediction_fields(prediction),
+                **self._rewrite_fields(rewrite, question, question),
                 answer=NOT_GROUNDED_ANSWER,
                 grounded=False,
                 verification_method="plan_rejected",
@@ -357,6 +520,7 @@ class ChatOrchestrator:
                 continue
             result = ChatOrchestrationResult(
                 **self._prediction_fields(prediction),
+                **self._rewrite_fields(rewrite, question, question),
                 answer=event.answer,
                 grounded=event.grounded,
                 documents=documents,

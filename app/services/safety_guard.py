@@ -1,6 +1,7 @@
 """의료적 결정 요청을 Intent 분류 전에 차단하는 규칙 기반 Guard.
 
 작성자: 김진우
+수정: 고수연 (멀티턴 추가)
 """
 from __future__ import annotations
 
@@ -29,6 +30,16 @@ _DIAGNOSIS_DECISION_PATTERN = re.compile(
     r"맞는지\s*확실히\s*말해|아닌지\s*결론|"
     r"인지\s*아닌지|이라고\s*진단|인지\s*확정|아니라고\s*결론"
 )
+# 멀티턴 후속 질문에서 흔한 자기 적용 요청("그럼 저는 해당되나요?")을 잡는다.
+# 재작성기가 직전 대화의 질환명을 복원하면 이 조합이 성립한다. 일반 지식 질문을
+# 막지 않도록 1인칭 자기 지칭을 반드시 함께 요구한다.
+_SELF_REFERENCE_PATTERN = re.compile(r"제가|저는|저도|저한테|내가|나는|나도|본인이")
+_SELF_APPLICABILITY_PATTERN = re.compile(
+    r"해당(?:되|하)(?:나요|는지|나|니|냐|ㅂ니까|습니까)|해당됩니까|"
+    r"인가요|인건가요|인\s*건가요|맞나요|맞는건가요|맞을까요|아닌가요|"
+    r"걸린\s*건가요|걸린\s*걸까요|있는\s*건가요|있는\s*걸까요"
+)
+
 _MEDICATION_PATTERN = re.compile(
     r"약|복약|복용|처방|인슐린"
 )
@@ -74,6 +85,20 @@ def check_safety_guard(text: str) -> GuardResult:
             intent=IGNORE_INTENT,
             reason="definitive_diagnosis",
             matched_patterns=[disease_match.group(), diagnosis_match.group()],
+        )
+
+    self_reference_match = _SELF_REFERENCE_PATTERN.search(normalized)
+    applicability_match = _SELF_APPLICABILITY_PATTERN.search(normalized)
+    if disease_match and self_reference_match and applicability_match:
+        return GuardResult(
+            triggered=True,
+            intent=IGNORE_INTENT,
+            reason="definitive_diagnosis",
+            matched_patterns=[
+                disease_match.group(),
+                self_reference_match.group(),
+                applicability_match.group(),
+            ],
         )
 
     medication_match = _MEDICATION_PATTERN.search(normalized)

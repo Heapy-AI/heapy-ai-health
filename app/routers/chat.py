@@ -1,6 +1,7 @@
 """최상위 Intent부터 응답까지 실행하는 통합 챗봇 API.
 
 작성자: 김진우
+수정: 고수연 (멀티턴 추가)
 """
 import json
 from collections.abc import Iterator
@@ -150,6 +151,12 @@ def _to_chat_response(
         searched_collections=result.searched_collections,
         failed_collections=result.failed_collections,
         personal_context_used=result.personal_context_used,
+        original_question=result.original_question or question,
+        search_question=result.search_question or question,
+        query_rewritten=result.query_rewritten,
+        rewrite_reason=result.rewrite_reason,
+        conversation_summary=result.conversation_summary,
+        summary_updated=result.summary_updated,
     )
 
 
@@ -173,7 +180,9 @@ def chat(request: ChatRequest) -> ChatResponse:
         )
 
     try:
-        result = orchestrator.answer(request.question)
+        result = orchestrator.answer(
+            request.question, request.history, request.summary
+        )
     except IntentClassifierUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SearchUnavailableError as exc:
@@ -198,7 +207,9 @@ def stream_chat(request: ChatRequest) -> StreamingResponse:
     def generate_events() -> Iterator[str]:
         label_filter = _CitationLabelStreamFilter()
         try:
-            for stream_event in orchestrator.stream_answer(request.question):
+            for stream_event in orchestrator.stream_answer(
+                request.question, request.history, request.summary
+            ):
                 if stream_event.event == "token":
                     display_text = label_filter.feed(stream_event.text)
                     if display_text:
