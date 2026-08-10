@@ -14,7 +14,9 @@
 | `session_id` | str | S1 |
 | `is_new_session` | bool | S1CHK |
 | `raw_query` | str | 입력 |
-| `resolved_query` | str | S3 / S4 |
+| `standalone_question` | str | S3 / S4 |
+| `resolved_query` | str | QN |
+| `resolution_status` | str | QN |
 | `history` | Turn[] | S2 / S4 |
 | `summary` | str \| null | S2 |
 | `query_embedding` | float[] | A1 |
@@ -53,8 +55,9 @@
 | S1 세션 조회 | `raw_query` | `session_id` |
 | S1CHK 세션 존재 여부 | `session_id` | `is_new_session` |
 | S2 컨텍스트 로드 | `session_id` | `history`, `summary` |
-| S3 질문 재구성 | `raw_query`, `history`, `summary` | `resolved_query` |
-| S4 신규 세션 초기화 | `raw_query` | `resolved_query`(=원문), `history`(=[]) |
+| S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` |
+| S4 신규 세션 초기화 | `raw_query` | `standalone_question`(=원문), `history`(=[]) |
+| QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status` |
 
 ### 의도 분류
 

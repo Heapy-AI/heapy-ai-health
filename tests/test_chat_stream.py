@@ -22,7 +22,15 @@ from app.services.intent_classifier import Intent
 class FakeStreamingOrchestrator:
     """토큰 두 건과 완료 결과를 순서대로 생성한다."""
 
-    def stream_answer(self, question: str):
+    def stream_answer(
+        self,
+        question: str,
+        history=(),
+        summary: str = "",
+        *,
+        confirmation_id: str = "",
+        confirmation_answer: bool | None = None,
+    ):
         yield ChatStreamEvent(event="token", text="안녕")
         yield ChatStreamEvent(event="token", text="하세요")
         yield ChatStreamEvent(

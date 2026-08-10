@@ -22,10 +22,12 @@ class FakeVectorSearch:
     def __init__(self, documents: list[Document] | None = None) -> None:
         self.documents = documents or []
         self.embed_count = 0
+        self.embedded_questions: list[str] = []
         self.search_count = 0
 
     def embed_query(self, question: str) -> list[float]:
         self.embed_count += 1
+        self.embedded_questions.append(question)
         return [0.0] * PINECONE_DIMENSION
 
     def search_many_by_vector(

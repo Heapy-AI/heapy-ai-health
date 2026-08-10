@@ -324,3 +324,28 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+.confirmation-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.confirmation-button {
+  border: 1px solid #d9d2e9;
+  border-radius: 999px;
+  background: #fff;
+  color: #3d3650;
+  cursor: pointer;
+  padding: 8px 16px;
+}
+
+.confirmation-button.primary {
+  border-color: #7052b8;
+  background: #7052b8;
+  color: #fff;
+}
+
+.confirmation-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}

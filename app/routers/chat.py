@@ -158,6 +158,21 @@ def _to_chat_response(
         searched_collections=result.searched_collections,
         failed_collections=result.failed_collections,
         personal_context_used=result.personal_context_used,
+        original_question=result.original_question or question,
+        standalone_question=result.standalone_question or question,
+        resolved_query=result.resolved_query or question,
+        query_rewritten=result.query_rewritten,
+        rewrite_reason=result.rewrite_reason,
+        rewrite_error=result.rewrite_error,
+        resolved_terms=result.resolved_terms,
+        resolution_status=result.resolution_status,
+        resolution_error=result.resolution_error,
+        query_confirmation=result.query_confirmation,
+        confirmation_question=result.confirmation_question,
+        confirmation_id=result.confirmation_id,
+        conversation_summary=result.conversation_summary,
+        summary_updated=result.summary_updated,
+        summary_reason=result.summary_reason,
     )
 
 
@@ -181,7 +196,13 @@ def chat(request: ChatRequest) -> ChatResponse:
         )
 
     try:
-        result = orchestrator.answer(request.question)
+        result = orchestrator.answer(
+            request.question,
+            request.history,
+            request.summary,
+            confirmation_id=request.confirmation_id,
+            confirmation_answer=request.confirmation_answer,
+        )
     except IntentClassifierUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SearchUnavailableError as exc:
@@ -206,7 +227,13 @@ def stream_chat(request: ChatRequest) -> StreamingResponse:
     def generate_events() -> Iterator[str]:
         label_filter = _CitationLabelStreamFilter()
         try:
-            for stream_event in orchestrator.stream_answer(request.question):
+            for stream_event in orchestrator.stream_answer(
+                request.question,
+                request.history,
+                request.summary,
+                confirmation_id=request.confirmation_id,
+                confirmation_answer=request.confirmation_answer,
+            ):
                 if stream_event.event == "token":
                     display_text = label_filter.feed(stream_event.text)
                     if display_text:

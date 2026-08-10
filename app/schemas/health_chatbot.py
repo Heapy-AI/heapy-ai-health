@@ -1,8 +1,15 @@
 # app/schemas/health_chatbot.py
 """건강관리 챗봇 요청/응답 Pydantic 모델 (FastAPI가 자동 검증·응답 형식 고정)"""
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.config import COLLECTIONS
+from app.core.config import (
+    CHAT_HISTORY_MAX_CHARS,
+    CHAT_HISTORY_MAX_TURNS,
+    COLLECTIONS,
+    CONVERSATION_SUMMARY_MAX_CHARS,
+)
 
 
 # ── /search, /ask 공용 요청 모델 ──
@@ -96,10 +103,29 @@ class CombinedAskResponse(AskResponse):
     failed_collections: list[str]
 
 
+class ChatTurn(BaseModel):
+    """클라이언트가 전달하는 최근 대화 한 턴.
+
+    작성자: 김진우
+    """
+
+    role: Literal["user", "assistant"]
+    content: str
+
+    @field_validator("content")
+    @classmethod
+    def _trim_content(cls, value: str) -> str:
+        return value.strip()[:CHAT_HISTORY_MAX_CHARS]
+
+
 class ChatRequest(BaseModel):
     """최상위 Intent부터 자동 분기하는 통합 챗봇 요청."""
 
     question: str = Field(..., min_length=1, description="사용자 질문")
+    history: list[ChatTurn] = Field(default_factory=list)
+    summary: str = ""
+    confirmation_id: str = ""
+    confirmation_answer: bool | None = None
 
     @field_validator("question")
     @classmethod
@@ -108,6 +134,20 @@ class ChatRequest(BaseModel):
         if not normalized:
             raise ValueError("질문은 비어 있을 수 없습니다.")
         return normalized
+
+    @field_validator("history")
+    @classmethod
+    def _limit_history(cls, value: list[ChatTurn]) -> list[ChatTurn]:
+        """빈 발화를 제거하고 최근 문맥 창만 유지한다.
+
+        작성자: 김진우
+        """
+        return [turn for turn in value if turn.content][-CHAT_HISTORY_MAX_TURNS:]
+
+    @field_validator("summary")
+    @classmethod
+    def _limit_summary(cls, value: str) -> str:
+        return value.strip()[:CONVERSATION_SUMMARY_MAX_CHARS]
 
 
 class ChatResponse(BaseModel):
@@ -145,3 +185,18 @@ class ChatResponse(BaseModel):
     searched_collections: list[str]
     failed_collections: list[str]
     personal_context_used: bool
+    original_question: str = ""
+    standalone_question: str = ""
+    resolved_query: str = ""
+    query_rewritten: bool = False
+    rewrite_reason: str = ""
+    rewrite_error: str | None = None
+    resolved_terms: list[dict[str, Any]] = Field(default_factory=list)
+    resolution_status: str = "NO_MATCH"
+    resolution_error: str | None = None
+    query_confirmation: bool = False
+    confirmation_question: str = ""
+    confirmation_id: str = ""
+    conversation_summary: str = ""
+    summary_updated: bool = False
+    summary_reason: str = ""

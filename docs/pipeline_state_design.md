@@ -18,7 +18,9 @@ Healpy AI health care의 요청 처리 파이프라인에서 노드 간에 흐�
 | `raw_query` | 문자열 | U (입력) | 사용자 원문 질문 |
 | `history` | 턴 목록 | S2 | 최근 N턴의 대화 기록 (신규 세션은 빈 목록) |
 | `summary` | 문자열 또는 없음 | S2 | 이전 턴들의 압축 요약본 (신규 세션은 없음) |
-| `resolved_query` | 문자열 | S3 또는 S4 | 재구성된 질문. 신규 세션은 원문과 동일 |
+| `standalone_question` | 문자열 | S3 또는 S4 | 대명사·생략을 복원한 독립형 질문. 신규 세션은 원문과 동일 |
+| `resolved_query` | 문자열 | QN | 의료용어를 정규화한 실제 분류·검색 질문 |
+| `resolution_status` | 문자열 | QN | NO_MATCH / RESOLVED / CONFIRM / AMBIGUOUS |
 | `query_embedding` | 실수 배열 | A1 | 질문 임베딩 벡터. 캐시 조회·검색·저장에서 재사용 |
 | `intent` | 열거형 | A4 | simple_lookup / comprehensive / general_chat / ignore |
 | `guard_triggered` | 불리언 | SG | 의료 Safety Guard 작동 여부 |
@@ -79,8 +81,9 @@ VDB 검색으로 확보한 개별 지식 청크를 표현한다.
 | S1 세션 조회 | `raw_query` | `session_id` | HDB에서 세션 조회만 수행. 저장은 O3가 담당 |
 | S1CHK 세션 존재 여부 | `session_id` | `is_new_session` | 기존/신규 분기 |
 | S2 컨텍스트 로드 | `session_id` | `history`, `summary` | 기존 세션만. 요약은 직전 O3가 만들어 둔 것을 로드 |
-| S3 질문 재구성 | `raw_query`, `history`, `summary` | `resolved_query` | 대명사·생략 복원 |
-| S4 신규 세션 초기화 | `raw_query` | `resolved_query`, `history`(빈 목록) | 재구성 스킵, 원문 그대로 |
+| S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` | 대명사·생략 복원 |
+| S4 신규 세션 초기화 | `raw_query` | `standalone_question`, `history`(빈 목록) | 재구성 스킵, 원문 그대로 |
+| QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status` | 확인·모호 상태면 검색 보류 |
 
 ### 의도 분류 (Decider)
 

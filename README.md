@@ -11,6 +11,8 @@ data/ 원천 데이터
   → jhgan/ko-sroberta-multitask 로컬 임베딩(768차원)
   → Pinecone dense index
   → namespace별 검색
+  → 멀티턴 후속 질문 재작성 및 RDB 의료용어 정규화
+  → 설정된 전체 namespace 병렬 검색·근거 검사
   → FastAPI /search, /ask
   → FastAPI 시연용 웹 앱
 ```

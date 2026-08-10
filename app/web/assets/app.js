@@ -49,6 +49,8 @@ const STREAM_CHARACTER_DELAY_MS = 28;
 const STREAM_COMMA_DELAY_MS = 70;
 const STREAM_SENTENCE_DELAY_MS = 130;
 let isRequesting = false;
+let conversationHistory = [];
+let conversationSummary = "";
 
 function selectRandomRecommendations(count) {
   const shuffled = [...recommendationPool];
@@ -223,6 +225,30 @@ function appendAssistantMessage(data) {
   }
   content.querySelector(".answer-meta")?.remove();
   content.appendChild(meta);
+  content.querySelector(".confirmation-actions")?.remove();
+  if (data.query_confirmation && data.confirmation_id) {
+    const actions = document.createElement("div");
+    actions.className = "confirmation-actions";
+    [
+      ["예", true],
+      ["아니요", false],
+    ].forEach(([label, answer]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = answer ? "confirmation-button primary" : "confirmation-button";
+      button.textContent = label;
+      button.addEventListener("click", () => {
+        actions.querySelectorAll("button").forEach((item) => { item.disabled = true; });
+        submitQuestion(data.original_question || data.question, {
+          confirmationId: data.confirmation_id,
+          confirmationAnswer: answer,
+          displayUser: false,
+        });
+      });
+      actions.appendChild(button);
+    });
+    content.appendChild(actions);
+  }
   scrollToLatest();
 }
 
@@ -624,6 +650,11 @@ function updateInsight(data) {
   addMonitorItem(monitorList, "위험 수준", riskLevelLabel(data.risk_level));
   addMonitorItem(monitorList, "금지 행동", (data.restricted_actions || []).join(", ") || "없음");
   addMonitorItem(monitorList, "응답 정책", data.response_policy || "—");
+  addMonitorItem(monitorList, "원문 질문", data.original_question || data.question || "—");
+  addMonitorItem(monitorList, "독립형 질문", data.standalone_question || "—");
+  addMonitorItem(monitorList, "최종 검색 질문", data.resolved_query || "—");
+  addMonitorItem(monitorList, "용어 정규화", data.resolution_status || "NO_MATCH");
+  addMonitorItem(monitorList, "정규화 오류", data.resolution_error || "없음");
   addMonitorItem(monitorList, "검증 방식", formatVerification(data.verification_method));
   addMonitorItem(monitorList, "검증 사유", data.verification_reason);
   addMonitorItem(monitorList, "분류 검토", data.uncertain ? "필요" : "불필요");
@@ -742,20 +773,37 @@ async function consumeChatStream(response) {
     await tokenPacer.drain();
     appendAssistantMessage(completePayload);
     updateInsight(completePayload);
+    updateConversationMemory(completePayload);
   } catch (error) {
     tokenPacer.cancel();
     throw error;
   }
 }
 
-async function submitQuestion(question) {
+function updateConversationMemory(data) {
+  conversationSummary = data.conversation_summary || conversationSummary;
+  const blockedStatuses = new Set([
+    "CONFIRM",
+    "AMBIGUOUS",
+    "CONFIRMATION_EXPIRED",
+    "CONFIRMATION_REJECTED",
+  ]);
+  if (data.query_confirmation || blockedStatuses.has(data.resolution_status)) return;
+  const userQuestion = String(data.original_question || data.question || "").trim();
+  const assistantAnswer = String(data.answer || "").trim();
+  if (userQuestion) conversationHistory.push({ role: "user", content: userQuestion });
+  if (assistantAnswer) conversationHistory.push({ role: "assistant", content: assistantAnswer });
+  conversationHistory = conversationHistory.slice(-6);
+}
+
+async function submitQuestion(question, options = {}) {
   const normalized = question.trim();
   if (!normalized || isRequesting) return;
 
   isRequesting = true;
   setConversationMode();
   setInsightPending();
-  appendUserMessage(normalized);
+  if (options.displayUser !== false) appendUserMessage(normalized);
   appendLoadingMessage();
   elements.input.value = "";
   resizeInput();
@@ -764,7 +812,13 @@ async function submitQuestion(question) {
     const response = await fetch("/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: normalized }),
+      body: JSON.stringify({
+        question: normalized,
+        history: conversationHistory,
+        summary: conversationSummary,
+        confirmation_id: options.confirmationId || "",
+        confirmation_answer: options.confirmationAnswer ?? null,
+      }),
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
@@ -790,6 +844,8 @@ function resetConversation() {
   elements.auditCardList.replaceChildren();
   elements.auditCountBadge.className = "quality-badge neutral";
   elements.auditCountBadge.textContent = "0건";
+  conversationHistory = [];
+  conversationSummary = "";
   renderSuggestionCards();
   elements.input.value = "";
   resizeInput();

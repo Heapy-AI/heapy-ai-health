@@ -10,8 +10,10 @@
 
 ```text
 사용자 질문
-→ 질문 임베딩 및 Intent v7 분류
-→ Safety Guard 안전 정책 생성
+→ 대화 이력·요약을 사용한 후속 질문 독립형 재작성
+→ RDB 의료용어 정규화 및 필요 시 사용자 확인
+→ 정규화 질문 임베딩 및 Intent v7 분류
+→ 원문·정규화 질문의 Safety Guard 정책 병합
 → Intent별 처리
   ├─ simple_lookup / comprehensive: Pinecone 병렬 검색
   ├─ general_chat: 검색 없는 일반 대화
@@ -97,6 +99,28 @@ Intent 분류와 독립적인 Safety Guard 정책을 함께 반환한다. Guard�
 ## `POST /chat`
 
 Intent 분류부터 검색·생성·감사까지 실행한 전체 결과를 JSON으로 반환한다.
+
+멀티턴 요청은 최근 대화와 이전 응답의 요약을 함께 전달한다. 의료용어 확인 응답을
+이어갈 때는 서버가 반환한 `confirmation_id`와 사용자의 `confirmation_answer`를
+전달한다.
+
+```json
+{
+  "question": "그 약 부작용은?",
+  "history": [
+    {"role": "user", "content": "부루펜을 먹었어"},
+    {"role": "assistant", "content": "어떤 정보가 궁금하신가요?"}
+  ],
+  "summary": "",
+  "confirmation_id": "",
+  "confirmation_answer": null
+}
+```
+
+질문 처리 단계는 `original_question`(원문), `standalone_question`(대화 문맥 복원),
+`resolved_query`(의료용어 정규화 및 실제 임베딩·검색 질문)로 구분한다. 응답에는
+`query_rewritten`, `resolved_terms`, `resolution_status`, `conversation_summary`도
+포함된다. `resolution_status=CONFIRM` 또는 `AMBIGUOUS`이면 임베딩과 검색을 보류한다.
 
 | Intent | 처리 경로 |
 |---|---|
@@ -191,11 +215,13 @@ RAG의 기본 검색 결과 검사는 다음을 구분한다.
 
 ```text
 SEARCH_COLLECTIONS=health_checkup_info,disease_info,medication_info
-SEARCH_TOP_K_PER_COLLECTION=3
+SEARCH_TOP_K_PER_COLLECTION=10
 SEARCH_FINAL_TOP_K=6
-SEARCH_MAX_PER_COLLECTION=2
+SEARCH_MAX_PER_COLLECTION=6
 SEARCH_MIN_SCORE=0.0
 ```
+
+현재 애플리케이션은 namespace별 후보 10개를 모아 전체 정렬한 뒤 최종 6개를 선택한다.
 
 ## 오류
 
