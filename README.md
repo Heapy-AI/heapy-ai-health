@@ -155,6 +155,19 @@ python run_ui.py
 Gradio 화면은 검색 품질 점검용으로 유지하며, 실제 MVP 시연은 FastAPI 웹 앱을
 사용합니다.
 
+사용자 시연 UI:
+
+```powershell
+python run_demo_ui.py
+```
+
+- 사용자 UI: <http://localhost:3000>
+- API 서버: <http://localhost:8000>
+
+사용자 시연 UI는 기존 FastAPI 검증 화면과 별도로 실행됩니다. 왼쪽 서비스 메뉴와
+챗봇 화면만 제공하며 프로젝트 환경, Intent·감사 로그, 응답 원본 JSON은 표시하지
+않습니다. 실행 전에 FastAPI 서버가 `8000` 포트에서 실행 중이어야 합니다.
+
 ## API
 
 | 메서드 | 경로 | 설명 |

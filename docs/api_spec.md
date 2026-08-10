@@ -12,6 +12,18 @@ FastAPI와 함께 실행되며 `POST /chat/stream`을 호출합니다. 현재 �
 복약정보는 화면에서 `검토 중`으로 표시하며, 실제 API 응답에 포함된 Intent·근거
 검증·출처만 답변 정보 패널에 노출합니다.
 
+## 사용자 시연 UI
+
+사용자 시연 UI는 별도 프로세스로 `http://localhost:3000`에서 실행하며, 기존 FastAPI
+검증 UI와 API는 `http://localhost:8000`에 유지한다. 사용자 브라우저의
+`POST /chat/stream` 요청은 시연 UI 서버가 같은 경로로 수신한 뒤 FastAPI의
+`POST /chat/stream`으로 중계한다.
+
+사용자 화면에는 왼쪽 서비스 메뉴와 중앙 채팅 화면만 표시한다. 프로젝트 환경,
+Pinecone 컬렉션, Intent 신뢰도, 근거 계획, 사후 감사, 응답 원본 JSON 등 개발·검증
+정보는 노출하지 않는다. 검증된 출처가 있을 때만 답변 아래의 접이식 출처 목록으로
+제공한다.
+
 ## `GET /health`
 
 Pinecone 연결과 namespace별 적재 수를 반환합니다.
