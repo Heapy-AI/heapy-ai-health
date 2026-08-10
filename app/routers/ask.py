@@ -11,7 +11,6 @@ from app.core.config import (
 from app.core.state import state
 from app.services.rag import cite, format_docs
 from app.services.search_result_merger import merge_search_results
-from app.services.intent_classifier import Intent
 from app.services.safety_guard import check_safety_guard
 from app.schemas.health_chatbot import (
     AskRequest,
@@ -71,27 +70,6 @@ def _retrieve_combined(question: str):
         min_score=SEARCH_MIN_SCORE,
     )
     return documents, search_result, query_vector
-
-
-def _select_grounding_verification(
-    question: str,
-    query_vector: list[float],
-) -> tuple[bool, str]:
-    """질문 위험도와 Intent에 따라 2차 LLM 검증 여부를 결정한다."""
-    guard_result = check_safety_guard(question)
-    if guard_result.triggered:
-        return True, f"safety_guard:{guard_result.reason}"
-
-    classifier = state.get("intent_classifier")
-    if classifier is None:
-        return True, "intent_classifier_unavailable"
-
-    prediction = classifier.predict(query_vector)
-    if prediction.uncertain:
-        return True, "intent_uncertain"
-    if prediction.intent in {Intent.COMPREHENSIVE, Intent.IGNORE}:
-        return True, f"intent:{prediction.intent.value}"
-    return False, f"intent:{prediction.intent.value}"
 
 
 def _to_sources(docs) -> list[str]:
@@ -218,34 +196,13 @@ def search_combined(req: CombinedAskRequest) -> CombinedSearchResponse:
 @router.post("/ask/combined", response_model=CombinedAskResponse)
 def ask_combined(req: CombinedAskRequest) -> CombinedAskResponse:
     """다중 namespace 검색 근거를 사용해 하나의 RAG 답변을 생성한다."""
-    docs, search_result, query_vector = _retrieve_combined(req.question)
+    docs, search_result, _ = _retrieve_combined(req.question)
     failed_collections = sorted(search_result.errors)
-    if not docs:
-        return CombinedAskResponse(
-            answer=NOT_GROUNDED_MARK,
-            sources=[],
-            grounded=False,
-            chunks=[],
-            citations=[],
-            verification_method="plan_rejected",
-            verification_reason="no_search_results",
-            grounding_errors=["검색된 최종 청크가 없습니다."],
-            unsupported_claims=[],
-            grounding_plan=None,
-            audit_status="not_run",
-            audit_summary="근거 계획을 생성하지 않았습니다.",
-            searched_collections=search_result.searched_collections,
-            failed_collections=failed_collections,
-        )
-
-    verify_semantics, verification_reason = _select_grounding_verification(
-        req.question,
-        query_vector,
-    )
+    safety_policy = check_safety_guard(req.question)
     result = state["grounded_rag_service"].answer(
         req.question,
         docs,
-        verify_semantics=verify_semantics,
+        safety_policy=safety_policy,
     )
     citations = _to_citations(docs, result.cited_chunk_ids)
     return CombinedAskResponse(
@@ -259,16 +216,15 @@ def ask_combined(req: CombinedAskRequest) -> CombinedAskResponse:
         chunks=_to_answer_chunks(docs),
         citations=citations,
         verification_method=result.verification_method,
-        verification_reason=verification_reason,
+        verification_reason=f"risk:{safety_policy.risk_level.value}",
         grounding_errors=result.grounding_errors,
         unsupported_claims=result.unsupported_claims,
-        grounding_plan=(
-            result.grounding_plan.model_dump(mode="json")
-            if result.grounding_plan is not None
-            else None
-        ),
+        evidence_status=result.evidence_status,
+        retrieval_assessment=result.retrieval_assessment.__dict__,
         audit_status=result.audit_status,
         audit_summary=result.audit_summary,
+        unanswered_items=result.unanswered_items or [],
+        safety_violations=result.safety_violations or [],
         searched_collections=search_result.searched_collections,
         failed_collections=failed_collections,
     )

@@ -185,10 +185,14 @@ function appendAssistantMessage(data) {
   if (!bubble) {
     bubble = document.createElement("div");
     bubble.className = "bubble";
-    bubble.textContent = sanitizeAnswerText(data.answer) || "답변을 생성하지 못했습니다.";
+    bubble.innerHTML = renderMarkdown(
+      sanitizeAnswerText(data.answer) || "답변을 생성하지 못했습니다.",
+    );
   } else if (message.dataset.started !== "true") {
     bubble.classList.remove("loading-bubble");
-    bubble.textContent = sanitizeAnswerText(data.answer) || "답변을 생성하지 못했습니다.";
+    bubble.innerHTML = renderMarkdown(
+      sanitizeAnswerText(data.answer) || "답변을 생성하지 못했습니다.",
+    );
   }
 
   let content = message.querySelector(".message-content");
@@ -208,7 +212,7 @@ function appendAssistantMessage(data) {
   if (data.grounded === true) {
     const groundedChip = document.createElement("span");
     groundedChip.className = "answer-chip";
-    groundedChip.textContent = "근거 계획 승인";
+    groundedChip.textContent = data.evidence_status === "partial" ? "부분 근거 답변" : "검색 근거 답변";
     meta.appendChild(groundedChip);
   }
   if (data.audit_status === "failed" || data.audit_status === "error") {
@@ -233,7 +237,9 @@ function appendStreamToken(text) {
     message.dataset.rawAnswer = "";
   }
   message.dataset.rawAnswer = `${message.dataset.rawAnswer || ""}${text}`;
-  bubble.textContent = sanitizeAnswerText(message.dataset.rawAnswer, true);
+  bubble.innerHTML = renderMarkdown(
+    sanitizeAnswerText(message.dataset.rawAnswer, true),
+  );
   scrollToLatest();
 }
 
@@ -296,12 +302,122 @@ function createTokenPacer() {
 }
 
 function sanitizeAnswerText(text, hidePartialLabel = false) {
-  let sanitized = String(text || "").replace(/\[C\d+\]/g, "");
-  if (hidePartialLabel) sanitized = sanitized.replace(/\[(?:C\d*)?$/g, "");
+  let sanitized = String(text || "").replace(/\[(?:C\d+\s*(?:,\s*C?\d+\s*)*)\]/gi, "");
+  if (hidePartialLabel) sanitized = sanitized.replace(/\[(?:C\d*(?:\s*,\s*C?\d*)*)?$/i, "");
   return sanitized
     .replace(/[ \t]+\n/g, "\n")
     .replace(/[ \t]{2,}/g, " ")
     .trimStart();
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderInlineMarkdown(text) {
+  const codeTokens = [];
+  let rendered = escapeHtml(text).replace(/`([^`\n]+)`/g, (_, code) => {
+    const token = `\u0000CODE${codeTokens.length}\u0000`;
+    codeTokens.push(`<code>${code}</code>`);
+    return token;
+  });
+  rendered = rendered
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/__([^_\n]+)__/g, "<strong>$1</strong>")
+    .replace(/~~([^~\n]+)~~/g, "<del>$1</del>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");
+  return rendered.replace(/\u0000CODE(\d+)\u0000/g, (_, index) => codeTokens[Number(index)]);
+}
+
+function renderMarkdown(markdown) {
+  const lines = String(markdown || "").replaceAll("\r\n", "\n").split("\n");
+  const blocks = [];
+  let paragraph = [];
+  let listType = null;
+  let listItems = [];
+  let codeLines = [];
+  let inCodeBlock = false;
+
+  function flushParagraph() {
+    if (!paragraph.length) return;
+    blocks.push(`<p>${paragraph.map(renderInlineMarkdown).join("<br>")}</p>`);
+    paragraph = [];
+  }
+
+  function flushList() {
+    if (!listType || !listItems.length) return;
+    blocks.push(
+      `<${listType}>${listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</${listType}>`,
+    );
+    listType = null;
+    listItems = [];
+  }
+
+  lines.forEach((line) => {
+    if (/^\s*```/.test(line)) {
+      flushParagraph();
+      flushList();
+      if (inCodeBlock) {
+        blocks.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        codeLines = [];
+      }
+      inCodeBlock = !inCodeBlock;
+      return;
+    }
+    if (inCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushList();
+      const level = heading[1].length;
+      blocks.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+      return;
+    }
+
+    const unorderedItem = line.match(/^\s*[-+*]\s+(.+)$/);
+    const orderedItem = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (unorderedItem || orderedItem) {
+      flushParagraph();
+      const nextListType = unorderedItem ? "ul" : "ol";
+      if (listType && listType !== nextListType) flushList();
+      listType = nextListType;
+      listItems.push((unorderedItem || orderedItem)[1]);
+      return;
+    }
+
+    const quote = line.match(/^\s*>\s?(.*)$/);
+    if (quote) {
+      flushParagraph();
+      flushList();
+      blocks.push(`<blockquote>${renderInlineMarkdown(quote[1])}</blockquote>`);
+      return;
+    }
+
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+    flushList();
+    paragraph.push(line);
+  });
+
+  if (inCodeBlock && codeLines.length) {
+    blocks.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+  }
+  flushParagraph();
+  flushList();
+  return blocks.join("");
 }
 
 function appendErrorMessage(error) {
@@ -374,37 +490,33 @@ function appendAuditSection(body, title) {
   return section;
 }
 
-function appendGroundingPlan(body, data) {
-  const plan = data.grounding_plan;
-  const section = appendAuditSection(body, "선검증 근거 계획");
-  if (!plan) {
-    section.appendChild(createTextElement("div", "no-source", "이 응답 경로에는 근거 계획이 없습니다."));
+function appendRetrievalAssessment(body, data) {
+  const assessment = data.retrieval_assessment;
+  const section = appendAuditSection(body, "검색 결과 기본 검사");
+  if (!assessment) {
+    section.appendChild(createTextElement("div", "no-source", "이 응답 경로는 검색을 사용하지 않았습니다."));
     return;
   }
 
-  section.appendChild(createTextElement("p", "environment-placeholder", plan.reason || "판단 이유 없음"));
-  const list = document.createElement("ul");
-  list.className = "plan-fact-list";
-  (plan.facts || []).forEach((fact) => {
-    const item = createTextElement("li", "plan-fact", fact.statement || "사실 내용 없음");
-    item.appendChild(
-      createTextElement("em", "", `근거: ${(fact.cited_chunk_ids || []).join(", ") || "없음"}`),
-    );
-    list.appendChild(item);
-  });
-  if (!list.childElementCount) {
-    list.appendChild(createTextElement("li", "plan-fact", "승인된 근거 사실이 없습니다."));
-  }
+  const list = document.createElement("div");
+  list.className = "audit-monitor-list";
+  addMonitorItem(list, "검사 결과", evidenceStatusLabel(assessment.status));
+  addMonitorItem(list, "최고 유사도", assessment.max_score == null ? "—" : `${(Number(assessment.max_score) * 100).toFixed(1)}%`);
+  addMonitorItem(list, "질문 대상", (assessment.query_entities || []).join(", ") || "명시 대상 없음");
+  addMonitorItem(list, "일치 대상", (assessment.matched_entities || []).join(", ") || "—");
   section.appendChild(list);
+  section.appendChild(createTextElement("p", "environment-placeholder", assessment.reason || "검사 사유 없음"));
 }
 
 function appendUnsupportedClaims(body, data) {
   const claims = Array.isArray(data.unsupported_claims) ? data.unsupported_claims : [];
-  if (!claims.length && !(data.grounding_errors || []).length) return;
+  const unanswered = Array.isArray(data.unanswered_items) ? data.unanswered_items : [];
+  const safetyViolations = Array.isArray(data.safety_violations) ? data.safety_violations : [];
+  if (!claims.length && !unanswered.length && !safetyViolations.length && !(data.grounding_errors || []).length) return;
   const section = appendAuditSection(body, "감사 경고");
   const list = document.createElement("ul");
   list.className = "unsupported-list";
-  [...claims, ...(data.grounding_errors || [])].forEach((claim) => {
+  [...claims, ...unanswered.map((item) => `근거 부족 항목: ${item}`), ...safetyViolations.map((item) => `안전 정책 위반: ${item}`), ...(data.grounding_errors || [])].forEach((claim) => {
     list.appendChild(createTextElement("li", "", claim));
   });
   section.appendChild(list);
@@ -491,7 +603,7 @@ function updateInsight(data) {
   [
     ["Intent", intentNames[data.intent] || data.intent || "—"],
     ["신뢰도", `${Math.round((Number(data.confidence) || 0) * 100)}%`],
-    ["근거 상태", data.grounded === true ? "계획 승인" : data.grounded === false ? "계획 거절" : "검색 미사용"],
+    ["근거 상태", evidenceStatusLabel(data.evidence_status)],
     ["감사 상태", status.label],
   ].forEach(([label, value]) => {
     const metric = document.createElement("div");
@@ -507,7 +619,10 @@ function updateInsight(data) {
   const monitorSection = appendAuditSection(body, "모니터링 정보");
   const monitorList = document.createElement("div");
   monitorList.className = "audit-monitor-list";
-  addMonitorItem(monitorList, "응답 경로", data.intent_source === "safety_guard" ? "Safety Guard" : "Intent v6");
+  addMonitorItem(monitorList, "응답 경로", `${data.model_version || "Intent 모델"} · ${intentNames[data.intent] || data.intent || "—"}`);
+  addMonitorItem(monitorList, "위험 수준", riskLevelLabel(data.risk_level));
+  addMonitorItem(monitorList, "금지 행동", (data.restricted_actions || []).join(", ") || "없음");
+  addMonitorItem(monitorList, "응답 정책", data.response_policy || "—");
   addMonitorItem(monitorList, "검증 방식", formatVerification(data.verification_method));
   addMonitorItem(monitorList, "검증 사유", data.verification_reason);
   addMonitorItem(monitorList, "분류 검토", data.uncertain ? "필요" : "불필요");
@@ -515,7 +630,7 @@ function updateInsight(data) {
   addMonitorItem(monitorList, "실패 컬렉션", (data.failed_collections || []).join(", ") || "없음");
   monitorSection.appendChild(monitorList);
 
-  appendGroundingPlan(body, data);
+  appendRetrievalAssessment(body, data);
   appendUnsupportedClaims(body, data);
   appendEvidenceChunks(body, data);
 
@@ -534,14 +649,37 @@ function updateInsight(data) {
 
 function formatVerification(method) {
   const names = {
-    prevalidated_post_audit: "근거 계획 + 사후 감사",
-    prevalidated_audit_warning: "근거 계획 + 감사 경고",
-    prevalidated_audit_error: "근거 계획 + 감사 오류",
-    plan_rejected: "근거 계획 거절",
+    retrieval_check_post_audit: "검색 검사 + 사후 감사",
+    retrieval_check_audit_warning: "검색 검사 + 감사 경고",
+    retrieval_check_audit_error: "검색 검사 + 감사 오류",
+    retrieval_rejected: "검색 결과 검사 거절",
     fixed_response: "고정 응답",
     not_applicable: "검증 대상 아님",
   };
   return names[method] || method || "—";
+}
+
+function evidenceStatusLabel(status) {
+  const names = {
+    sufficient: "근거 충분",
+    partial: "부분 근거",
+    insufficient: "근거 부족",
+    evidence_available: "근거 청크 있음",
+    no_evidence: "검색 결과 없음",
+    entity_mismatch: "질문 대상 불일치",
+    unknown: "감사 확인 필요",
+    not_applicable: "검색 미사용",
+  };
+  return names[status] || status || "검색 미사용";
+}
+
+function riskLevelLabel(level) {
+  const names = {
+    normal: "일반 정보",
+    caution: "주의 상담",
+    emergency: "긴급 우선",
+  };
+  return names[level] || level || "일반 정보";
 }
 
 function parseError(response, payload) {

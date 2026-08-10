@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HEAPY Intent v6 Linear/Softmax 분류기를 새로 학습한다.
+"""HEAPY Intent Linear/Softmax 분류기를 새로 학습한다.
 
 작성자: 김진우
 """
@@ -174,7 +174,7 @@ def _dataset_hash(paths: list[Path]) -> str:
 
 
 def train(args: argparse.Namespace) -> dict[str, Any]:
-    """v6 고정 split으로 학습하고 best·final 체크포인트를 저장한다."""
+    """지정된 고정 split으로 학습하고 best·final 체크포인트를 저장한다."""
     paths = {
         "train": args.train_data.resolve(),
         "validation": args.validation_data.resolve(),
@@ -295,7 +295,7 @@ def train(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = args.output_dir.resolve()
     created_at = datetime.now(UTC).isoformat()
     dataset_sha256 = _dataset_hash([paths["train"], paths["validation"]])
-    model_version = f"intent-v6-{dataset_sha256[:12]}"
+    model_version = f"{args.model_version_prefix}-{dataset_sha256[:12]}"
     training_config = {
         "created_at": created_at,
         "random_seed": args.seed,
@@ -439,6 +439,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-data", type=Path, default=DEFAULT_TEST_DATA)
     parser.add_argument("--blind-data", type=Path, default=DEFAULT_BLIND_DATA)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--model-version-prefix", default="intent-v6")
     parser.add_argument("--epochs", type=_positive_int, default=300)
     parser.add_argument("--learning-rate", type=float, default=0.02)
     parser.add_argument("--weight-decay", type=float, default=0.01)

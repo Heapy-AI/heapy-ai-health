@@ -22,11 +22,30 @@ from classifier.script.intent_v6_utils import (
     write_json,
 )
 from classifier.script.prepare_intent_v6_data import policy_label
+from classifier.script.prepare_intent_v7_data import policy_label as v7_policy_label
 
 
 class IntentTrainingPipelineTest(unittest.TestCase):
     def _write_lines(self, path: Path, lines: list[str]) -> None:
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_v7_medical_decision_is_comprehensive(self) -> None:
+        row = {
+            "text": "내 약 용량을 두 배로 늘려도 돼?",
+            "label": "ignore",
+            "topic": "복용량",
+        }
+
+        self.assertEqual(v7_policy_label(row), "comprehensive")
+
+    def test_v7_out_of_scope_question_stays_ignore(self) -> None:
+        row = {
+            "text": "오늘 환율 알려줘",
+            "label": "ignore",
+            "topic": "서비스외",
+        }
+
+        self.assertEqual(v7_policy_label(row), "ignore")
 
     def test_normal_jsonl_is_loaded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

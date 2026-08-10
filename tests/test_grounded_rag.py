@@ -1,4 +1,4 @@
-"""근거 계획 선검증·최종 스트리밍·사후 감사 단위 테스트.
+"""검색 기본 검사·부분 답변·사후 감사 단위 테스트.
 
 작성자: 김진우
 """
@@ -13,10 +13,11 @@ from app.services.grounded_rag import (
     GroundedAnswerResult,
     GroundedRagService,
     GroundingAudit,
-    GroundingPlan,
-    GroundingPlanFact,
     NOT_GROUNDED_ANSWER,
+    assess_retrieval,
+    strip_citation_labels,
 )
+from app.services.safety_guard import check_safety_guard
 
 
 class FakeChain:
@@ -70,159 +71,161 @@ def _documents() -> list[Document]:
     ]
 
 
-def _approved_plan(*citation_ids: str) -> GroundingPlan:
-    return GroundingPlan(
-        answerable=True,
-        facts=[
-            GroundingPlanFact(
-                statement="AST는 여러 조직에 존재하는 효소입니다.",
-                cited_chunk_ids=list(citation_ids or ("C1",)),
-            )
-        ],
-        reason="검색 청크가 질문에 직접 답합니다.",
-    )
-
-
-def _passed_audit() -> GroundingAudit:
+def _passed_audit(coverage_status: str = "sufficient") -> GroundingAudit:
     return GroundingAudit(
         passed=True,
-        summary="최종 답변이 승인된 근거 계획을 준수했습니다.",
+        summary="답변이 검색 근거와 안전 정책을 준수했습니다.",
+        coverage_status=coverage_status,
+        unanswered_items=[],
         unsupported_claims=[],
+        safety_violations=[],
     )
 
 
 class GroundedRagServiceTest(unittest.TestCase):
-    def test_final_prompt_skips_repeated_greeting_and_self_introduction(self) -> None:
-        self.assertIn("질문의 핵심부터 바로 답한다", FINAL_ANSWER_PROMPT)
-        self.assertIn('"HEAPY입니다"', FINAL_ANSWER_PROMPT)
+    def test_user_answer_removes_single_and_multiple_citation_labels(self) -> None:
+        answer = "첫 문장[C1] 둘째 문장[c1, c2]"
 
-    def test_stream_prevalidates_then_yields_final_tokens_and_audit(self) -> None:
-        planner = FakeChain(_approved_plan("C1"))
+        self.assertEqual(strip_citation_labels(answer), "첫 문장 둘째 문장")
+
+    def test_final_prompt_requires_partial_answer_and_no_repeated_greeting(self) -> None:
+        self.assertIn("근거가 있는 항목은 답하고", FINAL_ANSWER_PROMPT)
+        self.assertIn("질문의 핵심부터 답한다", FINAL_ANSWER_PROMPT)
+        self.assertIn("긴급 안내만 하고 답변을 끝내지 말고", FINAL_ANSWER_PROMPT)
+        self.assertIn("내부 구현 용어를 노출하지 않는다", FINAL_ANSWER_PROMPT)
+
+    def test_emergency_information_request_still_uses_rag_generation(self) -> None:
+        generator = FakeChain("즉시 119에 연락하세요. 호흡곤란은 숨쉬기 어려운 상태입니다.[C1]")
+        auditor = FakeChain(_passed_audit())
+        service = GroundedRagService(generator, auditor)
+        question = "나 지금 숨이 안 쉬어지는데 호흡곤란 증상 좀 알려줘"
+
+        result = service.answer(
+            question,
+            _documents(),
+            safety_policy=check_safety_guard(question),
+        )
+
+        self.assertEqual(generator.call_count, 1)
+        self.assertTrue(result.grounded)
+        self.assertIn("호흡곤란", result.answer)
+
+    def test_stream_generates_without_planner_then_audits(self) -> None:
         generator = FakeChain("사용하지 않는 동기 답변")
         auditor = FakeChain(_passed_audit())
         stream_generator = FakeStreamChain(
-            ["AST는 여러 조직에 ", "존재하는 효소입니다."]
+            ["AST는 여러 조직에 ", "존재하는 효소입니다.[C1]"]
         )
-        service = GroundedRagService(
-            planner,
-            generator,
-            auditor,
-            stream_generator,
-        )
+        service = GroundedRagService(generator, auditor, stream_generator)
 
-        events = list(service.stream_answer("AST가 무엇인가요?", _documents()))
+        events = list(
+            service.stream_answer(
+                "AST가 무엇인가요?",
+                _documents(),
+                safety_policy=check_safety_guard("AST가 무엇인가요?"),
+            )
+        )
 
         self.assertEqual(events[:2], stream_generator.tokens)
         self.assertIsInstance(events[-1], GroundedAnswerResult)
-        self.assertEqual(events[-1].answer, "".join(stream_generator.tokens))
+        self.assertEqual(events[-1].answer, "AST는 여러 조직에 존재하는 효소입니다.")
         self.assertTrue(events[-1].grounded)
         self.assertEqual(events[-1].audit_status, "passed")
         self.assertEqual(events[-1].cited_chunk_ids, ["C1"])
-        self.assertNotIn("의료 진단이 아닌 정보 제공 목적", events[-1].answer)
-        self.assertEqual(planner.call_count, 1)
         self.assertEqual(auditor.call_count, 1)
 
-    def test_rejected_plan_does_not_start_generation_or_audit(self) -> None:
-        planner = FakeChain(
-            GroundingPlan(
-                answerable=False,
-                facts=[],
-                reason="질문에 답할 근거가 부족합니다.",
-            )
-        )
+    def test_entity_mismatch_stops_generation_without_llm_call(self) -> None:
         generator = FakeChain("생성하면 안 되는 답변")
         auditor = FakeChain(_passed_audit())
-        stream_generator = FakeStreamChain(["생성하면 안 되는 토큰"])
-        service = GroundedRagService(
-            planner,
-            generator,
-            auditor,
-            stream_generator,
+        service = GroundedRagService(generator, auditor)
+
+        result = service.answer(
+            "판콜에스내복액이 무슨 약이야?",
+            _documents(),
+            safety_policy=check_safety_guard("판콜에스내복액이 무슨 약이야?"),
         )
-
-        events = list(service.stream_answer("질문", _documents()))
-
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].answer, NOT_GROUNDED_ANSWER)
-        self.assertFalse(events[0].grounded)
-        self.assertEqual(events[0].verification_method, "plan_rejected")
-        self.assertEqual(stream_generator.call_count, 0)
-        self.assertEqual(auditor.call_count, 0)
-
-    def test_unknown_plan_citation_is_rejected_before_generation(self) -> None:
-        planner = FakeChain(_approved_plan("C99"))
-        generator = FakeChain("생성하면 안 되는 답변")
-        auditor = FakeChain(_passed_audit())
-        service = GroundedRagService(planner, generator, auditor)
-
-        result = service.answer("질문", _documents())
 
         self.assertFalse(result.grounded)
-        self.assertEqual(result.answer, NOT_GROUNDED_ANSWER)
-        self.assertTrue(result.grounding_errors)
+        self.assertEqual(result.evidence_status, "entity_mismatch")
         self.assertEqual(generator.call_count, 0)
         self.assertEqual(auditor.call_count, 0)
 
-    def test_post_audit_failure_keeps_streamed_answer(self) -> None:
-        answer = "AST 상승은 암을 확정합니다."
-        planner = FakeChain(_approved_plan("C1"))
-        generator = FakeChain(answer)
+    def test_partial_coverage_is_a_valid_grounded_answer(self) -> None:
+        answer = "이 약의 효능은 확인됩니다.[C1] 부작용은 현재 자료에서 확인되지 않았습니다."
+        auditor = FakeChain(
+            GroundingAudit(
+                passed=True,
+                summary="효능은 답했고 부작용은 근거 부족으로 구분했습니다.",
+                coverage_status="partial",
+                unanswered_items=["부작용"],
+                unsupported_claims=[],
+                safety_violations=[],
+            )
+        )
+        service = GroundedRagService(FakeChain(answer), auditor)
+
+        result = service.answer(
+            "AST의 의미와 위험요인을 알려줘",
+            _documents(),
+            safety_policy=check_safety_guard("AST의 의미와 위험요인을 알려줘"),
+        )
+
+        self.assertTrue(result.grounded)
+        self.assertEqual(result.evidence_status, "partial")
+        self.assertEqual(result.unanswered_items, ["부작용"])
+        self.assertEqual(result.audit_status, "passed")
+
+    def test_post_audit_failure_keeps_generated_answer(self) -> None:
+        answer = "AST 상승은 암을 확정합니다.[C1]"
         auditor = FakeChain(
             GroundingAudit(
                 passed=False,
-                summary="승인되지 않은 진단성 주장이 추가됐습니다.",
-                unsupported_claims=[answer],
+                summary="근거 없는 진단성 주장이 추가됐습니다.",
+                coverage_status="sufficient",
+                unanswered_items=[],
+                unsupported_claims=["AST 상승은 암을 확정합니다."],
+                safety_violations=["definitive_diagnosis"],
             )
         )
-        service = GroundedRagService(planner, generator, auditor)
+        service = GroundedRagService(FakeChain(answer), auditor)
 
-        result = service.answer("질문", _documents())
+        result = service.answer(
+            "AST로 암을 확정해줘",
+            _documents(),
+            safety_policy=check_safety_guard("AST로 암을 확정해줘"),
+        )
 
-        self.assertEqual(result.answer, answer)
-        self.assertTrue(result.grounded)
+        self.assertEqual(result.answer, "AST 상승은 암을 확정합니다.")
         self.assertEqual(result.audit_status, "failed")
-        self.assertEqual(result.unsupported_claims, [answer])
-        self.assertEqual(result.verification_method, "prevalidated_audit_warning")
+        self.assertEqual(result.verification_method, "retrieval_check_audit_warning")
 
-    def test_post_audit_error_keeps_answer_and_reports_monitoring_error(self) -> None:
-        answer = "AST는 여러 조직에 존재하는 효소입니다."
-        service = GroundedRagService(
-            FakeChain(_approved_plan("C1")),
-            FakeChain(answer),
-            FakeChain(RuntimeError("감사 장애")),
+    def test_no_documents_returns_no_evidence_without_generation(self) -> None:
+        generator = FakeChain("답변")
+        service = GroundedRagService(generator, FakeChain(_passed_audit()))
+
+        result = service.answer(
+            "질문",
+            [],
+            safety_policy=check_safety_guard("질문"),
         )
-
-        result = service.answer("질문", _documents())
-
-        self.assertEqual(result.answer, answer)
-        self.assertTrue(result.grounded)
-        self.assertEqual(result.audit_status, "error")
-        self.assertTrue(result.grounding_errors)
-
-    def test_enhanced_verification_level_is_sent_to_planner(self) -> None:
-        planner = FakeChain(_approved_plan("C1"))
-        service = GroundedRagService(
-            planner,
-            FakeChain("답변"),
-            FakeChain(_passed_audit()),
-        )
-
-        service.answer("질문", _documents(), verify_semantics=True)
-
-        self.assertIn("강화", planner.values["verification_level"])
-
-    def test_no_documents_returns_rejected_plan_result(self) -> None:
-        service = GroundedRagService(
-            FakeChain(_approved_plan("C1")),
-            FakeChain("답변"),
-            FakeChain(_passed_audit()),
-        )
-
-        result = service.answer("질문", [])
 
         self.assertEqual(result.answer, NOT_GROUNDED_ANSWER)
         self.assertFalse(result.grounded)
-        self.assertEqual(result.audit_status, "not_run")
+        self.assertEqual(result.evidence_status, "no_evidence")
+        self.assertEqual(generator.call_count, 0)
+
+    def test_assessment_accepts_matching_medication_entity(self) -> None:
+        documents = [
+            Document(
+                page_content="의약품: 판콜에스내복액\n효능: 감기 증상 완화",
+                metadata={"item_name": "판콜에스내복액", "score": 0.9},
+            )
+        ]
+
+        result = assess_retrieval("판콜에스내복액은 무슨 약이야?", documents)
+
+        self.assertTrue(result.eligible)
+        self.assertEqual(result.matched_entities, ["판콜에스내복액"])
 
 
 if __name__ == "__main__":

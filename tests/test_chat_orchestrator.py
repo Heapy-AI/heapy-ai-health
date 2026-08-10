@@ -12,9 +12,8 @@ from app.core.config import PINECONE_DIMENSION
 from app.services.chat_orchestrator import (
     ChatOrchestrator,
     GENERAL_IGNORE_ANSWER,
-    SAFETY_IGNORE_ANSWER,
 )
-from app.services.grounded_rag import GroundedAnswerResult
+from app.services.grounded_rag import GroundedAnswerResult, RetrievalAssessment
 from app.services.intent_classifier import Intent, IntentPrediction
 from app.services.vector_search import MultiCollectionSearchResult
 
@@ -66,32 +65,50 @@ class FakeClassifier:
 class FakeGroundedRagService:
     def __init__(self) -> None:
         self.call_count = 0
-        self.verify_semantics = None
+        self.safety_policy = None
 
-    def answer(self, question, documents, *, verify_semantics):
+    def answer(self, question, documents, *, safety_policy):
         self.call_count += 1
-        self.verify_semantics = verify_semantics
+        self.safety_policy = safety_policy
         return GroundedAnswerResult(
             answer="검색 근거 기반 답변",
             grounded=True,
             cited_chunk_ids=["C1"],
-            verification_method="prevalidated_post_audit",
+            verification_method="retrieval_check_post_audit",
             grounding_errors=[],
             unsupported_claims=[],
+            evidence_status="sufficient",
+            retrieval_assessment=RetrievalAssessment(
+                status="evidence_available",
+                eligible=True,
+                reason="테스트 근거 있음",
+                max_score=0.91,
+                query_entities=[],
+                matched_entities=[],
+            ),
         )
 
-    def stream_answer(self, question, documents, *, verify_semantics):
+    def stream_answer(self, question, documents, *, safety_policy):
         self.call_count += 1
-        self.verify_semantics = verify_semantics
+        self.safety_policy = safety_policy
         yield "검색 근거 "
         yield "기반 답변"
         yield GroundedAnswerResult(
             answer="검색 근거 기반 답변",
             grounded=True,
             cited_chunk_ids=["C1"],
-            verification_method="prevalidated_post_audit",
+            verification_method="retrieval_check_post_audit",
             grounding_errors=[],
             unsupported_claims=[],
+            evidence_status="sufficient",
+            retrieval_assessment=RetrievalAssessment(
+                status="evidence_available",
+                eligible=True,
+                reason="테스트 근거 있음",
+                max_score=0.91,
+                query_entities=[],
+                matched_entities=[],
+            ),
         )
 
 
@@ -159,7 +176,7 @@ class ChatOrchestratorTest(unittest.TestCase):
         )
         self.assertTrue(events[-1].result.grounded)
         self.assertEqual(vector_search.embed_count, 1)
-        self.assertFalse(grounded_rag.verify_semantics)
+        self.assertEqual(grounded_rag.safety_policy.risk_level.value, "normal")
 
     def test_general_chat_uses_chain_stream(self) -> None:
         orchestrator, vector_search, _, general_chat = _build_orchestrator(
@@ -195,10 +212,10 @@ class ChatOrchestratorTest(unittest.TestCase):
         self.assertEqual(result.intent, Intent.SIMPLE_LOOKUP)
         self.assertEqual(vector_search.embed_count, 1)
         self.assertEqual(vector_search.search_count, 1)
-        self.assertFalse(grounded_rag.verify_semantics)
+        self.assertEqual(grounded_rag.safety_policy.risk_level.value, "normal")
         self.assertEqual(general_chat.call_count, 0)
 
-    def test_comprehensive_uses_semantic_verification(self) -> None:
+    def test_comprehensive_uses_same_retrieval_flow(self) -> None:
         orchestrator, _, grounded_rag, _ = _build_orchestrator(
             Intent.COMPREHENSIVE,
             documents=[_document()],
@@ -207,7 +224,7 @@ class ChatOrchestratorTest(unittest.TestCase):
         result = orchestrator.answer("내 공복혈당 결과를 자세히 분석해줘")
 
         self.assertEqual(result.intent, Intent.COMPREHENSIVE)
-        self.assertTrue(grounded_rag.verify_semantics)
+        self.assertEqual(grounded_rag.call_count, 1)
         self.assertFalse(result.personal_context_used)
 
     def test_general_chat_skips_search(self) -> None:
@@ -236,7 +253,7 @@ class ChatOrchestratorTest(unittest.TestCase):
         self.assertEqual(grounded_rag.call_count, 0)
         self.assertEqual(general_chat.call_count, 0)
 
-    def test_safety_guard_skips_embedding_classifier_and_llm(self) -> None:
+    def test_safety_guard_keeps_intent_and_rag_but_adds_restrictions(self) -> None:
         orchestrator, vector_search, grounded_rag, general_chat = (
             _build_orchestrator(Intent.SIMPLE_LOOKUP)
         )
@@ -244,11 +261,13 @@ class ChatOrchestratorTest(unittest.TestCase):
         result = orchestrator.answer("이 약을 두 알 먹어도 돼?")
 
         self.assertTrue(result.guard_triggered)
-        self.assertEqual(result.intent, Intent.IGNORE)
-        self.assertEqual(result.answer, SAFETY_IGNORE_ANSWER)
-        self.assertEqual(vector_search.embed_count, 0)
-        self.assertEqual(vector_search.search_count, 0)
-        self.assertEqual(grounded_rag.call_count, 0)
+        self.assertEqual(result.intent, Intent.SIMPLE_LOOKUP)
+        self.assertEqual(result.answer, "검색 근거 기반 답변")
+        self.assertEqual(vector_search.embed_count, 1)
+        self.assertEqual(vector_search.search_count, 1)
+        self.assertEqual(grounded_rag.call_count, 1)
+        self.assertIn("personalized_prescription", result.restricted_actions)
+        self.assertEqual(result.risk_level, "caution")
         self.assertEqual(general_chat.call_count, 0)
 
 

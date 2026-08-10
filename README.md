@@ -144,6 +144,10 @@ uvicorn app.main:app --reload
 웹 앱은 통합 챗봇 `POST /chat/stream`을 사용하며 Intent, 근거 검증, 출처 정보를
 시각적으로 확인할 수 있습니다. 현재 복약 데이터는 검토 중 상태로 표시됩니다.
 
+기본 Intent 모델은 `classifier/artifacts/intent-v7/best_model.json`입니다. v7에서는
+`ignore`를 건강 서비스 외 질문으로 한정하고, 의료 위험 질문은 Safety Guard가
+Intent를 바꾸지 않은 채 위험 수준과 금지 행동을 최종 프롬프트에 전달합니다.
+
 Gradio:
 
 ```powershell

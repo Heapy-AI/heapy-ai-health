@@ -49,7 +49,7 @@ Pinecone 인덱스와 namespace별 레코드 수를 표시합니다.
 
 질문을 로컬 모델로 임베딩한 뒤 Linear/Softmax 분류 결과를 확인합니다. 최상위 intent, 신뢰도, intent별 확률과 `uncertain` 여부를 표시합니다.
 
-현재 기본 모델은 `classifier/artifacts/intent-v6/best_model.json`이다. `INTENT_MODEL_PATH`로 선택한 모델 파일이 없으면 Intent 탭만 사용할 수 없으며 Search와 Ask는 계속 동작합니다.
+현재 기본 모델은 `classifier/artifacts/intent-v7/best_model.json`이다. `INTENT_MODEL_PATH`로 선택한 모델 파일이 없으면 Intent 탭만 사용할 수 없으며 Search와 Ask는 계속 동작합니다.
 
 ## Ask
 

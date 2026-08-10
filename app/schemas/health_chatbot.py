@@ -86,9 +86,12 @@ class CombinedAskResponse(AskResponse):
     verification_reason: str
     grounding_errors: list[str]
     unsupported_claims: list[str]
-    grounding_plan: dict | None
+    evidence_status: str
+    retrieval_assessment: dict | None
     audit_status: str
     audit_summary: str
+    unanswered_items: list[str]
+    safety_violations: list[str]
     searched_collections: list[str]
     failed_collections: list[str]
 
@@ -107,21 +110,6 @@ class ChatRequest(BaseModel):
         return normalized
 
 
-class GroundingPlanFactResponse(BaseModel):
-    """선검증된 단일 근거 사실."""
-
-    statement: str
-    cited_chunk_ids: list[str]
-
-
-class GroundingPlanResponse(BaseModel):
-    """최종 답변 스트리밍 전에 승인된 근거 계획."""
-
-    answerable: bool
-    facts: list[GroundingPlanFactResponse]
-    reason: str
-
-
 class ChatResponse(BaseModel):
     """Intent 분류와 선택된 처리 경로의 통합 응답."""
 
@@ -135,6 +123,10 @@ class ChatResponse(BaseModel):
     guard_triggered: bool
     guard_reason: str | None
     matched_patterns: list[str]
+    risk_level: str
+    restricted_actions: list[str]
+    response_policy: str
+    emergency: bool
     answer: str
     sources: list[str]
     grounded: bool | None
@@ -144,9 +136,12 @@ class ChatResponse(BaseModel):
     verification_reason: str
     grounding_errors: list[str]
     unsupported_claims: list[str]
-    grounding_plan: GroundingPlanResponse | None
+    evidence_status: str
+    retrieval_assessment: dict | None
     audit_status: str
     audit_summary: str
+    unanswered_items: list[str]
+    safety_violations: list[str]
     searched_collections: list[str]
     failed_collections: list[str]
     personal_context_used: bool

@@ -27,6 +27,10 @@ class WebUiTest(unittest.TestCase):
         self.assertIn('eventName === "complete"', script)
         self.assertIn("sanitizeAnswerText(data.answer)", script)
         self.assertIn("sanitizeAnswerText", script)
+        self.assertIn("function renderMarkdown", script)
+        self.assertIn("function escapeHtml", script)
+        self.assertIn("bubble.innerHTML = renderMarkdown", script)
+        self.assertIn("<strong>$1</strong>", script)
         self.assertIn("STREAM_CHARACTER_DELAY_MS", script)
         self.assertIn("createTokenPacer", script)
         self.assertIn("await tokenPacer.drain()", script)
@@ -80,7 +84,7 @@ class WebUiTest(unittest.TestCase):
         self.assertIn("overflow-wrap: anywhere", styles)
 
     def test_question_audit_cards_are_wired(self) -> None:
-        """질문별 접이식 감사 카드와 선검증 메타데이터 연결을 확인한다."""
+        """질문별 접이식 감사 카드와 검색·안전 메타데이터 연결을 확인한다."""
         markup = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         script = (WEB_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
         styles = (WEB_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
@@ -88,7 +92,8 @@ class WebUiTest(unittest.TestCase):
         self.assertIn("질문별 감사 기록", markup)
         self.assertIn('id="auditCardList"', markup)
         self.assertIn('document.createElement("details")', script)
-        self.assertIn("data.grounding_plan", script)
+        self.assertIn("data.retrieval_assessment", script)
+        self.assertIn("data.risk_level", script)
         self.assertIn("data.audit_status", script)
         self.assertIn("data.audit_summary", script)
         self.assertIn('message.dataset.started !== "true"', script)

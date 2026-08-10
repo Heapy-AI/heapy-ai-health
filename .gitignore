@@ -217,3 +217,8 @@ evaluation/results/
 !classifier/artifacts/intent-v6/
 classifier/artifacts/intent-v6/*
 !classifier/artifacts/intent-v6/best_model.json
+
+# Intent v7 운영 체크포인트도 팀 실행을 위해 공유
+!classifier/artifacts/intent-v7/
+classifier/artifacts/intent-v7/*
+!classifier/artifacts/intent-v7/best_model.json

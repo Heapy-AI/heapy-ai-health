@@ -26,7 +26,8 @@
 | `cache_hit` | bool | SC1 / BC1 |
 | `user_context` | object \| null | D2 |
 | `prompt` | str | C2 / B4 / C5 |
-| `grounding_plan` | object \| null | P1 |
+| `retrieval_assessment` | object \| null | RCHK |
+| `evidence_status` | str | APOST |
 | `audit_status` | str | APOST |
 | `audit_summary` | str | APOST |
 | `error` | str \| null | ERRMSG |
@@ -59,7 +60,7 @@
 
 | 노드 | 입력 | 출력 |
 |---|---|---|
-| SG Safety Guard | `resolved_query` | `guard_triggered`, `guard_reason`, 차단 시 `intent=ignore` |
+| SG Safety Guard | `resolved_query` | `guard_triggered`, `guard_reason`, `risk_level`, `restricted_actions`, `response_policy`, `emergency` (위험 증상 + 개인·현재 상황 + 요청 행동 + 정보형 의문문 조합 판정) |
 | A1 임베딩 변환 | `resolved_query` | `query_embedding` |
 | A2~A3 분류기 | `query_embedding` | (내부 로짓/확률) |
 | A4 Intent 분류 | (확률) | `intent` |
@@ -90,10 +91,10 @@
 | C2 프롬프트 (simple) | `chunks`, `history` | `prompt` |
 | B4 프롬프트 (comprehensive) | `chunks`, `user_context`, `history`, `summary` | `prompt` |
 | C5 프롬프트 (chat) | `history`, `summary` | `prompt` |
-| P1 근거 계획 선검증 | `chunks`, `intent`, 질문 | `grounding_plan`, `grounded` |
-| L1 최종 답변 호출 | `grounding_plan` | (스트림 시작) |
+| RCHK 검색 결과 기본 검사 | `chunks`, 질문 | `retrieval_assessment`, `grounded` |
+| L1 최종 답변 호출 | `chunks`, 안전 정책 | (스트림 시작) |
 | L2 / L3 스트림 전송 | 최종 답변 토큰 | (클라이언트로 전송) |
-| APOST 사후 감사 | 최종 답변, `grounding_plan`, `chunks` | `audit_status`, `audit_summary`, `unsupported_claims` |
+| APOST 사후 감사 | 최종 답변, `chunks`, 안전 정책 | `audit_status`, `audit_summary`, `evidence_status`, `unanswered_items`, `unsupported_claims`, `safety_violations` |
 
 ---
 

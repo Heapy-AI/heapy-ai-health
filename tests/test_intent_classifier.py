@@ -75,24 +75,25 @@ class LinearIntentClassifierTest(unittest.TestCase):
         self.assertEqual(response.source, "linear_classifier")
         self.assertFalse(response.guard_triggered)
 
-    def test_api_guard_blocks_before_embedding(self) -> None:
-        class FailIfCalledVectorSearch:
+    def test_api_guard_records_policy_without_overriding_intent(self) -> None:
+        class FakeVectorSearch:
             def embed_query(self, question: str) -> list[float]:
-                raise AssertionError("Guard 작동 시 임베딩을 호출하면 안 됩니다.")
+                return [0.0] * PINECONE_DIMENSION
 
-        state["vector_search"] = FailIfCalledVectorSearch()
+        state["vector_search"] = FakeVectorSearch()
         state["intent_classifier"] = self._build_classifier([4.0, 0.0, 0.0, 0.0])
 
         response = classify_intent(
             IntentClassifyRequest(question="오늘 약 두 알 먹어도 돼?")
         )
 
-        self.assertEqual(response.intent, Intent.IGNORE.value)
-        self.assertEqual(response.confidence, 1.0)
+        self.assertEqual(response.intent, Intent.SIMPLE_LOOKUP.value)
         self.assertFalse(response.uncertain)
-        self.assertEqual(response.source, "safety_guard")
+        self.assertEqual(response.source, "linear_classifier")
         self.assertTrue(response.guard_triggered)
         self.assertEqual(response.guard_reason, "medication_decision")
+        self.assertEqual(response.risk_level, "caution")
+        self.assertIn("medication_dose_change", response.restricted_actions)
 
 
 if __name__ == "__main__":

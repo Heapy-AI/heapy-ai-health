@@ -3,6 +3,7 @@
 작성자: 김진우
 """
 import json
+import re
 from collections.abc import Iterator
 
 from fastapi import APIRouter, HTTPException
@@ -62,16 +63,16 @@ class _CitationLabelStreamFilter:
 
     @staticmethod
     def _is_partial_label(value: str) -> bool:
-        if value in {"[", "[C"}:
+        if value == "[":
             return True
-        return value.startswith("[C") and value[2:].isdigit()
+        return bool(
+            re.fullmatch(r"\[[Cc]\d*(?:\s*,\s*[Cc]?\d*)*\s*", value)
+        )
 
     @staticmethod
     def _is_complete_label(value: str) -> bool:
-        return (
-            value.startswith("[C")
-            and value.endswith("]")
-            and value[2:-1].isdigit()
+        return bool(
+            re.fullmatch(r"\[[Cc]\d+(?:\s*,\s*[Cc]?\d+)*\s*]", value)
         )
 
 
@@ -135,6 +136,10 @@ def _to_chat_response(
         guard_triggered=result.guard_triggered,
         guard_reason=result.guard_reason,
         matched_patterns=result.matched_patterns,
+        risk_level=result.risk_level,
+        restricted_actions=result.restricted_actions,
+        response_policy=result.response_policy,
+        emergency=result.emergency,
         answer=result.answer,
         sources=sources,
         grounded=result.grounded,
@@ -144,9 +149,12 @@ def _to_chat_response(
         verification_reason=result.verification_reason,
         grounding_errors=result.grounding_errors,
         unsupported_claims=result.unsupported_claims,
-        grounding_plan=result.grounding_plan,
+        evidence_status=result.evidence_status,
+        retrieval_assessment=result.retrieval_assessment,
         audit_status=result.audit_status,
         audit_summary=result.audit_summary,
+        unanswered_items=result.unanswered_items,
+        safety_violations=result.safety_violations,
         searched_collections=result.searched_collections,
         failed_collections=result.failed_collections,
         personal_context_used=result.personal_context_used,

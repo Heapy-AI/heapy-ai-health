@@ -23,12 +23,16 @@ Healpy AI health care의 요청 처리 파이프라인에서 노드 간에 흐�
 | `intent` | 열거형 | A4 | simple_lookup / comprehensive / general_chat / ignore |
 | `guard_triggered` | 불리언 | SG | 의료 Safety Guard 작동 여부 |
 | `guard_reason` | 문자열 또는 없음 | SG | definitive_diagnosis / medication_decision / medical_visit_decision |
+| `risk_level` | 문자열 | SG | normal / caution / emergency |
+| `restricted_actions` | 문자열 목록 | SG | 최종 답변에서 금지할 의료적 결정 |
+| `response_policy` | 문자열 | SG | 일반·주의·긴급 응답 정책 |
 | `search_collections` | 문자열 목록 | B1 | 설정으로 고정한 병렬 검색 대상 namespace |
 | `chunks` | 청크 목록 또는 없음 | 검색/캐시 노드 | 검색 결과 청크. 아래 "chunks 상태 규약" 참조 |
 | `cache_hit` | 불리언 | SC1 또는 BC1 | 캐시 히트 여부 |
 | `user_context` | 객체 또는 없음 | D2 | RDB에서 조합한 개인 컨텍스트 (comprehensive 경로만) |
 | `prompt` | 문자열 | C2 / B4 / C5 | LLM에 전달할 최종 프롬프트 |
-| `grounding_plan` | 객체 또는 없음 | P1 | 스트리밍 전에 승인한 사실·근거 청크 계획 |
+| `retrieval_assessment` | 객체 또는 없음 | RCHK | 검색 결과 존재·최소 기준·명시 대상 일치 검사 |
+| `evidence_status` | 문자열 | APOST | sufficient / partial / insufficient / unknown |
 | `audit_status` | 문자열 | APOST | passed / failed / error / not_run |
 | `audit_summary` | 문자열 | APOST | 사용자 본문을 바꾸지 않는 사후 감사 요약 |
 | `error` | 문자열 또는 없음 | ERRMSG | 에러 발생 시 안내 메시지. 정상 흐름에서는 없음 |
@@ -82,7 +86,7 @@ VDB 검색으로 확보한 개별 지식 청크를 표현한다.
 
 | 노드 | 입력 | 출력 | 비고 |
 |---|---|---|---|
-| SG Safety Guard | `resolved_query` | `guard_triggered`, `guard_reason`, (차단 시)`intent` | 진단·약물 결정·내원 판단이면 임베딩 전에 ignore |
+| SG Safety Guard | `resolved_query` | `guard_triggered`, `guard_reason`, `risk_level`, `restricted_actions`, `response_policy` | 위험 증상·개인/현재 상황·요청 행동·정보형 의문문을 조합해 판단하며 Intent와 RAG 진행 여부는 변경하지 않음 |
 | A1 임베딩 변환 | `resolved_query` | `query_embedding` | Sentence-Transformers. 이후 캐시·검색에서 재사용 |
 | A2 Linear Layer | `query_embedding` | (로짓, 내부) | 학습된 선형 분류기 |
 | A3 Softmax | (로짓) | (확률 분포, 내부) | intent별 확률 |
@@ -116,19 +120,19 @@ VDB 검색으로 확보한 개별 지식 청크를 표현한다.
 | C5 프롬프트 구성 (chat) | `history`, `summary` | `prompt` | 자유 대화 |
 | L1 LLM 호출 | `prompt` | (스트림 시작) | 스트리밍 모드 |
 | L2 / L3 스트림 전송 | (LLM 토큰) | (출력으로 청크 전송) | 토큰 단위 전송 |
-| P1 근거 계획 선검증 | 질문, 청크 ID가 붙은 `chunks`, intent | `grounding_plan`, `grounded` | 답변 가능 여부와 승인 사실·근거 ID를 스트리밍 전에 확정 |
-| L1 최종 답변 생성 | 승인된 `grounding_plan` | (스트림 시작) | 계획에 포함된 사실만 사용자 문장으로 작성 |
-| APOST 사후 감사 | 최종 답변, `grounding_plan`, `chunks` | `audit_status`, `audit_summary`, `unsupported_claims` | 본문을 교체하지 않고 계획 이탈 여부만 기록 |
+| RCHK 검색 결과 기본 검사 | 질문, `chunks` | `retrieval_assessment`, `grounded` | 결과 존재·최소 기준·명시 대상 일치를 코드로 검사 |
+| L1 최종 답변 생성 | `chunks`, 안전 정책 | (스트림 시작) | 근거 있는 항목은 답하고 부족한 항목은 구분 |
+| APOST 사후 감사 | 최종 답변, `chunks`, 안전 정책 | `audit_status`, `audit_summary`, `evidence_status`, `unanswered_items`, `unsupported_claims`, `safety_violations` | 본문을 교체하지 않고 근거·안전 정책 준수 여부 기록 |
 
 ## State 라이프사이클
 
 하나의 요청이 처리되는 동안 State가 채워지는 순서를 요약한다.
 
-요청이 들어오면 S1이 세션을 조회하고 S1CHK가 신규 여부를 판정한다. 기존 세션이면 S2가 히스토리와 요약을 로드하고 S3가 질문을 재구성하며, 신규 세션이면 S4가 빈 히스토리로 초기화하고 원문을 그대로 사용한다. 이후 SG가 의료적 결정 요청을 먼저 확인한다. Guard가 작동하면 임베딩 없이 ignore로 라우팅하고, 통과한 질문만 A1이 임베딩을 생성한 뒤 A4가 intent를 결정한다.
+요청이 들어오면 S1이 세션을 조회하고 S1CHK가 신규 여부를 판정한다. 기존 세션이면 S2가 히스토리와 요약을 로드하고 S3가 질문을 재구성하며, 신규 세션이면 S4가 빈 히스토리로 초기화하고 원문을 그대로 사용한다. A1과 A4가 Intent v7을 분류하고, SG는 별도로 위험 수준과 금지 행동을 기록한다. Guard는 Intent나 검색 경로를 변경하지 않는다.
 
 intent가 simple 또는 comprehensive이면 먼저 캐시를 조회하고, 히트하면 저장된 청크를 재사용하며 미스이면 VDB를 검색한다. VDB 응답 성공을 확인한 뒤 검색 결과 유무를 판정하고, 결과가 있으면 캐시에 저장한 다음 프롬프트를 구성한다. comprehensive 경로는 이와 병렬로 인증을 거쳐 개인 컨텍스트를 조합하며, 이 개인 데이터는 캐시하지 않는다.
 
-검색 문맥이 완성되면 P1이 답변 가능 여부와 사용할 사실·근거 ID를 먼저 확정한다. 계획이 거절되면 고정 근거 없음 응답을 반환하고, 승인되면 L1이 계획의 사실만 사용해 최종 답변을 스트리밍한다. 누적이 끝나면 APOST가 계획 이탈 여부를 감사하되 사용자에게 이미 표시한 본문은 바꾸지 않는다. 분류 결과, 계획, 감사·에러, 캐시·스트리밍 지표는 모니터링 로그로 기록한다.
+검색 문맥이 완성되면 RCHK가 검색 결과 존재, 설정된 최소 유사도 통과, 질문의 명시 대상과 청크 대상 일치를 확인한다. 통과하면 L1이 근거가 있는 질문 항목은 답하고 부족한 항목은 확인되지 않았다고 구분해 스트리밍한다. `emergency`여도 이 흐름은 중단하지 않고 긴급 행동 안내를 먼저 배치한 뒤 요청 정보까지 제공한다. 누적이 끝나면 APOST가 근거 충족도와 안전 정책 준수 여부를 감사하되 사용자에게 이미 표시한 본문은 바꾸지 않는다. 분류 결과, 안전 정책, 검색 검사, 감사·에러, 캐시·스트리밍 지표는 모니터링 로그로 기록한다.
 
 응답이 사용자에게 모두 전송된 후, 후처리 단계에서 이번 턴을 히스토리에 추가하고 요약을 갱신하여 세션 저장소에 기록한다. 이 저장 작업은 사용자 응답 경로 밖에서 이루어지므로 체감 지연에 영향을 주지 않으며, 갱신된 요약은 다음 턴의 S2가 로드하게 된다.
 

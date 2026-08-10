@@ -1,4 +1,4 @@
-"""청크 인용과 별도 검증을 사용하는 근거 기반 RAG 서비스.
+"""기본 검색 검사와 사후 감사를 사용하는 근거 기반 RAG 서비스.
 
 작성자: 김진우
 """
@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.documents import Document
@@ -18,40 +18,97 @@ from pydantic import BaseModel, Field
 
 from app.core.config import MODEL
 from app.services.rag import cite
+from app.services.safety_guard import GuardResult
 
 
-NOT_GROUNDED_ANSWER = "지식베이스에 근거 없음"
-_CITATION_PATTERN = re.compile(r"\[(C\d+)]")
-
-
-class GroundingPlanFact(BaseModel):
-    """사용자 답변에 사용할 검증된 사실과 근거 청크."""
-
-    statement: str = Field(description="검색 청크가 직접 뒷받침하는 단일 사실")
-    cited_chunk_ids: list[str] = Field(description="사실을 뒷받침하는 C1 형식 청크 ID")
-
-
-class GroundingPlan(BaseModel):
-    """최종 답변 생성 전에 확정하는 근거 계획."""
-
-    answerable: bool = Field(description="검색 청크만으로 질문에 답할 수 있는지")
-    facts: list[GroundingPlanFact] = Field(description="최종 답변에 사용할 사실 목록")
-    reason: str = Field(description="답변 가능 여부와 근거 계획 판단 이유")
+NOT_GROUNDED_ANSWER = (
+    "질문과 정확히 일치하는 정보를 찾지 못했습니다. 이름이나 수치를 다시 확인해 "
+    "알려주시면 확인 가능한 정보부터 이어서 설명드릴게요."
+)
+EMERGENCY_NO_EVIDENCE_ANSWER = (
+    "지금 실제로 숨쉬기 어렵거나 심한 흉통, 의식 저하 같은 증상이 있다면 "
+    "답변을 기다리지 말고 주변에 도움을 요청한 뒤 119에 연락하거나 가까운 "
+    "응급실로 이동하세요. 증상이 언제 시작됐는지와 현재 복용 중인 약을 정리해 "
+    "의료진에게 전달하면 빠른 판단에 도움이 됩니다."
+)
+_CITATION_LABEL_PATTERN = re.compile(
+    r"\[(?:C\d+\s*(?:,\s*C?\d+\s*)*)]",
+    re.IGNORECASE,
+)
+_CITATION_ID_PATTERN = re.compile(r"C\d+", re.IGNORECASE)
+_ENTITY_TOKEN_PATTERN = re.compile(r"[가-힣A-Za-z0-9·+\-]{2,40}")
+_MEDICATION_SUFFIXES = (
+    "내복액",
+    "캡슐",
+    "시럽",
+    "주사",
+    "연고",
+    "크림",
+    "과립",
+    "정",
+    "액",
+    "산",
+)
+_DISEASE_SUFFIXES = ("당뇨병", "고혈압", "감기", "암", "병", "염", "증")
+_ENTITY_STOP_WORDS = {
+    "질병",
+    "합병증",
+    "부작용",
+    "증상",
+    "염증",
+    "검진",
+    "건강",
+    "약",
+}
+_ENTITY_METADATA_KEYS = (
+    "item_name",
+    "display_item_name",
+    "search_item_name",
+    "original_item_name",
+    "disease",
+    "heading",
+    "canonical_key",
+    "record_id",
+)
 
 
 class GroundingAudit(BaseModel):
     """스트리밍 완료 답변에 대한 사후 품질 감사 결과."""
 
-    passed: bool = Field(description="최종 답변이 승인된 근거 계획을 벗어나지 않았는지")
+    passed: bool = Field(description="답변의 의료 사실이 검색 청크와 안전 정책을 준수하는지")
     summary: str = Field(description="모니터링 패널에 표시할 감사 요약")
+    coverage_status: str = Field(
+        description="질문 항목별 근거 충족 상태: sufficient, partial, insufficient"
+    )
+    unanswered_items: list[str] = Field(
+        default_factory=list,
+        description="검색 근거가 없어 답하지 못한 질문 항목",
+    )
     unsupported_claims: list[str] = Field(
-        description="승인된 근거 계획이나 검색 청크가 뒷받침하지 않는 주장"
+        default_factory=list,
+        description="검색 청크가 뒷받침하지 않는 주장",
+    )
+    safety_violations: list[str] = Field(
+        default_factory=list,
+        description="안전 정책의 금지 행동을 위반한 표현",
     )
 
 
 @dataclass(frozen=True)
+class RetrievalAssessment:
+    """LLM 호출 전에 수행하는 결정론적 검색 결과 검사."""
+
+    status: str
+    eligible: bool
+    reason: str
+    max_score: float | None
+    query_entities: list[str]
+    matched_entities: list[str]
+
+
+@dataclass(frozen=True)
 class GroundedAnswerResult:
-    """검증 완료 답변과 인용·오류 정보."""
+    """생성 답변과 검색 검사·사후 감사 정보."""
 
     answer: str
     grounded: bool
@@ -59,24 +116,40 @@ class GroundedAnswerResult:
     verification_method: str
     grounding_errors: list[str]
     unsupported_claims: list[str]
-    grounding_plan: GroundingPlan | None = None
+    evidence_status: str
+    retrieval_assessment: RetrievalAssessment
     audit_status: str = "not_applicable"
     audit_summary: str = ""
+    unanswered_items: list[str] | None = None
+    safety_violations: list[str] | None = None
 
 
-GROUNDING_PLAN_PROMPT = """너는 HEAPY 건강정보 답변의 근거 설계자다.
-사용자에게 답변을 보여주기 전에 검색 청크만으로 답할 수 있는지 판단하고 근거 계획을 작성하라.
+FINAL_ANSWER_PROMPT = """너는 HEAPY의 건강정보 안내 봇이다.
+사용자 질문에 대해 아래 검색 청크와 안전 정책만 사용해 한국어 답변을 작성하라.
 
-규칙:
-1. 검색 청크가 직접 뒷받침하는 사실만 facts에 넣는다.
-2. 각 사실에는 실제 근거 청크 ID를 하나 이상 연결한다.
-3. 검색 청크에 없는 사실을 사전학습 기억으로 보충하거나 추측하지 않는다.
-4. 질문의 핵심에 답할 근거가 부족하면 answerable=false로 설정하고 facts는 비운다.
-5. 존재하지 않는 청크 ID를 만들지 않는다.
-6. 사실은 최종 답변 작성기가 그대로 활용할 수 있도록 완결된 한국어 문장으로 작성한다.
+[근거 사용 규칙]
+1. 검색 청크가 직접 뒷받침하는 의료 사실만 말한다. 사전학습 기억으로 보충하거나 추측하지 않는다.
+2. 질문에 여러 항목이 있으면 항목별로 판단한다. 근거가 있는 항목은 답하고, 없는 항목은 "현재 확인 가능한 정보에서는 구체적인 내용을 찾지 못했다"고 자연스럽게 구분한다.
+3. 일부 항목의 근거가 없다는 이유로 근거가 있는 다른 항목까지 거절하지 않는다.
+4. 의료 사실을 사용한 문단 끝에는 내부 검증용 청크 ID를 [C1] 형식으로 붙인다. 존재하지 않는 ID는 만들지 않는다.
+5. 청크의 대상 의약품·질병·검사항목을 다른 대상으로 바꾸어 설명하지 않는다.
 
-[검증 수준]
-{verification_level}
+[안전 규칙]
+1. safety_policy의 restricted_actions에 포함된 의료적 결정을 대신 수행하지 않는다.
+2. definitive_diagnosis가 제한되면 질병을 확정하지 않고 관련 일반 정보와 위험 신호를 설명한다.
+3. personalized_prescription, medication_dose_change, medication_stop이 제한되면 특정 약의 선택·증량·감량·중단을 결정하지 않는다.
+4. emergency=true이면 첫 문장에서 119 연락 또는 즉시 응급실 방문을 우선 안내한다. 단, 긴급 안내만 하고 답변을 끝내지 말고 검색 청크에서 확인되는 사용자의 요청 정보도 최대한 제공한다.
+5. personalized_prognosis가 제한되면 개인의 완치 날짜나 회복 시점을 단정하지 않고 일반적인 경과와 영향을 주는 요인을 설명한다.
+6. 개인 증상, 복약 결정, 부분 근거 부족, 지속·악화 위험이 있는 경우에만 의료진 상담이나 진료 안내를 덧붙인다. 모든 답변에 같은 면책 문구를 반복하지 않는다.
+
+[표현 규칙]
+1. 자연스럽고 읽기 쉽게 쓰되 JSON이나 코드 블록은 출력하지 않는다.
+2. 사용자가 먼저 인사하지 않았다면 인사말이나 자기소개 없이 질문의 핵심부터 답한다.
+3. 사용자에게는 청크 ID가 제거되어 표시되므로, 문장이 자연스럽게 이어지도록 작성한다.
+4. 사용자에게 데이터베이스, 청크, 근거 계획 같은 내부 구현 용어를 노출하지 않는다.
+
+[안전 정책]
+{safety_policy}
 
 [검색 청크]
 {context}
@@ -86,39 +159,22 @@ GROUNDING_PLAN_PROMPT = """너는 HEAPY 건강정보 답변의 근거 설계자�
 """
 
 
-FINAL_ANSWER_PROMPT = """너는 HEAPY의 친절한 건강정보 안내 봇이다.
-아래 승인된 근거 계획만 사용해 사용자에게 보여줄 최종 한국어 답변을 작성하라.
-
-규칙:
-1. 근거 계획의 facts에 없는 건강·의료 사실, 수치, 원인, 관계를 추가하지 않는다.
-2. 청크 ID나 인용 라벨을 답변 본문에 표시하지 않는다.
-3. 자연스럽고 읽기 쉬운 문장으로 작성하되 과장하거나 진단하지 않는다.
-4. JSON, 코드 블록, 제목을 출력하지 않는다.
-5. 사용자가 먼저 인사한 경우가 아니면 인사말, 자기소개, "HEAPY입니다" 같은 상투 문구 없이 질문의 핵심부터 바로 답한다.
-
-[승인된 근거 계획]
-{plan}
-
-[질문]
-{question}
-"""
-
-
 POST_AUDIT_PROMPT = """너는 HEAPY 건강정보 답변의 사후 품질 감사자다.
-이미 사용자에게 스트리밍된 최종 답변을 승인된 근거 계획과 검색 청크에 대조하라.
+이미 사용자에게 스트리밍된 답변을 검색 청크와 안전 정책에 대조하라. 답변 본문은 수정하지 않고 모니터링 결과만 기록한다.
 
 감사 규칙:
-1. 답변의 모든 건강·의료 사실은 승인된 facts와 검색 청크가 직접 뒷받침해야 한다.
-2. 계획에 없는 질환명, 원인, 수치, 관계, 행동 권고가 추가되면 unsupported다.
-3. 단순한 연결 표현이나 말투는 감사 대상에서 제외한다.
-4. 승인된 계획을 벗어난 주장이 하나라도 있으면 passed=false다.
-5. summary에는 통과 여부와 핵심 이유를 한두 문장으로 작성한다.
+1. 답변의 모든 의료 사실이 검색 청크에 직접 근거하는지 확인한다.
+2. 질문의 여러 요청 중 답한 항목과 근거 부족으로 답하지 않은 항목을 구분한다.
+3. 일부만 답했으며 부족한 항목을 명확히 밝혔으면 coverage_status=partial로 기록하되 그 이유만으로 실패 처리하지 않는다.
+4. 근거 없는 사실을 추가했거나 안전 정책의 금지 행동을 수행했으면 passed=false다.
+5. 충분히 답했으면 sufficient, 전혀 답할 근거가 없었으면 insufficient로 기록한다.
+6. summary는 통과 여부, 근거 충족도, 안전 정책 준수 여부를 한두 문장으로 작성한다.
 
 [질문]
 {question}
 
-[승인된 근거 계획]
-{plan}
+[안전 정책]
+{safety_policy}
 
 [최종 답변]
 {answer}
@@ -135,8 +191,79 @@ def _coerce_model(value: Any, model_type):
     return model_type.model_validate(value)
 
 
+def _normalize_entity(value: str) -> str:
+    """대상 일치 비교를 위해 조사·공백·기호를 제거한다."""
+    normalized = re.sub(r"[^가-힣a-z0-9]", "", value.lower())
+    return re.sub(r"(?:으로|에서|에게|에는|으로는|이랑|와|과|은|는|이|가|을|를|의)$", "", normalized)
+
+
+def extract_query_entities(question: str) -> list[str]:
+    """명시적인 의약품·질병명 후보만 보수적으로 추출한다."""
+    entities: list[str] = []
+    for raw_token in _ENTITY_TOKEN_PATTERN.findall(question):
+        token = _normalize_entity(raw_token)
+        if token in _ENTITY_STOP_WORDS or len(token) < 2:
+            continue
+        if token.endswith(_MEDICATION_SUFFIXES) or token.endswith(_DISEASE_SUFFIXES):
+            entities.append(token)
+    return list(dict.fromkeys(entities))
+
+
+def _document_search_text(document: Document) -> str:
+    metadata_values = [
+        str(document.metadata.get(key, ""))
+        for key in _ENTITY_METADATA_KEYS
+    ]
+    return _normalize_entity(" ".join([document.page_content, *metadata_values]))
+
+
+def assess_retrieval(
+    question: str,
+    documents: list[Document],
+) -> RetrievalAssessment:
+    """결과 존재 여부와 명시 대상 일치를 LLM 없이 검사한다."""
+    if not documents:
+        return RetrievalAssessment(
+            status="no_evidence",
+            eligible=False,
+            reason="검색된 최종 청크가 없습니다.",
+            max_score=None,
+            query_entities=[],
+            matched_entities=[],
+        )
+
+    scores = [
+        float(document.metadata.get("score", 0.0) or 0.0)
+        for document in documents
+    ]
+    query_entities = extract_query_entities(question)
+    searchable_text = " ".join(_document_search_text(document) for document in documents)
+    matched_entities = [entity for entity in query_entities if entity in searchable_text]
+    if query_entities and not matched_entities:
+        return RetrievalAssessment(
+            status="entity_mismatch",
+            eligible=False,
+            reason=(
+                "질문에 명시된 대상과 검색 청크의 대상이 일치하지 않습니다: "
+                + ", ".join(query_entities)
+            ),
+            max_score=max(scores),
+            query_entities=query_entities,
+            matched_entities=[],
+        )
+
+    return RetrievalAssessment(
+        status="evidence_available",
+        eligible=True,
+        reason="최소 검색 기준을 통과한 청크가 있으며 명시 대상 불일치가 없습니다.",
+        max_score=max(scores),
+        query_entities=query_entities,
+        matched_entities=matched_entities,
+    )
+
+
 def format_citation_context(documents: list[Document]) -> str:
-    """최종 청크에 C1부터 순서대로 고정 인용 ID를 부여한다."""
+    """최종 청크에 C1부터 순서대로 내부 검증 ID를 부여한다."""
     return "\n\n".join(
         (
             f"[C{index}]\n"
@@ -150,20 +277,30 @@ def format_citation_context(documents: list[Document]) -> str:
 
 
 def strip_citation_labels(answer: str) -> str:
-    """검증용 인용 라벨을 사용자에게 표시할 답변에서 제거한다.
-
-    작성자: 김진우
-    """
-    without_labels = _CITATION_PATTERN.sub("", answer)
+    """검증용 인용 라벨을 사용자 표시 답변에서 제거한다."""
+    without_labels = _CITATION_LABEL_PATTERN.sub("", answer)
     without_trailing_spaces = re.sub(r"[ \t]+\n", "\n", without_labels)
     return re.sub(r"[ \t]{2,}", " ", without_trailing_spaces).strip()
 
 
-class GroundedRagService:
-    """근거 계획을 선검증하고 최종 답변 스트리밍 후 감사를 수행한다."""
+def _safety_policy_json(safety_policy: GuardResult) -> str:
+    return json.dumps(
+        {
+            "risk_level": safety_policy.risk_level.value,
+            "restricted_actions": safety_policy.restricted_actions,
+            "response_policy": safety_policy.response_policy,
+            "emergency": safety_policy.emergency,
+            "reason": safety_policy.reason,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
-    def __init__(self, planner, generator, auditor, stream_generator=None) -> None:
-        self._planner = planner
+
+class GroundedRagService:
+    """기본 검색 검사를 통과한 문맥으로 생성하고 결과를 사후 감사한다."""
+
+    def __init__(self, generator, auditor, stream_generator=None) -> None:
         self._generator = generator
         self._auditor = auditor
         self._stream_generator = stream_generator or generator
@@ -173,35 +310,29 @@ class GroundedRagService:
         question: str,
         documents: list[Document],
         *,
-        verify_semantics: bool = True,
+        safety_policy: GuardResult,
     ) -> GroundedAnswerResult:
-        """선검증된 근거 계획만으로 최종 답변을 생성하고 사후 감사한다."""
-        if not documents:
-            return self._no_documents_result()
+        assessment = assess_retrieval(question, documents)
+        if not assessment.eligible:
+            return self._rejected_retrieval_result(assessment, safety_policy)
 
         context = format_citation_context(documents)
-        plan, errors = self._create_grounding_plan(
-            question,
-            documents,
-            context,
-            verify_semantics=verify_semantics,
-        )
-        if errors:
-            return self._rejected_plan_result(plan, errors)
-
-        plan_text = self._format_plan(plan)
-        answer = str(
+        safety_policy_text = _safety_policy_json(safety_policy)
+        raw_answer = str(
             self._generator.invoke(
-                {"question": question, "plan": plan_text}
+                {
+                    "question": question,
+                    "context": context,
+                    "safety_policy": safety_policy_text,
+                }
             )
         ).strip()
         return self._build_audited_result(
             question=question,
-            documents=documents,
             context=context,
-            plan=plan,
-            plan_text=plan_text,
-            answer=answer,
+            safety_policy_text=safety_policy_text,
+            raw_answer=raw_answer,
+            assessment=assessment,
         )
 
     def stream_answer(
@@ -209,31 +340,22 @@ class GroundedRagService:
         question: str,
         documents: list[Document],
         *,
-        verify_semantics: bool = True,
+        safety_policy: GuardResult,
     ) -> Iterator[str | GroundedAnswerResult]:
-        """근거 계획 승인 후 최종 본문을 한 번 스트리밍하고 감사한다.
-
-        작성자: 김진우
-        """
-        if not documents:
-            yield self._no_documents_result()
+        assessment = assess_retrieval(question, documents)
+        if not assessment.eligible:
+            yield self._rejected_retrieval_result(assessment, safety_policy)
             return
 
         context = format_citation_context(documents)
-        plan, errors = self._create_grounding_plan(
-            question,
-            documents,
-            context,
-            verify_semantics=verify_semantics,
-        )
-        if errors:
-            yield self._rejected_plan_result(plan, errors)
-            return
-
-        plan_text = self._format_plan(plan)
+        safety_policy_text = _safety_policy_json(safety_policy)
         answer_parts: list[str] = []
         for token in self._stream_generator.stream(
-            {"question": question, "plan": plan_text}
+            {
+                "question": question,
+                "context": context,
+                "safety_policy": safety_policy_text,
+            }
         ):
             text = str(token)
             if not text:
@@ -241,100 +363,69 @@ class GroundedRagService:
             answer_parts.append(text)
             yield text
 
-        answer = "".join(answer_parts)
         yield self._build_audited_result(
             question=question,
-            documents=documents,
             context=context,
-            plan=plan,
-            plan_text=plan_text,
-            answer=answer,
+            safety_policy_text=safety_policy_text,
+            raw_answer="".join(answer_parts),
+            assessment=assessment,
         )
-
-    def _create_grounding_plan(
-        self,
-        question: str,
-        documents: list[Document],
-        context: str,
-        *,
-        verify_semantics: bool,
-    ) -> tuple[GroundingPlan, list[str]]:
-        """구조화된 근거 계획을 생성하고 청크 ID 계약을 검사한다.
-
-        작성자: 김진우
-        """
-        verification_level = "강화: 사실과 청크의 의미 일치를 엄격하게 확인" if verify_semantics else "기본: 질문에 직접 답하는 근거 사실 확인"
-        plan = _coerce_model(
-            self._planner.invoke(
-                {
-                    "question": question,
-                    "context": context,
-                    "verification_level": verification_level,
-                }
-            ),
-            GroundingPlan,
-        )
-        valid_ids = {f"C{index}" for index in range(1, len(documents) + 1)}
-        errors: list[str] = []
-
-        if not plan.answerable:
-            errors.append(plan.reason or "검색 청크만으로 답변할 수 없습니다.")
-            return plan, errors
-        if not plan.facts:
-            errors.append("답변 가능 계획에 승인된 사실이 없습니다.")
-
-        for index, fact in enumerate(plan.facts, start=1):
-            if not fact.statement.strip():
-                errors.append(f"근거 계획 사실 {index}의 내용이 비어 있습니다.")
-            if not fact.cited_chunk_ids:
-                errors.append(f"근거 계획 사실 {index}에 청크 ID가 없습니다.")
-                continue
-            invalid_ids = sorted(set(fact.cited_chunk_ids) - valid_ids)
-            if invalid_ids:
-                errors.append(
-                    f"근거 계획 사실 {index}에 존재하지 않는 청크 ID가 있습니다: {invalid_ids}"
-                )
-        return plan, errors
 
     def _build_audited_result(
         self,
         *,
         question: str,
-        documents: list[Document],
         context: str,
-        plan: GroundingPlan,
-        plan_text: str,
-        answer: str,
+        safety_policy_text: str,
+        raw_answer: str,
+        assessment: RetrievalAssessment,
     ) -> GroundedAnswerResult:
-        """표시 답변은 유지하면서 사후 감사 메타데이터를 구성한다."""
-        cited_chunk_ids = self._plan_citation_ids(plan)
+        cited_chunk_ids = list(
+            dict.fromkeys(
+                citation_id.upper()
+                for label in _CITATION_LABEL_PATTERN.findall(raw_answer)
+                for citation_id in _CITATION_ID_PATTERN.findall(label)
+            )
+        )
+        answer = strip_citation_labels(raw_answer)
         try:
             audit = _coerce_model(
                 self._auditor.invoke(
                     {
                         "question": question,
-                        "plan": plan_text,
-                        "answer": answer,
+                        "safety_policy": safety_policy_text,
+                        "answer": raw_answer,
                         "context": context,
                     }
                 ),
                 GroundingAudit,
             )
-            audit_status = "passed" if audit.passed and not audit.unsupported_claims else "failed"
-            verification_method = (
-                "prevalidated_post_audit"
-                if audit_status == "passed"
-                else "prevalidated_audit_warning"
+            audit_passed = (
+                audit.passed
+                and not audit.unsupported_claims
+                and not audit.safety_violations
             )
+            audit_status = "passed" if audit_passed else "failed"
+            verification_method = (
+                "retrieval_check_post_audit"
+                if audit_passed
+                else "retrieval_check_audit_warning"
+            )
+            grounding_errors: list[str] = []
+            evidence_status = audit.coverage_status
             audit_summary = audit.summary
             unsupported_claims = audit.unsupported_claims
-            grounding_errors = []
+            unanswered_items = audit.unanswered_items
+            safety_violations = audit.safety_violations
         except Exception:
             audit_status = "error"
-            verification_method = "prevalidated_audit_error"
-            audit_summary = "사후 감사 호출에 실패했습니다. 표시된 답변은 선검증 근거 계획을 사용했습니다."
-            unsupported_claims = []
+            verification_method = "retrieval_check_audit_error"
             grounding_errors = ["사후 감사 호출에 실패했습니다."]
+            evidence_status = "unknown"
+            audit_summary = "검색 검사는 통과했지만 사후 감사 호출에 실패했습니다."
+            unsupported_claims = []
+            unanswered_items = []
+            safety_violations = []
 
         return GroundedAnswerResult(
             answer=answer,
@@ -343,65 +434,46 @@ class GroundedRagService:
             verification_method=verification_method,
             grounding_errors=grounding_errors,
             unsupported_claims=unsupported_claims,
-            grounding_plan=plan,
+            evidence_status=evidence_status,
+            retrieval_assessment=assessment,
             audit_status=audit_status,
             audit_summary=audit_summary,
+            unanswered_items=unanswered_items,
+            safety_violations=safety_violations,
         )
 
     @staticmethod
-    def _plan_citation_ids(plan: GroundingPlan) -> list[str]:
-        return list(
-            dict.fromkeys(
-                citation_id
-                for fact in plan.facts
-                for citation_id in fact.cited_chunk_ids
-            )
-        )
-
-    @staticmethod
-    def _format_plan(plan: GroundingPlan) -> str:
-        return json.dumps(plan.model_dump(mode="json"), ensure_ascii=False, indent=2)
-
-    @staticmethod
-    def _no_documents_result() -> GroundedAnswerResult:
-        return GroundedAnswerResult(
-            answer=NOT_GROUNDED_ANSWER,
-            grounded=False,
-            cited_chunk_ids=[],
-            verification_method="plan_rejected",
-            grounding_errors=["검색된 최종 청크가 없습니다."],
-            unsupported_claims=[],
-            audit_status="not_run",
-            audit_summary="근거 계획을 생성하지 않았습니다.",
-        )
-
-    @staticmethod
-    def _rejected_plan_result(
-        plan: GroundingPlan,
-        errors: list[str],
+    def _rejected_retrieval_result(
+        assessment: RetrievalAssessment,
+        safety_policy: GuardResult,
     ) -> GroundedAnswerResult:
+        answer = (
+            EMERGENCY_NO_EVIDENCE_ANSWER
+            if safety_policy.emergency
+            else NOT_GROUNDED_ANSWER
+        )
         return GroundedAnswerResult(
-            answer=NOT_GROUNDED_ANSWER,
+            answer=answer,
             grounded=False,
             cited_chunk_ids=[],
-            verification_method="plan_rejected",
-            grounding_errors=errors,
+            verification_method="retrieval_rejected",
+            grounding_errors=[assessment.reason],
             unsupported_claims=[],
-            grounding_plan=plan,
+            evidence_status=assessment.status,
+            retrieval_assessment=assessment,
             audit_status="not_run",
-            audit_summary="근거 계획이 선검증을 통과하지 못했습니다.",
+            audit_summary="검색 결과 기본 검사에서 답변 생성을 중단했습니다.",
+            unanswered_items=[],
+            safety_violations=[],
         )
 
 
 def build_grounded_rag_service() -> GroundedRagService:
-    """FastAPI lifespan에서 공유할 계획·생성·감사 체인을 만든다."""
-    planner_prompt = ChatPromptTemplate.from_template(GROUNDING_PLAN_PROMPT)
+    """FastAPI lifespan에서 공유할 생성·사후 감사 체인을 만든다."""
     generator_prompt = ChatPromptTemplate.from_template(FINAL_ANSWER_PROMPT)
     auditor_prompt = ChatPromptTemplate.from_template(POST_AUDIT_PROMPT)
-    planner_llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0)
     generator_llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0)
     auditor_llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0)
-    planner = planner_prompt | planner_llm.with_structured_output(GroundingPlan)
     generator = generator_prompt | generator_llm | StrOutputParser()
     auditor = auditor_prompt | auditor_llm.with_structured_output(GroundingAudit)
-    return GroundedRagService(planner, generator, auditor, generator)
+    return GroundedRagService(generator, auditor, generator)

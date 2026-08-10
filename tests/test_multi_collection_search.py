@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import threading
 import unittest
-from types import SimpleNamespace
 
 from fastapi import HTTPException
 from langchain_core.documents import Document
@@ -14,14 +13,12 @@ from langchain_core.documents import Document
 from app.core.config import PINECONE_DIMENSION, SEARCH_COLLECTIONS
 from app.core.state import state
 from app.routers.ask import (
-    _select_grounding_verification,
     ask_combined,
     search_combined,
 )
 from app.schemas.health_chatbot import CombinedAskRequest
 from app.services.search_result_merger import merge_search_results
-from app.services.grounded_rag import GroundedAnswerResult
-from app.services.intent_classifier import Intent
+from app.services.grounded_rag import GroundedAnswerResult, RetrievalAssessment
 from app.services.vector_search import (
     MultiCollectionSearchResult,
     PineconeSearchService,
@@ -267,30 +264,31 @@ class CombinedSearchEndpointTest(unittest.TestCase):
                 )
 
         class FakeGroundedRagService:
-            def answer(self, question, documents, *, verify_semantics):
+            def answer(self, question, documents, *, safety_policy):
                 self.question = question
                 self.documents = documents
-                self.verify_semantics = verify_semantics
+                self.safety_policy = safety_policy
                 return GroundedAnswerResult(
                     answer="검색 근거 기반 답변",
                     grounded=True,
                     cited_chunk_ids=["C1"],
-                    verification_method="prevalidated_post_audit",
+                    verification_method="retrieval_check_post_audit",
                     grounding_errors=[],
                     unsupported_claims=[],
-                )
-
-        class FakeClassifier:
-            def predict(self, query_vector):
-                return SimpleNamespace(
-                    intent=Intent.SIMPLE_LOOKUP,
-                    uncertain=False,
+                    evidence_status="sufficient",
+                    retrieval_assessment=RetrievalAssessment(
+                        status="evidence_available",
+                        eligible=True,
+                        reason="테스트 근거 있음",
+                        max_score=0.95,
+                        query_entities=[],
+                        matched_entities=[],
+                    ),
                 )
 
         grounded_rag_service = FakeGroundedRagService()
         state["vector_search"] = FakeVectorSearch()
         state["grounded_rag_service"] = grounded_rag_service
-        state["intent_classifier"] = FakeClassifier()
 
         response = ask_combined(CombinedAskRequest(question="공복혈당이 뭐야?"))
 
@@ -301,48 +299,12 @@ class CombinedSearchEndpointTest(unittest.TestCase):
         self.assertEqual(response.citations[0].citation_id, "C1")
         self.assertEqual(response.citations[0].text, full_text)
         self.assertEqual(grounded_rag_service.documents[0].page_content, full_text)
-        self.assertFalse(grounded_rag_service.verify_semantics)
+        self.assertEqual(grounded_rag_service.safety_policy.risk_level.value, "normal")
         self.assertEqual(
             response.verification_method,
-            "prevalidated_post_audit",
+            "retrieval_check_post_audit",
         )
-        self.assertEqual(response.verification_reason, "intent:simple_lookup")
-
-    def test_comprehensive_intent_enables_semantic_verification(self) -> None:
-        class FakeClassifier:
-            def predict(self, query_vector):
-                return SimpleNamespace(
-                    intent=Intent.COMPREHENSIVE,
-                    uncertain=False,
-                )
-
-        state["intent_classifier"] = FakeClassifier()
-
-        verify_semantics, reason = _select_grounding_verification(
-            "내 검진 결과와 복약 기록을 같이 분석해줘",
-            [0.0] * PINECONE_DIMENSION,
-        )
-
-        self.assertTrue(verify_semantics)
-        self.assertEqual(reason, "intent:comprehensive")
-
-    def test_uncertain_intent_enables_semantic_verification(self) -> None:
-        class FakeClassifier:
-            def predict(self, query_vector):
-                return SimpleNamespace(
-                    intent=Intent.SIMPLE_LOOKUP,
-                    uncertain=True,
-                )
-
-        state["intent_classifier"] = FakeClassifier()
-
-        verify_semantics, reason = _select_grounding_verification(
-            "애매한 질문",
-            [0.0] * PINECONE_DIMENSION,
-        )
-
-        self.assertTrue(verify_semantics)
-        self.assertEqual(reason, "intent_uncertain")
+        self.assertEqual(response.verification_reason, "risk:normal")
 
 
 if __name__ == "__main__":

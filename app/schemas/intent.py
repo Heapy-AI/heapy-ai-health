@@ -20,7 +20,7 @@ class IntentClassifyRequest(BaseModel):
 
 
 class IntentClassifyResponse(BaseModel):
-    """Safety Guard 또는 Linear/Softmax intent 분류 결과."""
+    """Linear/Softmax Intent와 독립적으로 계산한 안전 정책 결과."""
 
     intent: str
     confidence: float
@@ -31,3 +31,7 @@ class IntentClassifyResponse(BaseModel):
     guard_triggered: bool = False
     guard_reason: str | None = None
     matched_patterns: list[str] = Field(default_factory=list)
+    risk_level: str = "normal"
+    restricted_actions: list[str] = Field(default_factory=list)
+    response_policy: str = "standard_grounded"
+    emergency: bool = False
