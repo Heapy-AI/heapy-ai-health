@@ -69,7 +69,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+docs/
 
 # PyBuilder
 .pybuilder/
@@ -211,6 +211,9 @@ vdb/chunk_v1.0
 classifier/data/
 classifier/evaluation/
 classifier/artifacts/*
+
+# RAG 평가 원시 결과는 실행 환경별 산출물이므로 로컬에서만 보관
+evaluation/results/
 
 # 팀 실행에 필요한 v6 운영 체크포인트만 공유
 !classifier/artifacts/intent-v6/
