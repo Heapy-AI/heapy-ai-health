@@ -57,6 +57,8 @@ QUERY_REWRITE_PROMPT = """너는 건강정보 챗봇의 질문 정규화기다.
 
 규칙:
 1. 대명사("그거", "이건")와 생략된 주제를 직전 대화에서 찾아 명시적으로 복원한다.
+   "낮추려면 어떻게 해야 돼?", "부작용은?"처럼 목적어만 빠진 후속 질문도
+   직전 대화의 대상으로 복원한다.
 2. 직전 대화에 없는 의료 사실, 질환명, 수치, 약 이름을 새로 지어내지 않는다.
 3. 마지막 발화가 이미 단독으로 이해되면 그대로 두고 rewritten=false로 표시한다.
 4. 사용자의 의도와 어조를 바꾸지 않는다. 특히 개인 진단·복약 결정·내원 판단을
@@ -78,21 +80,52 @@ QUERY_REWRITE_PROMPT = """너는 건강정보 챗봇의 질문 정규화기다.
 """
 
 
-CONTEXT_DEPENDENT_PATTERN = re.compile(
-    r"(?:^|\s)(?:그|그거|그건|그게|그 약|이거|이건|이게|저거|아까|앞에서|"
-    r"방금|그러면|그럼)(?:\s|은|는|이|가|도|의|\?|$)"
+CONTEXT_REFERENCE_PATTERN = re.compile(
+    r"(?:^|\s)(?:그거|그걸|그것|그건|그게|그 약|그 수치|그 검사|그 결과|"
+    r"이거|이걸|이것|이건|이게|저거|저걸|저것|아까|앞에서|방금|"
+    r"그러면|그럼|그렇게|그대로)(?:\s|은|는|이|가|을|를|도|의|로|\?|$)"
 )
 
 
-def needs_context_rewrite(question: str) -> bool:
-    """문맥 의존 표현이 있는 후속 질문만 재작성 대상으로 판정한다.
+OMITTED_TARGET_FOLLOW_UP_PATTERN = re.compile(
+    r"^(?:더\s*)?(?:"
+    r"(?:낮추|높이|줄이|늘리|관리하|예방하|개선하|유지하|먹|복용하|끊|중단하)"
+    r"(?:려면|려면은|면|어도|아도|는\s*방법|는\s*법)|"
+    r"왜\s*(?:높|낮)(?:아|은|은\s*거|게|으면)|"
+    r"(?:(?:정상|적정|권장|위험|높은|낮은)\s*)?"
+    r"(?:수치|범위|기준|값|단위|부작용|효능|효과|원인|증상|예방법|주의사항)"
+    r"(?:은|는|이|가|을|를)?(?:\s|[?？]|$)|"
+    r"어떻게\s*(?:해야|관리|낮추|높이|줄이|늘리)"
+    r")"
+)
+
+
+EXPLICIT_TOPIC_PATTERN = re.compile(
+    r"(?:^|\s)[가-힣A-Za-z0-9][가-힣A-Za-z0-9·+\-/]{1,30}"
+    r"(?:을|를|은|는|이|가|의)(?=\s|[?？]|$)"
+)
+
+
+def needs_context_rewrite(question: str, history=(), summary: str = "") -> bool:
+    """이전 문맥이 필요할 가능성이 있는 질문을 재작성 대상으로 판정한다.
+
+    명확히 자족적인 질문만 건너뛰고, 어느 쪽인지 애매하면 재작성 LLM이
+    최종 판단하도록 전달한다. 의료용어 DB 연결 전에는 한국어 조사로 드러나는
+    명시적 주제를 사용하며, DB 연결 후에는 용어 탐지 결과를 추가할 수 있다.
 
     작성자: 김진우
     """
     normalized = re.sub(r"\s+", " ", str(question or "").strip())
-    if not normalized:
+    has_context = bool(history) or bool(str(summary or "").strip())
+    if not normalized or not has_context:
         return False
-    return bool(CONTEXT_DEPENDENT_PATTERN.search(normalized)) or len(normalized) <= 12
+    if CONTEXT_REFERENCE_PATTERN.search(normalized):
+        return True
+    if OMITTED_TARGET_FOLLOW_UP_PATTERN.search(normalized):
+        return True
+    if EXPLICIT_TOPIC_PATTERN.search(normalized):
+        return False
+    return True
 
 
 def normalize_history(turns) -> list[ConversationTurn]:
@@ -146,7 +179,7 @@ class QueryRewriter:
                 rewritten=False,
                 reason="직전 대화와 요약이 없어 재작성하지 않았습니다.",
             )
-        if not needs_context_rewrite(question):
+        if not needs_context_rewrite(question, turns, summary_text):
             return QueryRewriteResult(
                 question=question,
                 original_question=question,

@@ -55,7 +55,7 @@
 | S1 세션 조회 | `raw_query` | `session_id` |
 | S1CHK 세션 존재 여부 | `session_id` | `is_new_session` |
 | S2 컨텍스트 로드 | `session_id` | `history`, `summary` |
-| S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` |
+| S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` (문맥 지시어·대상 생략·애매한 후속 질문을 재작성 모델이 판정) |
 | S4 신규 세션 초기화 | `raw_query` | `standalone_question`(=원문), `history`(=[]) |
 | QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status` |
 

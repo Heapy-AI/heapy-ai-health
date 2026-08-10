@@ -122,6 +122,11 @@ Intent 분류부터 검색·생성·감사까지 실행한 전체 결과를 JSON
 `query_rewritten`, `resolved_terms`, `resolution_status`, `conversation_summary`도
 포함된다. `resolution_status=CONFIRM` 또는 `AMBIGUOUS`이면 임베딩과 검색을 보류한다.
 
+후속 질문 재작성은 첫 질문에서는 실행하지 않는다. 이전 대화가 있으면 문맥 지시어,
+`낮추려면`, `부작용은` 같은 대상 생략 표현을 우선 탐지하고, 명시적 주제가 확인되지
+않는 애매한 질문도 재작성 모델이 최종 판단하도록 전달한다. 질문 길이는 재작성 여부의
+판정 기준으로 사용하지 않는다.
+
 | Intent | 처리 경로 |
 |---|---|
 | `simple_lookup` | 일반 질병·검사·의약품 정보용 Pinecone RAG |

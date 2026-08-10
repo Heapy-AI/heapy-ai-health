@@ -81,7 +81,7 @@ VDB 검색으로 확보한 개별 지식 청크를 표현한다.
 | S1 세션 조회 | `raw_query` | `session_id` | HDB에서 세션 조회만 수행. 저장은 O3가 담당 |
 | S1CHK 세션 존재 여부 | `session_id` | `is_new_session` | 기존/신규 분기 |
 | S2 컨텍스트 로드 | `session_id` | `history`, `summary` | 기존 세션만. 요약은 직전 O3가 만들어 둔 것을 로드 |
-| S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` | 대명사·생략 복원 |
+| S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` | 대명사·목적어 생략 복원. 명확히 자족적인 질문만 호출 생략 |
 | S4 신규 세션 초기화 | `raw_query` | `standalone_question`, `history`(빈 목록) | 재구성 스킵, 원문 그대로 |
 | QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status` | 확인·모호 상태면 검색 보류 |
 
