@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 """Intent 분류 API 요청·응답 모델.
 
 작성자: 김진우
 """
+from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -29,5 +33,5 @@ class IntentClassifyResponse(BaseModel):
     model_version: str
     source: str = "linear_classifier"
     guard_triggered: bool = False
-    guard_reason: str | None = None
+    guard_reason: Optional[str] = None
     matched_patterns: list[str] = Field(default_factory=list)

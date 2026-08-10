@@ -23,7 +23,13 @@ def classify_intent(request: IntentClassifyRequest) -> IntentClassifyResponse:
             detail="학습된 intent 모델이 없어 분류기를 사용할 수 없습니다.",
         )
 
-    guard_result = check_safety_guard(request.question)
+    resolver = state.get("query_resolver")
+    resolution = (
+        resolver.resolve(request.question)
+        if callable(getattr(resolver, "resolve", None))
+        else None
+    )
+    guard_result = check_safety_guard(request.question, resolution=resolution)
     if guard_result.triggered:
         # Guard 결과는 규칙이 명시적으로 확정한 라우팅이므로 confidence=1.0을 사용한다.
         probabilities = {label: 0.0 for label in INTENT_LABELS}

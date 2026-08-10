@@ -19,6 +19,10 @@ from app.core.config import (
     PINECONE_METRIC,
     SEARCH_COLLECTIONS,
 )
+from app.services.query_resolver import (
+    MedicalQueryResolver,
+    QueryResolution,
+)
 
 
 def _read_value(value: Any, key: str, default: Any = None) -> Any:
@@ -43,7 +47,7 @@ class PineconeSearchService:
     backend_name = "pinecone"
     embed_model = EMBED_MODEL
 
-    def __init__(self) -> None:
+    def __init__(self, query_resolver: MedicalQueryResolver | None = None) -> None:
         if not PINECONE_API_KEY:
             raise RuntimeError(
                 "PINECONE_API_KEY가 없습니다. 프로젝트 루트의 .env 파일을 확인하세요."
@@ -81,16 +85,28 @@ class PineconeSearchService:
 
         self._index = client.Index(host=host)
         self._embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
+        self._query_resolver = query_resolver or MedicalQueryResolver()
 
-    def embed_query(self, question: str) -> list[float]:
-        """질문을 검색·분류에서 재사용할 768차원 벡터로 변환한다."""
-        query_vector = self._embeddings.embed_query(question)
+    def resolve_query(self, question: str) -> QueryResolution:
+        """질문을 RDB 표준용어 기준으로 정규화한다."""
+        resolver = getattr(self, "_query_resolver", None)
+        if resolver is None:
+            resolver = MedicalQueryResolver()
+        return resolver.resolve(question)
+
+    def embed_resolved_query(self, resolved_question: str) -> list[float]:
+        """이미 정규화한 질문을 임베딩한다(중복 RDB 조회 방지)."""
+        query_vector = self._embeddings.embed_query(resolved_question)
         if len(query_vector) != PINECONE_DIMENSION:
             raise ValueError(
                 f"질문 임베딩 차원이 올바르지 않습니다: "
                 f"{len(query_vector)} != {PINECONE_DIMENSION}"
             )
         return query_vector
+
+    def embed_query(self, question: str) -> list[float]:
+        """질문을 정규화한 뒤 검색·분류에서 재사용할 벡터로 변환한다."""
+        return self.embed_resolved_query(self.resolve_query(question).resolved_query)
 
     def search_by_vector(
         self,
@@ -128,8 +144,11 @@ class PineconeSearchService:
 
     def search(self, collection: str, question: str, top_k: int) -> list[Document]:
         """질문을 임베딩한 뒤 지정 namespace에서 유사 청크를 반환한다."""
-        query_vector = self.embed_query(question)
-        return self.search_by_vector(collection, query_vector, top_k)
+        resolution = self.resolve_query(question)
+        query_vector = self.embed_resolved_query(resolution.resolved_query)
+        documents = self.search_by_vector(collection, query_vector, top_k)
+        self._attach_query_resolution(documents, resolution)
+        return documents
 
     def search_many_by_vector(
         self,
@@ -188,12 +207,30 @@ class PineconeSearchService:
         top_k_per_collection: int,
     ) -> MultiCollectionSearchResult:
         """질문을 한 번 임베딩한 뒤 여러 namespace를 검색한다."""
-        query_vector = self.embed_query(question)
-        return self.search_many_by_vector(
+        resolution = self.resolve_query(question)
+        query_vector = self.embed_resolved_query(resolution.resolved_query)
+        result = self.search_many_by_vector(
             collections,
             query_vector,
             top_k_per_collection,
         )
+        self._attach_query_resolution(result.documents, resolution)
+        return result
+
+    @staticmethod
+    def _attach_query_resolution(
+        documents: list[Document],
+        resolution: QueryResolution,
+    ) -> None:
+        """검색 결과에 감사·UI 표시용 정규화 정보를 보존한다."""
+        if not resolution.terms and resolution.resolved_query == resolution.original_query:
+            return
+        for document in documents:
+            document.metadata["original_query"] = resolution.original_query
+            document.metadata["resolved_query"] = resolution.resolved_query
+            document.metadata["resolved_terms"] = [
+                term.as_dict() for term in resolution.terms
+            ]
 
     def counts(self) -> dict[str, int]:
         """namespace별 적재 벡터 수를 반환한다."""
@@ -209,6 +246,8 @@ class PineconeSearchService:
         return result
 
 
-def build_pinecone_search_service() -> PineconeSearchService:
+def build_pinecone_search_service(
+    query_resolver: MedicalQueryResolver | None = None,
+) -> PineconeSearchService:
     """FastAPI lifespan에서 공유할 Pinecone 검색 서비스를 생성한다."""
-    return PineconeSearchService()
+    return PineconeSearchService(query_resolver=query_resolver)

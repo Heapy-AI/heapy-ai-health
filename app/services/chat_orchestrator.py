@@ -22,6 +22,10 @@ from app.services.intent_classifier import (
 )
 from app.services.safety_guard import GuardResult, check_safety_guard
 from app.services.search_result_merger import merge_search_results
+from app.services.query_resolver import (
+    QueryResolution,
+    build_confirmed_query_resolution,
+)
 from app.services.vector_search import PineconeSearchService
 
 
@@ -29,6 +33,14 @@ GENERAL_IGNORE_ANSWER = "죄송합니다. 건강 관련 문의만 도와드릴 �
 SAFETY_IGNORE_ANSWER = (
     "안전상 질병의 확정 진단, 복약 결정 또는 내원 여부를 대신 판단할 수 없습니다. "
     "의료진이나 전문 의료기관에 상담해 주세요."
+)
+MEDICAL_ADVICE_ANSWER = (
+    "통증이나 증상의 원인은 다양해서 증상만으로 특정 약을 추천할 수 없습니다. "
+    "기저질환, 알레르기, 복용 중인 약·영양제에 따라 약이 오히려 부담이 될 수 있으니 "
+    "임의로 복용하거나 용량을 늘리지 말고 의료진 또는 약사와 확인해 주세요.\n\n"
+    "피부나 눈이 노래짐, 심하거나 점점 심해지는 통증, 고열, 반복되는 구토, "
+    "배가 갑자기 붓는 증상, 의식이 흐려짐, 피를 토하거나 검은변이 있으면 "
+    "즉시 응급진료를 받으세요."
 )
 
 
@@ -67,6 +79,12 @@ class ChatOrchestrationResult:
     searched_collections: list[str] = field(default_factory=list)
     failed_collections: list[str] = field(default_factory=list)
     personal_context_used: bool = False
+    resolved_query: str = ""
+    resolved_terms: list[dict] = field(default_factory=list)
+    query_confirmation: bool = False
+    confirmation_question: str = ""
+    confirmation_id: str = ""
+    resolution_status: str = "NO_MATCH"
 
 
 @dataclass(frozen=True)
@@ -107,35 +125,74 @@ class ChatOrchestrator:
         self._max_per_collection = max_per_collection
         self._min_score = min_score
 
-    def answer(self, question: str) -> ChatOrchestrationResult:
+    def answer(
+        self,
+        question: str,
+        *,
+        confirmed_term: dict | None = None,
+    ) -> ChatOrchestrationResult:
         """질문을 한 번 분류하고 선택된 Intent 경로의 최종 응답을 반환한다."""
-        guard_result = check_safety_guard(question)
+        query_resolution = self._resolve_query(
+            question,
+            confirmed_term=confirmed_term,
+        )
+        guard_result = check_safety_guard(question, resolution=query_resolution)
         if guard_result.triggered:
-            return self._build_guard_response(guard_result)
+            return self._build_guard_response(guard_result, query_resolution)
+
+        if query_resolution.needs_confirmation:
+            return self._build_query_confirmation_response(query_resolution)
+        if query_resolution.resolution_status == "AMBIGUOUS":
+            return self._build_query_ambiguous_response(query_resolution)
 
         if self._intent_classifier is None:
             raise IntentClassifierUnavailableError(
                 "학습된 intent 모델이 없어 챗봇 경로를 선택할 수 없습니다."
             )
 
-        query_embedding = self._vector_search.embed_query(question)
+        query_embedding = self._embed_resolved_query(query_resolution)
         prediction = self._intent_classifier.predict(query_embedding)
 
         if prediction.intent is Intent.IGNORE:
             return self._build_ignore_response(prediction)
         if prediction.intent is Intent.GENERAL_CHAT:
             return self._build_general_chat_response(question, prediction)
-        return self._build_rag_response(question, query_embedding, prediction)
+        return self._build_rag_response(
+            question,
+            query_embedding,
+            prediction,
+            query_resolution,
+        )
 
-    def stream_answer(self, question: str) -> Iterator[ChatStreamEvent]:
+    def stream_answer(
+        self,
+        question: str,
+        *,
+        confirmed_term: dict | None = None,
+    ) -> Iterator[ChatStreamEvent]:
         """Intent 경로에 따라 LLM 토큰과 검증 완료 결과를 순서대로 전달한다.
 
         작성자: 김진우
         """
-        guard_result = check_safety_guard(question)
+        query_resolution = self._resolve_query(
+            question,
+            confirmed_term=confirmed_term,
+        )
+        guard_result = check_safety_guard(question, resolution=query_resolution)
         if guard_result.triggered:
             yield from self._stream_fixed_result(
-                self._build_guard_response(guard_result)
+                self._build_guard_response(guard_result, query_resolution)
+            )
+            return
+
+        if query_resolution.needs_confirmation:
+            yield from self._stream_fixed_result(
+                self._build_query_confirmation_response(query_resolution)
+            )
+            return
+        if query_resolution.resolution_status == "AMBIGUOUS":
+            yield from self._stream_fixed_result(
+                self._build_query_ambiguous_response(query_resolution)
             )
             return
 
@@ -144,7 +201,7 @@ class ChatOrchestrator:
                 "학습된 intent 모델이 없어 챗봇 경로를 선택할 수 없습니다."
             )
 
-        query_embedding = self._vector_search.embed_query(question)
+        query_embedding = self._embed_resolved_query(query_resolution)
         prediction = self._intent_classifier.predict(query_embedding)
         if prediction.intent is Intent.IGNORE:
             yield from self._stream_fixed_result(
@@ -158,11 +215,36 @@ class ChatOrchestrator:
             question,
             query_embedding,
             prediction,
+            query_resolution,
         )
+
+    def _resolve_query(
+        self,
+        question: str,
+        *,
+        confirmed_term: dict | None = None,
+    ) -> QueryResolution:
+        if confirmed_term is not None:
+            return build_confirmed_query_resolution(question, confirmed_term)
+        resolver = getattr(self._vector_search, "resolve_query", None)
+        if callable(resolver):
+            return resolver(question)
+        return QueryResolution(question, question)
+
+    def _embed_resolved_query(self, resolution: QueryResolution) -> list[float]:
+        set_resolution = getattr(self._vector_search, "set_query_resolution", None)
+        if callable(set_resolution):
+            set_resolution(resolution)
+        embed_resolved = getattr(self._vector_search, "embed_resolved_query", None)
+        if callable(embed_resolved):
+            return embed_resolved(resolution.resolved_query)
+        # 기존 검색 서비스 대체 구현과 테스트 fake도 계속 지원한다.
+        return self._vector_search.embed_query(resolution.resolved_query)
 
     def _build_guard_response(
         self,
         guard_result: GuardResult,
+        query_resolution: QueryResolution | None = None,
     ) -> ChatOrchestrationResult:
         probabilities = {label: 0.0 for label in INTENT_LABELS}
         probabilities[Intent.IGNORE.value] = 1.0
@@ -180,10 +262,96 @@ class ChatOrchestrator:
             guard_triggered=True,
             guard_reason=guard_result.reason,
             matched_patterns=guard_result.matched_patterns,
-            answer=SAFETY_IGNORE_ANSWER,
+            answer=(
+                MEDICAL_ADVICE_ANSWER
+                if guard_result.reason == "symptom_medication_advice"
+                else SAFETY_IGNORE_ANSWER
+            ),
             grounded=None,
             verification_method="fixed_response",
             verification_reason=f"safety_guard:{guard_result.reason}",
+            resolved_query=(
+                query_resolution.resolved_query if query_resolution is not None else ""
+            ),
+            resolved_terms=(
+                [term.as_dict() for term in query_resolution.terms]
+                if query_resolution is not None
+                else []
+            ),
+            resolution_status=(
+                query_resolution.resolution_status
+                if query_resolution is not None
+                else "NO_MATCH"
+            ),
+        )
+
+    def _build_query_confirmation_response(
+        self,
+        query_resolution: QueryResolution,
+    ) -> ChatOrchestrationResult:
+        probabilities = {label: 0.0 for label in INTENT_LABELS}
+        probabilities[Intent.SIMPLE_LOOKUP.value] = 1.0
+        return ChatOrchestrationResult(
+            intent=Intent.SIMPLE_LOOKUP,
+            confidence=1.0,
+            probabilities=probabilities,
+            uncertain=False,
+            model_version=(
+                self._intent_classifier.model_version
+                if self._intent_classifier is not None
+                else "query-resolver"
+            ),
+            intent_source="query_resolver",
+            guard_triggered=False,
+            guard_reason=None,
+            matched_patterns=[],
+            answer=query_resolution.confirmation_question,
+            grounded=None,
+            verification_method="query_confirmation",
+            verification_reason="query_resolver:confirmation_required",
+            audit_status="not_applicable",
+            audit_summary="오인식 가능성이 있는 표준용어 후보를 확인한 뒤 검색을 보류했습니다.",
+            resolved_query=query_resolution.resolved_query,
+            resolved_terms=[term.as_dict() for term in query_resolution.terms],
+            query_confirmation=True,
+            confirmation_question=query_resolution.confirmation_question,
+            resolution_status=query_resolution.resolution_status,
+        )
+
+    def _build_query_ambiguous_response(
+        self,
+        query_resolution: QueryResolution,
+    ) -> ChatOrchestrationResult:
+        """여러 표준용어로 해석되는 입력을 강제 검색하지 않는다."""
+        probabilities = {label: 0.0 for label in INTENT_LABELS}
+        probabilities[Intent.SIMPLE_LOOKUP.value] = 1.0
+        answer = (
+            "입력하신 검색어가 여러 건강정보 항목으로 해석될 수 있어요. "
+            "질환명이나 검사명을 조금 더 정확하게 입력해 주세요."
+        )
+        return ChatOrchestrationResult(
+            intent=Intent.SIMPLE_LOOKUP,
+            confidence=1.0,
+            probabilities=probabilities,
+            uncertain=False,
+            model_version=(
+                self._intent_classifier.model_version
+                if self._intent_classifier is not None
+                else "query-resolver"
+            ),
+            intent_source="query_resolver",
+            guard_triggered=False,
+            guard_reason=None,
+            matched_patterns=[],
+            answer=answer,
+            grounded=None,
+            verification_method="query_ambiguity",
+            verification_reason="query_resolver:ambiguous_candidates",
+            audit_status="not_applicable",
+            audit_summary="모호한 표준용어 후보가 있어 검색을 보류했습니다.",
+            resolved_query=query_resolution.resolved_query,
+            resolved_terms=[term.as_dict() for term in query_resolution.terms],
+            resolution_status=query_resolution.resolution_status,
         )
 
     @staticmethod
@@ -257,9 +425,10 @@ class ChatOrchestrator:
         question: str,
         query_embedding: list[float],
         prediction: IntentPrediction,
+        query_resolution: QueryResolution,
     ) -> ChatOrchestrationResult:
         documents, searched_collections, failed_collections = (
-            self._search_rag_documents(query_embedding)
+            self._search_rag_documents(query_embedding, query_resolution)
         )
         verification_reason = (
             "intent_uncertain"
@@ -278,13 +447,16 @@ class ChatOrchestrator:
                 audit_summary="근거 계획을 생성하지 않았습니다.",
                 searched_collections=searched_collections,
                 failed_collections=failed_collections,
+                resolved_query=query_resolution.resolved_query,
+                resolved_terms=[term.as_dict() for term in query_resolution.terms],
+                resolution_status=query_resolution.resolution_status,
             )
 
         verify_semantics = (
             prediction.intent is Intent.COMPREHENSIVE or prediction.uncertain
         )
         grounded_result: GroundedAnswerResult = self._grounded_rag_service.answer(
-            question,
+            query_resolution.resolved_query,
             documents,
             verify_semantics=verify_semantics,
         )
@@ -308,6 +480,9 @@ class ChatOrchestrator:
             searched_collections=searched_collections,
             failed_collections=failed_collections,
             personal_context_used=False,
+            resolved_query=query_resolution.resolved_query,
+            resolved_terms=[term.as_dict() for term in query_resolution.terms],
+            resolution_status=query_resolution.resolution_status,
         )
 
     def _stream_rag_response(
@@ -315,13 +490,14 @@ class ChatOrchestrator:
         question: str,
         query_embedding: list[float],
         prediction: IntentPrediction,
+        query_resolution: QueryResolution,
     ) -> Iterator[ChatStreamEvent]:
         """근거 계획 승인 후 최종 답변을 스트리밍하고 감사 결과를 반환한다.
 
         작성자: 김진우
         """
         documents, searched_collections, failed_collections = (
-            self._search_rag_documents(query_embedding)
+            self._search_rag_documents(query_embedding, query_resolution)
         )
         if not documents:
             result = ChatOrchestrationResult(
@@ -335,6 +511,9 @@ class ChatOrchestrator:
                 audit_summary="근거 계획을 생성하지 않았습니다.",
                 searched_collections=searched_collections,
                 failed_collections=failed_collections,
+                resolved_query=query_resolution.resolved_query,
+                resolved_terms=[term.as_dict() for term in query_resolution.terms],
+                resolution_status=query_resolution.resolution_status,
             )
             yield from self._stream_fixed_result(result)
             return
@@ -348,7 +527,7 @@ class ChatOrchestrator:
             else f"intent:{prediction.intent.value}"
         )
         for event in self._grounded_rag_service.stream_answer(
-            question,
+            query_resolution.resolved_query,
             documents,
             verify_semantics=verify_semantics,
         ):
@@ -375,19 +554,24 @@ class ChatOrchestrator:
                 searched_collections=searched_collections,
                 failed_collections=failed_collections,
                 personal_context_used=False,
+                resolved_query=query_resolution.resolved_query,
+                resolved_terms=[term.as_dict() for term in query_resolution.terms],
+                resolution_status=query_resolution.resolution_status,
             )
             yield ChatStreamEvent(event="complete", result=result)
 
     def _search_rag_documents(
         self,
         query_embedding: list[float],
+        query_resolution: QueryResolution | None = None,
     ) -> tuple[list[Document], list[str], list[str]]:
         """설정된 namespace를 검색하고 최종 문맥 청크를 병합한다.
 
         작성자: 김진우
         """
+        collections = self._collections_for_resolution(query_resolution)
         search_result = self._vector_search.search_many_by_vector(
-            self._search_collections,
+            collections,
             query_embedding,
             self._top_k_per_collection,
         )
@@ -408,6 +592,21 @@ class ChatOrchestrator:
             search_result.searched_collections,
             sorted(search_result.errors),
         )
+
+    def _collections_for_resolution(
+        self,
+        query_resolution: QueryResolution | None,
+    ) -> tuple[str, ...]:
+        """RDB 용어 타입·복합어 힌트에 맞는 namespace를 우선 검색한다."""
+        if query_resolution is None or query_resolution.domain_hint != "MEDICATION":
+            return self._search_collections
+
+        medication_collections = tuple(
+            collection
+            for collection in self._search_collections
+            if "medication" in collection.casefold()
+        )
+        return medication_collections or self._search_collections
 
     @staticmethod
     def _stream_fixed_result(

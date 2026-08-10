@@ -12,18 +12,35 @@ from app.core.config import PINECONE_DIMENSION
 from app.services.chat_orchestrator import (
     ChatOrchestrator,
     GENERAL_IGNORE_ANSWER,
+    MEDICAL_ADVICE_ANSWER,
     SAFETY_IGNORE_ANSWER,
 )
 from app.services.grounded_rag import GroundedAnswerResult
 from app.services.intent_classifier import Intent, IntentPrediction
+from app.services.query_resolver import (
+    InMemoryMedicalTermRepository,
+    MedicalQueryResolver,
+)
 from app.services.vector_search import MultiCollectionSearchResult
 
 
 class FakeVectorSearch:
-    def __init__(self, documents: list[Document] | None = None) -> None:
+    def __init__(
+        self,
+        documents: list[Document] | None = None,
+        resolver: MedicalQueryResolver | None = None,
+    ) -> None:
         self.documents = documents or []
+        self.resolver = resolver
         self.embed_count = 0
         self.search_count = 0
+
+    def resolve_query(self, question: str):
+        if self.resolver is None:
+            from app.services.query_resolver import QueryResolution
+
+            return QueryResolution(question, question)
+        return self.resolver.resolve(question)
 
     def embed_query(self, question: str) -> list[float]:
         self.embed_count += 1
@@ -125,8 +142,9 @@ def _build_orchestrator(
     *,
     uncertain: bool = False,
     documents: list[Document] | None = None,
+    resolver: MedicalQueryResolver | None = None,
 ):
-    vector_search = FakeVectorSearch(documents)
+    vector_search = FakeVectorSearch(documents, resolver)
     grounded_rag = FakeGroundedRagService()
     general_chat = FakeGeneralChatChain()
     orchestrator = ChatOrchestrator(
@@ -246,6 +264,53 @@ class ChatOrchestratorTest(unittest.TestCase):
         self.assertTrue(result.guard_triggered)
         self.assertEqual(result.intent, Intent.IGNORE)
         self.assertEqual(result.answer, SAFETY_IGNORE_ANSWER)
+        self.assertEqual(vector_search.embed_count, 0)
+        self.assertEqual(vector_search.search_count, 0)
+        self.assertEqual(grounded_rag.call_count, 0)
+        self.assertEqual(general_chat.call_count, 0)
+
+    def test_symptom_medication_request_returns_safe_triage_answer(self) -> None:
+        orchestrator, vector_search, grounded_rag, general_chat = (
+            _build_orchestrator(Intent.SIMPLE_LOOKUP)
+        )
+
+        result = orchestrator.answer("내 간이 좀 아파서 뭐 먹을까?")
+        events = list(orchestrator.stream_answer("간이 아픈데 먹을만한 약 추천해줘"))
+
+        self.assertTrue(result.guard_triggered)
+        self.assertEqual(result.guard_reason, "symptom_medication_advice")
+        self.assertEqual(result.answer, MEDICAL_ADVICE_ANSWER)
+        self.assertEqual(events[0].text, MEDICAL_ADVICE_ANSWER)
+        self.assertEqual(events[-1].result.answer, MEDICAL_ADVICE_ANSWER)
+        self.assertEqual(vector_search.embed_count, 0)
+        self.assertEqual(vector_search.search_count, 0)
+        self.assertEqual(grounded_rag.call_count, 0)
+        self.assertEqual(general_chat.call_count, 0)
+
+    def test_initial_only_query_asks_for_confirmation_before_search(self) -> None:
+        resolver = MedicalQueryResolver(
+            InMemoryMedicalTermRepository(
+                [
+                    {
+                        "canonical_key": "AST",
+                        "canonical_name": "AST",
+                        "term_type": "SCREENING",
+                        "aliases": ["AST", "간수치"],
+                    }
+                ]
+            )
+        )
+        orchestrator, vector_search, grounded_rag, general_chat = _build_orchestrator(
+            Intent.SIMPLE_LOOKUP,
+            resolver=resolver,
+        )
+
+        result = orchestrator.answer("ㄱㅅㅊ 했어?")
+        events = list(orchestrator.stream_answer("ㄱㅅㅊ 했어?"))
+
+        self.assertTrue(result.query_confirmation)
+        self.assertIn("간수치(AST)", result.answer)
+        self.assertEqual(events[-1].result.confirmation_question, result.answer)
         self.assertEqual(vector_search.embed_count, 0)
         self.assertEqual(vector_search.search_count, 0)
         self.assertEqual(grounded_rag.call_count, 0)

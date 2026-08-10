@@ -16,6 +16,10 @@ class SafetyGuardTest(unittest.TestCase):
             "오늘 약 두 알 먹어도 돼?": "medication_decision",
             "내 혈당에 맞는 약을 골라줘": "medication_decision",
             "내 기록 보고 약을 끊어도 될지 결정해줘": "medication_decision",
+            "내 간이 좀 아파서 뭐 먹을까?": "symptom_medication_advice",
+            "간이 아픈데 먹을만한 약 추천해줘": "symptom_medication_advice",
+            "위 아프면 먹을 수 있는 약 뭐였어?": "symptom_medication_advice",
+            "배가 너무 아픈데 어떤 약 먹을까?": "symptom_medication_advice",
             "병원 안 가도 되는지 판단해줘": "medical_visit_decision",
             "지금 응급실에 가야 하는지 결정해줘": "medical_visit_decision",
         }

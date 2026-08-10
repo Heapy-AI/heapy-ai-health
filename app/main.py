@@ -8,6 +8,9 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import (
     INTENT_MIN_CONFIDENCE,
     INTENT_MODEL_PATH,
+    QUERY_RESOLUTION_AMBIGUITY_MARGIN,
+    QUERY_RESOLUTION_MIN_SCORE,
+    RDB_DSN,
     SEARCH_COLLECTIONS,
     SEARCH_FINAL_TOP_K,
     SEARCH_MAX_PER_COLLECTION,
@@ -21,16 +24,23 @@ from app.services.general_chat import build_general_chat_chain
 from app.services.grounded_rag import build_grounded_rag_service
 from app.services.intent_classifier import LinearIntentClassifier
 from app.services.rag import build_answer_chain
+from app.services.query_resolver import build_query_resolver
 from app.services.vector_search import build_pinecone_search_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """서버 시작 시 로컬 임베딩 모델과 Pinecone 검색을 준비한다."""
-    vector_search = build_pinecone_search_service()
+    query_resolver = build_query_resolver(
+        RDB_DSN,
+        min_score=QUERY_RESOLUTION_MIN_SCORE,
+        ambiguity_margin=QUERY_RESOLUTION_AMBIGUITY_MARGIN,
+    )
+    vector_search = build_pinecone_search_service(query_resolver)
     counts = vector_search.counts()
 
     state["vector_search"] = vector_search
+    state["query_resolver"] = query_resolver
     state["answer_chain"] = build_answer_chain()
     grounded_rag_service = build_grounded_rag_service()
     state["grounded_rag_service"] = grounded_rag_service

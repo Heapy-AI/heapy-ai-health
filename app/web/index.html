@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#7b68e8" />
     <meta name="description" content="HEAPY 건강정보 AI 챗봇 MVP" />
     <title>HEAPY | 건강정보 AI</title>
-    <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/styles.css?v=llm-mode-1" />
   </head>
   <body>
     <!-- 작성자: 김진우 -->
@@ -36,6 +36,10 @@
             <div>
               <dt>Embedding</dt>
               <dd id="embedModelLabel">—</dd>
+            </div>
+            <div>
+              <dt>Answer generation</dt>
+              <dd id="llmBackendLabel">—</dd>
             </div>
             <div>
               <dt>Indexed chunks</dt>
@@ -147,6 +151,6 @@
         <div id="auditCardList" class="audit-card-list" aria-live="polite"></div>
       </aside>
     </div>
-    <script src="/assets/app.js" defer></script>
+    <script src="/assets/app.js?v=query-confirmation-1" defer></script>
   </body>
 </html>

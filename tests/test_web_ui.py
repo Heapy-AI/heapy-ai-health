@@ -35,6 +35,12 @@ class WebUiTest(unittest.TestCase):
         self.assertIn("question: normalized", script)
         self.assertIn("data.answer", script)
         self.assertIn("data.intent", script)
+        self.assertIn("query-confirmation-actions", script)
+        self.assertIn('yesButton.textContent = "예"', script)
+        self.assertIn('noButton.textContent = "아니요"', script)
+        self.assertIn("buildConfirmedQuestion", script)
+        self.assertIn("confirmation_id", script)
+        self.assertIn("confirmation_answer", script)
 
     def test_korean_mvp_status_is_visible(self) -> None:
         markup = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
@@ -91,6 +97,8 @@ class WebUiTest(unittest.TestCase):
         self.assertIn("data.grounding_plan", script)
         self.assertIn("data.audit_status", script)
         self.assertIn("data.audit_summary", script)
+        self.assertIn("resolved_terms", script)
+        self.assertIn("검색어 정규화", script)
         self.assertIn('message.dataset.started !== "true"', script)
         self.assertIn("[hidden] { display: none !important; }", styles)
 

@@ -13,6 +13,7 @@ const elements = {
   environmentStatus: document.querySelector("#environmentStatus"),
   vectorBackendLabel: document.querySelector("#vectorBackendLabel"),
   embedModelLabel: document.querySelector("#embedModelLabel"),
+  llmBackendLabel: document.querySelector("#llmBackendLabel"),
   totalChunkCount: document.querySelector("#totalChunkCount"),
   classifierLabel: document.querySelector("#classifierLabel"),
   collectionTotalLabel: document.querySelector("#collectionTotalLabel"),
@@ -120,6 +121,8 @@ async function loadProjectEnvironment() {
     elements.vectorBackendLabel.textContent = String(data.vector_backend || "unknown").toUpperCase();
     elements.embedModelLabel.textContent = data.embed_model || "unknown";
     elements.embedModelLabel.title = data.embed_model || "unknown";
+    elements.llmBackendLabel.textContent = String(data.llm_backend || "unknown").toUpperCase();
+    elements.llmBackendLabel.title = data.llm_backend || "unknown";
     elements.totalChunkCount.textContent = totalChunks.toLocaleString("ko-KR");
     elements.classifierLabel.textContent = classifier.ready
       ? classifier.model_version || "준비 완료"
@@ -129,6 +132,7 @@ async function loadProjectEnvironment() {
     setEnvironmentBadge("error", "연결 실패");
     elements.vectorBackendLabel.textContent = "확인 불가";
     elements.embedModelLabel.textContent = "확인 불가";
+    elements.llmBackendLabel.textContent = "확인 불가";
     elements.totalChunkCount.textContent = "—";
     elements.classifierLabel.textContent = "확인 불가";
     renderCollections({});
@@ -156,6 +160,73 @@ function appendUserMessage(question) {
   bubble.textContent = question;
   message.appendChild(bubble);
   elements.messages.appendChild(message);
+}
+
+function appendLocalAssistantMessage(answer) {
+  const message = document.createElement("div");
+  message.className = "message assistant";
+  message.appendChild(createAssistantAvatar());
+  const content = document.createElement("div");
+  content.className = "message-content";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = answer;
+  content.appendChild(bubble);
+  message.appendChild(content);
+  elements.messages.appendChild(message);
+  scrollToLatest();
+}
+
+function getConfirmationTerm(data) {
+  const terms = Array.isArray(data.resolved_terms) ? data.resolved_terms : [];
+  return terms.find((term) => term.match_kind === "initials") || terms[0] || null;
+}
+
+function buildConfirmedQuestion(data) {
+  const term = getConfirmationTerm(data);
+  const originalQuestion = String(data.question || "").trim();
+  const source = String(term?.input || "").trim();
+  const canonical = String(term?.canonical_name || term?.matched_alias || "").trim();
+  if (!canonical) return originalQuestion;
+  if (!source || !originalQuestion.includes(source)) return canonical;
+  return originalQuestion.replace(source, canonical);
+}
+
+function handleQueryConfirmation(data, accepted, actions) {
+  actions.remove();
+  if (accepted) {
+    if (data.confirmation_id) {
+      submitQuestion(data.question, "예", {
+        confirmationId: data.confirmation_id,
+        confirmationAnswer: true,
+      });
+    } else {
+      // 구버전 API와의 하위 호환용 fallback. 최신 서버는 confirmation_id를
+      // 발급하므로 원문을 다시 resolver에 넣지 않는다.
+      submitQuestion(buildConfirmedQuestion(data), "예");
+    }
+    return;
+  }
+  appendUserMessage("아니요");
+  appendLocalAssistantMessage("알겠어요. 정확한 용어나 질문을 입력해 주세요.");
+  elements.input.focus();
+}
+
+function createQueryConfirmationActions(data) {
+  const actions = document.createElement("div");
+  actions.className = "query-confirmation-actions";
+  const yesButton = document.createElement("button");
+  yesButton.type = "button";
+  yesButton.className = "confirmation-button primary";
+  yesButton.textContent = "예";
+  yesButton.addEventListener("click", () => handleQueryConfirmation(data, true, actions));
+  const noButton = document.createElement("button");
+  noButton.type = "button";
+  noButton.className = "confirmation-button";
+  noButton.textContent = "아니요";
+  noButton.addEventListener("click", () => handleQueryConfirmation(data, false, actions));
+  actions.append(yesButton, noButton);
+  return actions;
 }
 
 function appendLoadingMessage() {
@@ -211,6 +282,25 @@ function appendAssistantMessage(data) {
     groundedChip.textContent = "근거 계획 승인";
     meta.appendChild(groundedChip);
   }
+  if (data.query_confirmation === true) {
+    const confirmationChip = document.createElement("span");
+    confirmationChip.className = "answer-chip";
+    confirmationChip.textContent = "검색어 확인 필요";
+    meta.appendChild(confirmationChip);
+  }
+  if (data.resolution_status === "AMBIGUOUS") {
+    const ambiguousChip = document.createElement("span");
+    ambiguousChip.className = "answer-chip warning";
+    ambiguousChip.textContent = "검색어 구체화 필요";
+    meta.appendChild(ambiguousChip);
+  }
+  const resolvedTerms = Array.isArray(data.resolved_terms) ? data.resolved_terms : [];
+  if (resolvedTerms.length) {
+    const resolvedChip = document.createElement("span");
+    resolvedChip.className = "answer-chip";
+    resolvedChip.textContent = `표준용어 보정 ${resolvedTerms.length}건`;
+    meta.appendChild(resolvedChip);
+  }
   if (data.audit_status === "failed" || data.audit_status === "error") {
     const auditChip = document.createElement("span");
     auditChip.className = "answer-chip warning";
@@ -219,6 +309,10 @@ function appendAssistantMessage(data) {
   }
   content.querySelector(".answer-meta")?.remove();
   content.appendChild(meta);
+  content.querySelector(".query-confirmation-actions")?.remove();
+  if (data.query_confirmation === true) {
+    content.appendChild(createQueryConfirmationActions(data));
+  }
   scrollToLatest();
 }
 
@@ -352,6 +446,7 @@ function auditStatusMeta(status) {
     error: { label: "감사 오류", className: "error" },
     not_run: { label: "감사 미실행", className: "not_run" },
     not_applicable: { label: "감사 비대상", className: "not_applicable" },
+    query_confirmation: { label: "검색어 확인 대기", className: "not_applicable" },
   };
   return statuses[status] || statuses.not_applicable;
 }
@@ -406,6 +501,30 @@ function appendUnsupportedClaims(body, data) {
   list.className = "unsupported-list";
   [...claims, ...(data.grounding_errors || [])].forEach((claim) => {
     list.appendChild(createTextElement("li", "", claim));
+  });
+  section.appendChild(list);
+}
+
+function appendResolvedTerms(body, data) {
+  const terms = Array.isArray(data.resolved_terms) ? data.resolved_terms : [];
+  if (!terms.length) return;
+  const section = appendAuditSection(body, "검색어 정규화");
+  const list = document.createElement("ul");
+  list.className = "plan-fact-list";
+  terms.forEach((term) => {
+    const item = createTextElement(
+      "li",
+      "plan-fact",
+      `${term.input || "입력 용어"} → ${term.canonical_name || "표준용어"}`,
+    );
+    item.appendChild(
+      createTextElement(
+        "em",
+        "",
+        `${term.term_type || "OTHER"} · ${term.match_kind || "fuzzy"} · score ${term.score ?? "—"}`,
+      ),
+    );
+    list.appendChild(item);
   });
   section.appendChild(list);
 }
@@ -515,6 +634,7 @@ function updateInsight(data) {
   addMonitorItem(monitorList, "실패 컬렉션", (data.failed_collections || []).join(", ") || "없음");
   monitorSection.appendChild(monitorList);
 
+  appendResolvedTerms(body, data);
   appendGroundingPlan(body, data);
   appendUnsupportedClaims(body, data);
   appendEvidenceChunks(body, data);
@@ -609,23 +729,28 @@ async function consumeChatStream(response) {
   }
 }
 
-async function submitQuestion(question) {
+async function submitQuestion(question, displayQuestion = "", options = {}) {
   const normalized = question.trim();
   if (!normalized || isRequesting) return;
 
   isRequesting = true;
   setConversationMode();
   setInsightPending();
-  appendUserMessage(normalized);
+  appendUserMessage(displayQuestion.trim() || normalized);
   appendLoadingMessage();
   elements.input.value = "";
   resizeInput();
 
   try {
+    const payload = { question: normalized };
+    if (options.confirmationId) {
+      payload.confirmation_id = options.confirmationId;
+      payload.confirmation_answer = options.confirmationAnswer === true;
+    }
     const response = await fetch("/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: normalized }),
+      body: JSON.stringify(payload),
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));

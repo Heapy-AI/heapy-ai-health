@@ -6,9 +6,13 @@ from dotenv import load_dotenv
 # data/ 폴더를 위로 거슬러 찾아 ROOT 를 잡는다(어디서 실행해도 경로가 맞게)
 def _find_root(start: Path) -> Path:
     for p in [start, *start.parents]:
-        if (p / "data").exists():
+        # 원천 data 디렉터리가 배포 아티팩트에서 제외되어도
+        # versioned vdb/chunk만 있으면 서버를 시작할 수 있다.
+        if (p / "data").exists() or (p / "vdb" / "chunk").is_dir():
             return p
-    raise RuntimeError(f"'data' 폴더를 찾을 수 없습니다. (탐색 시작 위치: {start})")
+    raise RuntimeError(
+        f"'data' 또는 'vdb/chunk' 폴더를 찾을 수 없습니다. (탐색 시작 위치: {start})"
+    )
 
 ROOT = _find_root(Path(__file__).resolve().parent)
 DATA = ROOT / "data"
@@ -35,6 +39,11 @@ PINECONE_INDEX_NAME = os.environ.get(
 PINECONE_DIMENSION = 768
 PINECONE_METRIC = "cosine"
 SEARCH_TOP_K = 3
+RDB_DSN = (
+    os.environ.get("RDB_DSN")
+    or os.environ.get("DATABASE_URL")
+    or ""
+).strip()
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -101,3 +110,13 @@ SEARCH_MAX_PER_COLLECTION = _positive_int_env(
     2,
 )
 SEARCH_MIN_SCORE = _non_negative_float_env("SEARCH_MIN_SCORE", 0.0)
+
+QUERY_RESOLUTION_MIN_SCORE = float(
+    os.environ.get("QUERY_RESOLUTION_MIN_SCORE", "0.66")
+)
+if not 0.0 <= QUERY_RESOLUTION_MIN_SCORE <= 1.0:
+    raise RuntimeError("QUERY_RESOLUTION_MIN_SCORE는 0 이상 1 이하이어야 합니다.")
+QUERY_RESOLUTION_AMBIGUITY_MARGIN = _non_negative_float_env(
+    "QUERY_RESOLUTION_AMBIGUITY_MARGIN",
+    0.05,
+)

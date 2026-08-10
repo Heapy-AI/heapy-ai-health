@@ -2,8 +2,11 @@
 
 작성자: 김진우
 """
+from __future__ import annotations
+
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -21,9 +24,47 @@ from app.services.chat_orchestrator import (
     SearchUnavailableError,
 )
 from app.services.rag import cite
+from app.services.query_confirmation import QueryConfirmationStore
 
 
 router = APIRouter(tags=["chat"])
+
+
+def _confirmation_store() -> QueryConfirmationStore:
+    store = state.get("query_confirmation_store")
+    if store is None:
+        store = QueryConfirmationStore()
+        state["query_confirmation_store"] = store
+    return store
+
+
+def _prepare_question(request: ChatRequest) -> tuple[str, dict | None]:
+    """확인 버튼 요청이면 저장된 canonical term을 꺼낸다."""
+    if not request.confirmation_id:
+        return request.question, None
+    if request.confirmation_answer is not True:
+        _confirmation_store().discard(request.confirmation_id)
+        raise HTTPException(status_code=400, detail="확인 응답을 선택해 주세요.")
+    record = _confirmation_store().consume(request.confirmation_id)
+    if record is None:
+        raise HTTPException(
+            status_code=409,
+            detail="검색어 확인 상태가 만료되었습니다. 질문을 다시 입력해 주세요.",
+        )
+    return record.original_question, record.term
+
+
+def _attach_confirmation_id(
+    question: str,
+    result: ChatOrchestrationResult,
+) -> ChatOrchestrationResult:
+    if not result.query_confirmation or not result.resolved_terms:
+        return result
+    confirmation_id = _confirmation_store().create(
+        question,
+        result.resolved_terms,
+    )
+    return replace(result, confirmation_id=confirmation_id)
 
 
 class _CitationLabelStreamFilter:
@@ -150,6 +191,12 @@ def _to_chat_response(
         searched_collections=result.searched_collections,
         failed_collections=result.failed_collections,
         personal_context_used=result.personal_context_used,
+        resolved_query=result.resolved_query,
+        resolved_terms=result.resolved_terms,
+        query_confirmation=result.query_confirmation,
+        confirmation_question=result.confirmation_question,
+        confirmation_id=result.confirmation_id,
+        resolution_status=result.resolution_status,
     )
 
 
@@ -173,13 +220,21 @@ def chat(request: ChatRequest) -> ChatResponse:
         )
 
     try:
-        result = orchestrator.answer(request.question)
+        question, confirmed_term = _prepare_question(request)
+        if confirmed_term is None:
+            result = orchestrator.answer(question)
+        else:
+            result = orchestrator.answer(
+                question,
+                confirmed_term=confirmed_term,
+            )
+        result = _attach_confirmation_id(question, result)
     except IntentClassifierUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SearchUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    return _to_chat_response(request.question, result)
+    return _to_chat_response(question, result)
 
 
 @router.post("/chat/stream")
@@ -195,10 +250,20 @@ def stream_chat(request: ChatRequest) -> StreamingResponse:
             detail="챗봇 오케스트레이터가 준비되지 않았습니다.",
         )
 
+    question, confirmed_term = _prepare_question(request)
+
     def generate_events() -> Iterator[str]:
         label_filter = _CitationLabelStreamFilter()
         try:
-            for stream_event in orchestrator.stream_answer(request.question):
+            events = (
+                orchestrator.stream_answer(question)
+                if confirmed_term is None
+                else orchestrator.stream_answer(
+                    question,
+                    confirmed_term=confirmed_term,
+                )
+            )
+            for stream_event in events:
                 if stream_event.event == "token":
                     display_text = label_filter.feed(stream_event.text)
                     if display_text:
@@ -210,8 +275,8 @@ def stream_chat(request: ChatRequest) -> StreamingResponse:
                 if trailing_text:
                     yield _sse_event("token", {"text": trailing_text})
                 response = _to_chat_response(
-                    request.question,
-                    stream_event.result,
+                    question,
+                    _attach_confirmation_id(question, stream_event.result),
                 )
                 yield _sse_event(
                     "complete",

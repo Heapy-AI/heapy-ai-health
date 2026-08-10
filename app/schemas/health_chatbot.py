@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 # app/schemas/health_chatbot.py
 """건강관리 챗봇 요청/응답 Pydantic 모델 (FastAPI가 자동 검증·응답 형식 고정)"""
+from typing import Any, Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import COLLECTIONS
@@ -28,6 +32,8 @@ class SearchHit(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     hits: list[SearchHit]
+    resolved_query: str = ""
+    resolved_terms: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ── /ask 응답 ──
@@ -35,6 +41,8 @@ class AskResponse(BaseModel):
     answer: str                              # 지식베이스 근거 답변(없으면 "지식베이스에 근거 없음")
     sources: list[str]                       # 출처 목록(["AIHub 전문 의학지식 데이터 · https://...", ...])
     grounded: bool                           # 근거로 답했는지(False면 회피)
+    resolved_query: str = ""
+    resolved_terms: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CombinedAskRequest(BaseModel):
@@ -59,6 +67,8 @@ class CombinedSearchResponse(BaseModel):
     hits: list[CombinedSearchHit]
     searched_collections: list[str]
     failed_collections: list[str]
+    resolved_query: str = ""
+    resolved_terms: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CombinedAnswerChunk(BaseModel):
@@ -86,7 +96,7 @@ class CombinedAskResponse(AskResponse):
     verification_reason: str
     grounding_errors: list[str]
     unsupported_claims: list[str]
-    grounding_plan: dict | None
+    grounding_plan: Optional[dict]
     audit_status: str
     audit_summary: str
     searched_collections: list[str]
@@ -97,6 +107,14 @@ class ChatRequest(BaseModel):
     """최상위 Intent부터 자동 분기하는 통합 챗봇 요청."""
 
     question: str = Field(..., min_length=1, description="사용자 질문")
+    confirmation_id: str = Field(
+        default="",
+        description="예/아니요 확인 상태를 이어갈 때 사용하는 서버 발급 ID",
+    )
+    confirmation_answer: Optional[bool] = Field(
+        default=None,
+        description="확인 질문에 대한 승인 여부",
+    )
 
     @field_validator("question")
     @classmethod
@@ -133,20 +151,26 @@ class ChatResponse(BaseModel):
     model_version: str
     intent_source: str
     guard_triggered: bool
-    guard_reason: str | None
+    guard_reason: Optional[str]
     matched_patterns: list[str]
     answer: str
     sources: list[str]
-    grounded: bool | None
+    grounded: Optional[bool]
     chunks: list[CombinedAnswerChunk]
     citations: list[CombinedCitation]
     verification_method: str
     verification_reason: str
     grounding_errors: list[str]
     unsupported_claims: list[str]
-    grounding_plan: GroundingPlanResponse | None
+    grounding_plan: Optional[GroundingPlanResponse]
     audit_status: str
     audit_summary: str
     searched_collections: list[str]
     failed_collections: list[str]
     personal_context_used: bool
+    resolved_query: str = ""
+    resolved_terms: list[dict[str, Any]] = Field(default_factory=list)
+    query_confirmation: bool = False
+    confirmation_question: str = ""
+    confirmation_id: str = ""
+    resolution_status: str = "NO_MATCH"
