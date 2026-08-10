@@ -2,6 +2,38 @@
 
 한국어 건강정보 청크를 로컬에서 임베딩하고 Pinecone에서 검색하는 FastAPI RAG 서버입니다.
 
+## 이번 브랜치 주요 변경사항
+
+기준 브랜치 `resolver`에 의료 검색어 정규화와 확인 응답 흐름을 추가했습니다. 특정 의료용어를 코드에 직접 매핑하지 않고, 원천 데이터에서 생성한 표준용어·alias를 기준으로 초성, 오타, 조사와 문맥을 처리합니다.
+
+- `ㄱㅅㅊ`, `갼슈치`처럼 초성·오타가 포함된 검색어를 표준 의료용어 후보로 변환합니다.
+- `나왔어`, `낮게`, `알려줘`처럼 의료용어가 아닌 동사·형용사는 후보에서 제외해 문맥 오인식을 줄입니다.
+- 후보가 불확실할 때 `혹시 '간수치'를 물어보신 걸까요?`와 같이 한 가지 후보만 확인합니다.
+- 확인 질문은 `예/아니요` 버튼으로 처리하며, `예`를 누르면 `confirmation_id`로 확정된 용어를 바로 사용합니다.
+- 확정 전 원문을 다시 fuzzy 검색하지 않아 `예` 이후 다른 의료용어로 바뀌는 문제를 막습니다.
+- 표준용어 해석 결과를 RDB 검색, Pinecone 검색, LLM 응답 단계가 공유하도록 연결했습니다.
+- 검색 결과와 문서 토큰을 캐시·인덱싱해 반복 검색 및 중복 해석 비용을 줄였습니다.
+- 로컬 서버에서 RDB/Pinecone 없이도 동일한 검색·확인·답변 흐름을 검증할 수 있습니다.
+
+## 주요 변경 파일
+
+| 영역 | 파일 | 역할 |
+|---|---|---|
+| 검색 정규화 | [`app/services/query_resolver.py`](app/services/query_resolver.py) | DB 표준용어 기준의 초성·오타·alias 후보 생성, 조사 제거, 문맥 후보 필터링 |
+| 확인 상태 | [`app/services/query_confirmation.py`](app/services/query_confirmation.py) | `예/아니요` 확인을 위한 서버 측 `confirmation_id` 저장·소비·만료 처리 |
+| 응답 orchestration | [`app/services/chat_orchestrator.py`](app/services/chat_orchestrator.py) | 확정 용어를 재검색하지 않고 RAG/LLM 응답 단계로 전달 |
+| API | [`app/routers/chat.py`](app/routers/chat.py), [`app/schemas/health_chatbot.py`](app/schemas/health_chatbot.py) | 확인 ID와 `confirmation_answer`를 주고받는 `/chat`, `/chat/stream` 처리 |
+| 로컬 검색 | [`app/services/local_dev.py`](app/services/local_dev.py), [`app/local_dev_server.py`](app/local_dev_server.py) | 로컬 문서 인덱스·검색 캐시와 테스트 서버 구성 |
+| 용어 catalog | [`app/services/medical_term_catalog.py`](app/services/medical_term_catalog.py) | 원천 JSONL에서 표준용어·alias catalog를 생성하는 공통 경로 |
+| Pinecone 연결 | [`app/services/vector_search.py`](app/services/vector_search.py) | 정규화 결과를 벡터 검색과 공유하고 중복 resolver 호출 방지 |
+| 웹 UI | [`app/web/assets/app.js`](app/web/assets/app.js), [`app/web/index.html`](app/web/index.html), [`app/web/assets/styles.css`](app/web/assets/styles.css) | 확인 ID 기반 `예/아니요` 버튼, 로딩·확인 상태 표시, 캐시 갱신 |
+| 안전·질의 API | [`app/routers/ask.py`](app/routers/ask.py), [`app/routers/intent.py`](app/routers/intent.py), [`app/services/safety_guard.py`](app/services/safety_guard.py) | 기존 질의·안전 필터와 새 검색 정규화 결과 연결 |
+| 설정·앱 진입점 | [`app/core/config.py`](app/core/config.py), [`app/main.py`](app/main.py), [`app/schemas/intent.py`](app/schemas/intent.py) | RDB/Pinecone/LLM 설정 및 응답 스키마 확장 |
+| 테스트 | [`tests/test_query_resolver.py`](tests/test_query_resolver.py), [`tests/test_query_confirmation.py`](tests/test_query_confirmation.py), [`tests/test_local_dev.py`](tests/test_local_dev.py), [`tests/test_web_ui.py`](tests/test_web_ui.py) | 초성·오타·문맥 분리, 확인 ID, 로컬 검색, UI 요청 회귀 검증 |
+| 문서 | [`QUERY_NORMALIZATION_README.md`](QUERY_NORMALIZATION_README.md) | 정규화 규칙, API 예시, 운영·RDB/Pinecone 연동 방법 |
+
+관련 테스트 42건을 통과했으며, 이 브랜치는 `main`에 직접 반영하지 않고 팀 검토용으로 공유하기 위한 작업 브랜치입니다.
+
 ## 아키텍처
 
 ```text
