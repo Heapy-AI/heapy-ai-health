@@ -97,6 +97,16 @@ class WebUiTest(unittest.TestCase):
         self.assertIn("data.audit_status", script)
         self.assertIn("data.audit_summary", script)
         self.assertIn('message.dataset.started !== "true"', script)
+        self.assertIn('"chunk-scroll-content"', script)
+        self.assertNotIn('detail.className = "chunk-detail"', script)
+        self.assertNotIn('"전체 청크 보기"', script)
+        self.assertIn("chunks.forEach", script)
+        self.assertNotIn("chunks.slice(0, 6)", script)
+        self.assertIn("max-height: calc(9.5px * 1.55 * 5)", styles)
+        self.assertIn("overflow-y: auto", styles)
+        self.assertIn("overscroll-behavior: contain", styles)
+        self.assertNotIn("background: #faf9fe", styles)
+        self.assertNotIn(".chunk-expand-button", styles)
         self.assertIn("[hidden] { display: none !important; }", styles)
 
     def test_recommended_questions_use_a_curated_random_pool(self) -> None:

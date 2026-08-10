@@ -532,7 +532,7 @@ function appendEvidenceChunks(body, data) {
   if (!chunks.length) {
     list.appendChild(createTextElement("div", "no-source", "이 응답은 표시할 검색 근거가 없습니다."));
   } else {
-    chunks.slice(0, 6).forEach((chunk, index) => {
+    chunks.forEach((chunk, index) => {
       const item = document.createElement("div");
       item.className = "chunk-item";
       const header = document.createElement("div");
@@ -546,13 +546,14 @@ function appendEvidenceChunks(body, data) {
         "chunk-meta",
         `${chunk.collection || "unknown"} · ${chunk.record_id || "ID 없음"}`,
       );
-      const preview = createTextElement("p", "", String(chunk.text || "본문 없음").slice(0, 150));
+      const chunkText = String(chunk.text || "본문 없음");
+      const chunkContent = createTextElement("div", "chunk-scroll-content", chunkText);
       const source = createTextElement(
         "span",
         "chunk-source",
         String(chunk.source || "출처 미상").split(" · ")[0],
       );
-      item.append(header, meta, preview, source);
+      item.append(header, meta, chunkContent, source);
       list.appendChild(item);
     });
   }

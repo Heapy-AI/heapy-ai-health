@@ -262,7 +262,10 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 .chunk-header strong { color: var(--purple-dark); font-size: 10px; }
 .chunk-header em { padding: 3px 6px; border-radius: 999px; color: #63817a; background: #edf5f2; font-size: 8px; font-style: normal; }
 .chunk-meta { display: block; overflow: hidden; margin-top: 7px; color: #85938f; font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
-.chunk-item p { display: -webkit-box; overflow: hidden; margin: 7px 0; color: #566662; font-size: 9.5px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.chunk-scroll-content { max-height: calc(9.5px * 1.55 * 5); overflow-x: hidden; overflow-y: auto; margin: 7px 0; color: #566662; font-size: 9.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; scrollbar-color: #d7d0ef transparent; scrollbar-width: thin; overscroll-behavior: contain; }
+.chunk-scroll-content::-webkit-scrollbar { width: 4px; }
+.chunk-scroll-content::-webkit-scrollbar-track { background: transparent; }
+.chunk-scroll-content::-webkit-scrollbar-thumb { border-radius: 999px; background: #d7d0ef; }
 .chunk-source { display: block; overflow: hidden; padding-top: 7px; border-top: 1px solid #f0f3f2; color: #91a09c; font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
 .no-source { padding: 12px; border: 1px dashed #d7e1de; border-radius: 11px; color: #899692; font-size: 10px; text-align: center; }
 .detail-toggle { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 22px; padding: 9px; border: 0; color: #788683; background: transparent; font-size: 9.5px; cursor: pointer; }
