@@ -9,8 +9,9 @@ import json, os, glob, csv, io, sys
 from collections import Counter, defaultdict
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "output"))
-REP = os.path.join(OUT, "_reports")
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+OUT = os.path.join(ROOT, "preprocessed", "disease_info", "kdca_reclassify")
+REP = os.path.join(ROOT, "output", "_reports")
 os.makedirs(REP, exist_ok=True)
 
 # 새 category -> 기대 superclass (불일치 판정용)

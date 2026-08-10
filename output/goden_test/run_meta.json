@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-08-06T01:31:34.893708+00:00",
+  "dataset": "data\\test_golden_dataset\\RAG_골든데이터셋_최종_질병_복약_건강검진_2290.jsonl",
+  "dataset_total": 2290,
+  "evaluated": 300,
+  "sample_size_requested": 300,
+  "split_filter": null,
+  "seed": 20260806,
+  "workers": 6,
+  "max_retries": 2,
+  "setup_seconds": 12.95,
+  "wall_seconds": 456.43,
+  "questions_per_second": 0.6573,
+  "errors": 0,
+  "system": {
+    "llm_model": "gemini-2.5-flash",
+    "embed_model": "jhgan/ko-sroberta-multitask",
+    "search_collections": [
+      "disease_info",
+      "health_checkup_info",
+      "medication_info"
+    ],
+    "top_k_per_collection": 3,
+    "final_top_k": 6,
+    "max_per_collection": 2,
+    "min_score": 0.0,
+    "intent_min_confidence": 0.55,
+    "intent_model_version": "intent-v6-8aeae9eced50"
+  }
+}

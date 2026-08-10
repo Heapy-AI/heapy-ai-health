@@ -13,6 +13,7 @@ from matcher import KCDMatcher
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KDCA = os.path.abspath(os.path.join(HERE, "..", "..", "disease_info", "kdca"))
+RECLASS_DIR = os.path.abspath(os.path.join(HERE, "..", "..", "disease_info", "kdca_reclassify"))
 
 def before_paren(s):
     i = s.find("("); j = s.find("（")
@@ -238,7 +239,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--files", nargs="*", help="처리할 파일 basename 목록(미지정시 전체)")
     ap.add_argument("--list-file", help="처리할 basename 목록이 담긴 JSON 파일")
-    ap.add_argument("--out", default=os.path.join(HERE, "..", "..", "..", "output"))
+    ap.add_argument("--out", default=RECLASS_DIR)
     ap.add_argument("--verdicts", default=os.path.join(HERE, "llm_verdicts.json"))
     ap.add_argument("--overrides", default=os.path.join(HERE, "kcd_overrides.json"),
                     help="문서별 KCD 대체 질의어 테이블(오매칭/미매칭 예외 처리)")

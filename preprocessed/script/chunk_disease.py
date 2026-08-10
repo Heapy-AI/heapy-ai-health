@@ -65,8 +65,10 @@ def chunk_aihub() -> tuple[int, Counter]:
 # ---------------- KDCA: 크기 적응형 ----------------
 def _iter_kdca_docs() -> list[dict]:
     """KCD 재분류 결과(output/*.json)가 있으면 그 기준으로 disease/symptom 문서만 사용한다."""
-    reclass_dir = ROOT / "output"
-    if reclass_dir.exists():
+    reclass_dirs = [ROOT / "preprocessed" / "disease_info" / "kdca_reclassify", ROOT / "output"]
+    for reclass_dir in reclass_dirs:
+        if not reclass_dir.exists():
+            continue
         docs = []
         for jf in sorted(reclass_dir.glob("*.json")):
             try:

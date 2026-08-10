@@ -25,7 +25,8 @@ from chunk_disease import chunk_sections  # 기존 청킹 재사용(ko-sroberta 
 from utils import extract_related_diseases
 
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-OUTPUT = os.path.join(ROOT, "output")
+RECLASS_DIR = os.path.abspath(os.path.join(ROOT, "preprocessed", "disease_info", "kdca_reclassify"))
+LEGACY_OUTPUT_DIR = os.path.join(ROOT, "output")
 DEFAULT_OUT = os.path.join(ROOT, "vdb", "chunk", "disease_info", "kdca_disease_enriched.jsonl")
 TODAY = datetime.date.today().isoformat()
 
@@ -70,7 +71,11 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    files = sorted(glob.glob(os.path.join(OUTPUT, "*.json")))
+    files = []
+    for base in [RECLASS_DIR, LEGACY_OUTPUT_DIR]:
+        if os.path.isdir(base):
+            files.extend(glob.glob(os.path.join(base, "*.json")))
+    files = sorted(set(files))
     lines = []
     n_doc = n_chunk = n_img_doc = n_cat = n_kcd = 0
     for f in files:
@@ -87,7 +92,12 @@ def main():
         if cats: n_cat += 1
         if kcd_code: n_kcd += 1
 
-        for i, (label, body, tbl) in enumerate(chunk_sections(d["sections"])):
+        for i, chunk in enumerate(chunk_sections(d["sections"])):
+            if len(chunk) == 3:
+                label, body, tbl = chunk
+            else:
+                label, body = chunk
+                tbl = None
             meta = {
                 "primary_key": disease,
                 "doc_type": "disease",
