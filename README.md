@@ -1,270 +1,74 @@
-# HEAPY 건강정보 RAG
+# HEAPY 의료 검색 정규화 개선
 
-한국어 건강정보 청크를 로컬에서 임베딩하고 Pinecone에서 검색하는 FastAPI RAG 서버입니다.
+`resolver` 브랜치를 기준으로 의료 검색어의 초성·오타·문맥을 처리하고, 불확실한 검색어를 사용자 확인 후 표준용어로 연결하는 작업 브랜치입니다.
 
-## 이번 브랜치 주요 변경사항
+## 주요 변경사항
 
-기준 브랜치 `resolver`에 의료 검색어 정규화와 확인 응답 흐름을 추가했습니다. 특정 의료용어를 코드에 직접 매핑하지 않고, 원천 데이터에서 생성한 표준용어·alias를 기준으로 초성, 오타, 조사와 문맥을 처리합니다.
-
-- `ㄱㅅㅊ`, `갼슈치`처럼 초성·오타가 포함된 검색어를 표준 의료용어 후보로 변환합니다.
-- `나왔어`, `낮게`, `알려줘`처럼 의료용어가 아닌 동사·형용사는 후보에서 제외해 문맥 오인식을 줄입니다.
-- 후보가 불확실할 때 `혹시 '간수치'를 물어보신 걸까요?`와 같이 한 가지 후보만 확인합니다.
-- 확인 질문은 `예/아니요` 버튼으로 처리하며, `예`를 누르면 `confirmation_id`로 확정된 용어를 바로 사용합니다.
-- 확정 전 원문을 다시 fuzzy 검색하지 않아 `예` 이후 다른 의료용어로 바뀌는 문제를 막습니다.
+- 특정 의료용어를 코드에 직접 매핑하지 않고, 원천 DB에서 생성한 표준용어·alias catalog를 기준으로 검색합니다.
+- `ㄱㅅㅊ`, `ㅈㅎㅇ`, `갼슈치`처럼 초성 또는 오타가 포함된 검색어를 표준용어 후보로 변환합니다.
+- 조사와 문장 성분을 분리하되 `나왔어`, `낮게`, `알려줘` 같은 동사·형용사는 의료용어 후보에서 제외합니다.
+- 후보가 불확실하면 `혹시 '간수치'를 물어보신 걸까요?`와 같이 가장 유력한 후보 한 가지만 확인합니다.
+- 확인 UI는 `예/아니요` 버튼으로 동작합니다.
+- `예`를 선택하면 `confirmation_id`로 확정된 용어를 바로 사용하고, 원문을 다시 fuzzy 검색하지 않습니다.
 - 표준용어 해석 결과를 RDB 검색, Pinecone 검색, LLM 응답 단계가 공유하도록 연결했습니다.
-- 검색 결과와 문서 토큰을 캐시·인덱싱해 반복 검색 및 중복 해석 비용을 줄였습니다.
-- 로컬 서버에서 RDB/Pinecone 없이도 동일한 검색·확인·답변 흐름을 검증할 수 있습니다.
+- 문서 토큰과 검색 결과를 캐시·인덱싱해 반복 검색과 중복 resolver 호출을 줄였습니다.
+- RDB·Pinecone 없이도 로컬 서버에서 동일한 검색·확인·답변 흐름을 테스트할 수 있습니다.
+
+## 검색 처리 흐름
+
+```text
+사용자 질문
+  → 문장 정규화·조사 분리
+  → 표준용어·alias 기준 초성/오타 후보 검색
+  → 동사·형용사 문맥 후보 제거
+  → 확정 후보면 바로 검색
+  → 불확실하면 예/아니요 확인
+  → RDB/Pinecone 검색 및 LLM 응답
+```
 
 ## 주요 변경 파일
 
-| 영역 | 파일 | 역할 |
+| 영역 | 파일 | 설명 |
 |---|---|---|
-| 검색 정규화 | [`app/services/query_resolver.py`](app/services/query_resolver.py) | DB 표준용어 기준의 초성·오타·alias 후보 생성, 조사 제거, 문맥 후보 필터링 |
-| 확인 상태 | [`app/services/query_confirmation.py`](app/services/query_confirmation.py) | `예/아니요` 확인을 위한 서버 측 `confirmation_id` 저장·소비·만료 처리 |
-| 응답 orchestration | [`app/services/chat_orchestrator.py`](app/services/chat_orchestrator.py) | 확정 용어를 재검색하지 않고 RAG/LLM 응답 단계로 전달 |
-| API | [`app/routers/chat.py`](app/routers/chat.py), [`app/schemas/health_chatbot.py`](app/schemas/health_chatbot.py) | 확인 ID와 `confirmation_answer`를 주고받는 `/chat`, `/chat/stream` 처리 |
-| 로컬 검색 | [`app/services/local_dev.py`](app/services/local_dev.py), [`app/local_dev_server.py`](app/local_dev_server.py) | 로컬 문서 인덱스·검색 캐시와 테스트 서버 구성 |
-| 용어 catalog | [`app/services/medical_term_catalog.py`](app/services/medical_term_catalog.py) | 원천 JSONL에서 표준용어·alias catalog를 생성하는 공통 경로 |
-| Pinecone 연결 | [`app/services/vector_search.py`](app/services/vector_search.py) | 정규화 결과를 벡터 검색과 공유하고 중복 resolver 호출 방지 |
-| 웹 UI | [`app/web/assets/app.js`](app/web/assets/app.js), [`app/web/index.html`](app/web/index.html), [`app/web/assets/styles.css`](app/web/assets/styles.css) | 확인 ID 기반 `예/아니요` 버튼, 로딩·확인 상태 표시, 캐시 갱신 |
-| 안전·질의 API | [`app/routers/ask.py`](app/routers/ask.py), [`app/routers/intent.py`](app/routers/intent.py), [`app/services/safety_guard.py`](app/services/safety_guard.py) | 기존 질의·안전 필터와 새 검색 정규화 결과 연결 |
-| 설정·앱 진입점 | [`app/core/config.py`](app/core/config.py), [`app/main.py`](app/main.py), [`app/schemas/intent.py`](app/schemas/intent.py) | RDB/Pinecone/LLM 설정 및 응답 스키마 확장 |
-| 테스트 | [`tests/test_query_resolver.py`](tests/test_query_resolver.py), [`tests/test_query_confirmation.py`](tests/test_query_confirmation.py), [`tests/test_local_dev.py`](tests/test_local_dev.py), [`tests/test_web_ui.py`](tests/test_web_ui.py) | 초성·오타·문맥 분리, 확인 ID, 로컬 검색, UI 요청 회귀 검증 |
-| 문서 | [`QUERY_NORMALIZATION_README.md`](QUERY_NORMALIZATION_README.md) | 정규화 규칙, API 예시, 운영·RDB/Pinecone 연동 방법 |
+| 검색 정규화 | [`app/services/query_resolver.py`](app/services/query_resolver.py) | 표준용어 기준 초성·오타·alias 후보 생성, 조사 분리, 문맥 후보 필터링 |
+| 용어 catalog | [`app/services/medical_term_catalog.py`](app/services/medical_term_catalog.py) | 원천 JSONL에서 표준용어와 alias catalog 생성 |
+| 확인 상태 | [`app/services/query_confirmation.py`](app/services/query_confirmation.py) | `confirmation_id` 생성·저장·소비·만료 처리 |
+| 응답 orchestration | [`app/services/chat_orchestrator.py`](app/services/chat_orchestrator.py) | 확정 용어를 재검색하지 않고 검색·LLM 응답 단계로 전달 |
+| Chat API | [`app/routers/chat.py`](app/routers/chat.py), [`app/schemas/health_chatbot.py`](app/schemas/health_chatbot.py) | 확인 ID와 `confirmation_answer` 처리 |
+| 로컬 서버 | [`app/local_dev_server.py`](app/local_dev_server.py), [`app/services/local_dev.py`](app/services/local_dev.py) | 로컬 문서 인덱스, 검색 캐시, 테스트용 서버 |
+| Pinecone 연결 | [`app/services/vector_search.py`](app/services/vector_search.py) | 정규화 결과 공유 및 중복 resolver 호출 방지 |
+| 웹 UI | [`app/web/assets/app.js`](app/web/assets/app.js), [`app/web/index.html`](app/web/index.html), [`app/web/assets/styles.css`](app/web/assets/styles.css) | `예/아니요` 확인 버튼과 confirmation ID 전송 |
+| 기존 질의 연결 | [`app/routers/ask.py`](app/routers/ask.py), [`app/routers/intent.py`](app/routers/intent.py), [`app/services/safety_guard.py`](app/services/safety_guard.py) | 기존 질의·의도·안전 처리와 정규화 결과 연결 |
+| 설정·스키마 | [`app/core/config.py`](app/core/config.py), [`app/main.py`](app/main.py), [`app/schemas/intent.py`](app/schemas/intent.py) | RDB/Pinecone/LLM 설정과 응답 구조 확장 |
+| 테스트 | [`tests/test_query_resolver.py`](tests/test_query_resolver.py), [`tests/test_query_confirmation.py`](tests/test_query_confirmation.py), [`tests/test_local_dev.py`](tests/test_local_dev.py), [`tests/test_web_ui.py`](tests/test_web_ui.py) | 초성·오타·문맥 분리·확인 ID·로컬 UI 회귀 검증 |
 
-관련 테스트 42건을 통과했으며, 이 브랜치는 `main`에 직접 반영하지 않고 팀 검토용으로 공유하기 위한 작업 브랜치입니다.
+## 로컬 검증
 
-## 아키텍처
-
-```text
-data/ 원천 데이터
-  → preprocessed/ 전처리
-  → vdb/chunk/ JSONL 청크
-  → jhgan/ko-sroberta-multitask 로컬 임베딩(768차원)
-  → Pinecone dense index
-  → namespace별 검색
-  → FastAPI /search, /ask
-  → FastAPI 시연용 웹 앱
-```
-
-| 컬렉션 | Pinecone namespace | 적재 대상 |
-|---|---|---:|
-| 건강검진정보 | `health_checkup_info` | 30건 |
-| 질병정보 | `disease_info` | 54,330건 |
-| 복약정보 | `medication_info` | 43,330건 |
-
-`disease_info`는 JSONL 108,662행에서 ID 중복과 Base64 이미지 청크를 제외한 수치입니다.
-
-현재 checkout의 `vdb/chunk`를 실제로 확인할 때는 `health_checkup_info=30`,
-`disease_info=15,349`, `medication_info=0`입니다. 위 표의 복약 수치는 운영 적재
-목표치이며, 복약 JSONL을 준비해 Pinecone에 적재하기 전까지는 해당 namespace가
-비어 있으므로 약물 질문을 근거 기반으로 답할 수 없습니다.
-
-## 환경
-
-- Python `3.11.9`
-- 임베딩 모델 `jhgan/ko-sroberta-multitask`
-- 벡터 차원 `768`
-- 거리 측정 `cosine`
-- Pinecone Serverless `aws / us-east-1`
-
-## 설치
-
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-프로젝트 루트의 `.env`:
-
-```env
-PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_INDEX_NAME=heapy-rag
-GOOGLE_API_KEY=your_gemini_api_key
-# 선택: 오타·별칭을 RDB 표준용어로 연결
-RDB_DSN=postgresql://user:password@host:5432/database
-```
-
-RDB 표준용어 정규화는 `database/migrations/001_medical_term_search.sql`을
-적용한 뒤 활성화됩니다. RDB가 없거나 `RDB_DSN`이 비어 있으면 기존 Pinecone
-검색을 그대로 사용하며, 설정된 경우 `/search`·`/ask`·`/chat` 응답의
-`resolved_query`와 `resolved_terms`에서 보정 결과를 확인할 수 있습니다.
-자세한 운영 규칙은 [`QUERY_NORMALIZATION_README.md`](QUERY_NORMALIZATION_README.md)를
-참고하세요.
-
-표준용어와 alias는 원천 JSONL에서 자동 생성합니다. 특정 의료용어를 검색 코드에
-직접 매핑하지 않습니다.
+관련 테스트 42건이 통과했습니다.
 
 ```bash
-python database/build_medical_term_catalog.py \
-  --chunk-root vdb/chunk > /tmp/medical_term_catalog.sql
-psql "$RDB_DSN" -f /tmp/medical_term_catalog.sql
+GOOGLE_API_KEY=local-demo-key \
+PYTHONDONTWRITEBYTECODE=1 \
+python3 -m unittest \
+  tests/test_query_resolver.py \
+  tests/test_query_confirmation.py \
+  tests/test_local_dev.py \
+  tests/test_chat_orchestrator.py \
+  tests/test_chat_stream.py \
+  tests/test_web_ui.py
 ```
 
-로컬 서버도 같은 catalog 생성기를 사용하므로, `vdb/chunk`가 없을 때는 의료용어
-fixture로 대체하지 않고 근거 없음으로 처리합니다. `resolved_query`와
-`resolved_terms` 외에 `resolution_status`가 `RESOLVED`, `CONFIRM`,
-`AMBIGUOUS`, `NO_MATCH` 중 하나로 반환됩니다.
-초성·오타 확인 응답에는 `confirmation_id`가 함께 반환되며, 사용자가 `예`를
-선택하면 이 ID로 확인된 표준용어를 확정합니다. 원문을 다시 전체 fuzzy 검색하지
-않으므로 문장 속 동사·형용사가 새로운 의료용어로 오인되지 않습니다.
-
-기존 통합 임베딩 인덱스는 768차원 로컬 임베딩과 호환되지 않습니다. 별도의 `heapy-rag` dense 인덱스를 사용합니다.
-
-## Pinecone 최초 적재
-
-768차원 dense 인덱스 생성:
-
-```powershell
-python vdb/script/manage_pinecone.py create-index
-```
-
-청크 검증:
-
-```powershell
-python vdb/script/manage_pinecone.py ingest `
-  --collection health_checkup_info `
-  --dry-run
-
-python vdb/script/manage_pinecone.py ingest `
-  --collection disease_info `
-  --dry-run
-```
-
-적재:
-
-```powershell
-python vdb/script/manage_pinecone.py ingest `
-  --collection health_checkup_info
-
-python vdb/script/manage_pinecone.py ingest `
-  --collection disease_info
-```
-
-적재 상태:
-
-```powershell
-python vdb/script/manage_pinecone.py stats
-```
-
-검색 확인:
-
-```powershell
-python vdb/script/manage_pinecone.py search `
-  --collection health_checkup_info `
-  --query "건강검진 정상B는 무슨 뜻이야?"
-```
-
-## 추가 데이터 동기화
-
-신규 원천을 기존 코드로 전처리·청킹한 뒤 같은 명령을 다시 실행합니다.
-
-```powershell
-python vdb/script/manage_pinecone.py ingest `
-  --collection disease_info
-```
-
-로컬 manifest의 `record_sha256`과 비교해 본문 또는 메타데이터가 바뀐 청크만 임베딩하고 upsert합니다. 성공한 배치마다 manifest를 저장하므로 중단 후 같은 명령을 실행하면 완료된 청크는 건너뜁니다.
-
-원천에서 삭제된 청크도 Pinecone에서 제거할 때만 `--delete-stale`을 사용합니다.
-
-```powershell
-python vdb/script/manage_pinecone.py ingest `
-  --collection disease_info `
-  --delete-stale
-```
-
-전체 재임베딩이 필요할 때:
-
-```powershell
-python vdb/script/manage_pinecone.py ingest `
-  --collection disease_info `
-  --force
-```
-
-이미 임베딩된 e약은요 compact 패키지는 재임베딩하지 않고 직접 적재합니다.
-
-```powershell
-python vdb/script/manage_pinecone.py ingest-precomputed `
-  --source data/eyak/eyak `
-  --collection medication_info `
-  --batch-size 100
-```
-
-## 서버 실행
-
-FastAPI:
-
-```powershell
-uvicorn app.main:app --reload
-```
-
-- 웹 앱: <http://localhost:8000>
-- Swagger: <http://localhost:8000/docs>
-
-별도의 프론트엔드 개발 서버 없이 FastAPI가 시연용 웹 앱을 함께 제공합니다.
-웹 앱은 통합 챗봇 `POST /chat/stream`을 사용하며 Intent, 근거 검증, 출처 정보를
-시각적으로 확인할 수 있습니다. 현재 복약 데이터는 검토 중 상태로 표시됩니다.
-
-Gradio:
-
-```powershell
-python run_ui.py
-```
-
-- UI: <http://localhost:7860>
-
-Gradio 화면은 검색 품질 점검용으로 유지하며, 실제 MVP 시연은 FastAPI 웹 앱을
-사용합니다.
-
-## API
-
-| 메서드 | 경로 | 설명 |
-|---|---|---|
-| `GET` | `/health` | Pinecone namespace별 적재 수 확인 |
-| `POST` | `/chat/stream` | SSE 기반 통합 챗봇 토큰 스트리밍 |
-| `POST` | `/search` | 로컬 질문 임베딩 후 Pinecone 검색 |
-| `POST` | `/ask` | 검색 청크 기반 Gemini 답변 |
-
-자세한 내용은 `docs/api_spec.md`, `docs/GRADIO_GUIDE.md`를 참고합니다.
-
-`/chat`·`/chat/stream` 요청에는 확인 흐름을 위한 선택 필드가 있습니다.
-
-```json
-{
-  "question": "ㄱㅅㅊ",
-  "confirmation_id": "서버가 발급한 ID",
-  "confirmation_answer": true
-}
-```
-
-## 로컬에서 실제 Gemini 답변 확인
-
-외부 키 없이 실행하면 `app/local_dev_server.py`가 검색·오타 보정만 확인하는
-`LOCAL_DEMO` 모드로 동작합니다. 실제 Gemini의 근거 계획·답변 생성·사후 감사까지
-확인하려면 프로젝트 루트 `.env`에 `GOOGLE_API_KEY`를 설정하고 다음 명령을 실행합니다.
+로컬 서버 실행:
 
 ```bash
-LOCAL_LLM_ENABLED=1 \
-PYTHONPATH=. \
-python3 -m uvicorn app.local_dev_server:app --host 127.0.0.1 --port 8000
+GOOGLE_API_KEY=local-demo-key \
+PYTHONPATH=. python3 -m uvicorn app.local_dev_server:app \
+  --host 127.0.0.1 --port 8000
 ```
 
-이 모드는 Pinecone 대신 로컬 샘플 문서를 검색하므로 벡터 DB 키 없이도 LLM 답변
-단계를 확인할 수 있습니다. 화면의 `Answer generation` 또는 `/health`의
-`llm_backend`가 `GEMINI`인지 확인하세요.
+브라우저에서 `http://127.0.0.1:8000/`을 열고 `ㄱㅅㅊ` 입력 후 `예`를 선택하면 간수치 관련 답변 흐름을 확인할 수 있습니다.
 
-## 운영 주의사항
+## 관련 문서
 
-- `.env`, API Key, Gemini Key를 Git에 커밋하지 않습니다.
-- 개인 검진 수치와 식별정보를 공용 namespace에 적재하지 않습니다.
-- 청크 ID는 재실행과 갱신을 위해 안정적으로 유지합니다.
-- `--delete-stale`은 전체 원천 청크가 준비된 상태에서만 사용합니다.
-- 로컬 manifest는 적재 체크포인트이며 `vdb/manifest/`에 생성됩니다.
-
-## 참고 자료
-
-- Pinecone create index: <https://docs.pinecone.io/guides/index-data/create-an-index>
-- Pinecone upsert: <https://docs.pinecone.io/guides/index-data/upsert-data>
-- Pinecone namespaces: <https://docs.pinecone.io/guides/index-data/implement-multitenancy>
+- [`QUERY_NORMALIZATION_README.md`](QUERY_NORMALIZATION_README.md): 정규화 규칙, API 요청 예시, RDB/Pinecone 운영 연동
+- 브랜치: [`feat/query-normalization`](https://github.com/Heapy-AI/heapy-ai-health/tree/feat/query-normalization)
