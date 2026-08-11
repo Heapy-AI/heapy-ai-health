@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.core.state import state
 from app.routers import chat
+from app.routers.auth import optional_current_session
 from app.routers.chat import _CitationLabelStreamFilter
 from app.services.chat_orchestrator import (
     ChatOrchestrationResult,
@@ -71,9 +72,12 @@ class ChatStreamApiTest(unittest.TestCase):
         state["chat_orchestrator"] = FakeStreamingOrchestrator()
         app = FastAPI()
         app.include_router(chat.router)
+        app.dependency_overrides[optional_current_session] = lambda: None
+        self.app = app
         self.client = TestClient(app)
 
     def tearDown(self) -> None:
+        self.app.dependency_overrides.clear()
         if self.previous_orchestrator is None:
             state.pop("chat_orchestrator", None)
         else:

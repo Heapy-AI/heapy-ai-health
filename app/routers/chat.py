@@ -6,10 +6,16 @@ import json
 import re
 from collections.abc import Iterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app.core.config import CHAT_HISTORY_MAX_TURNS
 from app.core.state import state
+from app.routers.auth import (
+    AuthenticatedSession,
+    conversation_service,
+    optional_current_session,
+)
 from app.schemas.health_chatbot import (
     ChatRequest,
     ChatResponse,
@@ -22,6 +28,7 @@ from app.services.chat_orchestrator import (
     SearchUnavailableError,
 )
 from app.services.rag import cite
+from app.services.supabase_conversation import SupabaseConversationError
 
 
 router = APIRouter(tags=["chat"])
@@ -114,6 +121,7 @@ def _to_citations(result: ChatOrchestrationResult) -> list[CombinedCitation]:
 def _to_chat_response(
     question: str,
     result: ChatOrchestrationResult,
+    session_id: str = "",
 ) -> ChatResponse:
     """오케스트레이션 결과를 동기·스트리밍 공통 API 응답으로 변환한다.
 
@@ -127,6 +135,7 @@ def _to_chat_response(
     )
     return ChatResponse(
         question=question,
+        session_id=session_id,
         intent=result.intent.value,
         confidence=result.confidence,
         probabilities=result.probabilities,
@@ -185,8 +194,80 @@ def _sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {payload}\n\n"
 
 
-@router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
+def _conversation_context(
+    request: ChatRequest,
+    session: AuthenticatedSession | None,
+) -> tuple[str, list, str]:
+    """인증 환경에서는 DB를 멀티턴 문맥의 단일 진실 공급원으로 사용한다.
+
+    작성자: 김진우
+    """
+    if session is None:
+        return "", request.history, request.summary
+    try:
+        if request.session_id:
+            session_row = conversation_service.get_session(
+                session.access_token,
+                request.session_id,
+            )
+        else:
+            session_row = conversation_service.create_session(
+                session.access_token,
+                str(session.user.get("id", "")),
+            )
+        session_id = str(session_row.get("session_id", ""))
+        messages = conversation_service.get_messages(
+            session.access_token,
+            session_id,
+            limit=CHAT_HISTORY_MAX_TURNS,
+        )
+        history = [
+            {"role": row.get("role", ""), "content": row.get("content", "")}
+            for row in messages
+        ]
+        return session_id, history, str(session_row.get("summary") or "")
+    except SupabaseConversationError as error:
+        status_code = error.status_code if error.status_code in {400, 404, 503} else 502
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
+
+
+def _persist_conversation_turn(
+    request: ChatRequest,
+    result: ChatOrchestrationResult,
+    session: AuthenticatedSession | None,
+    session_id: str,
+) -> None:
+    """검색·확인 단계가 끝난 정상 대화 턴과 요약을 저장한다."""
+    if session is None or not session_id:
+        return
+    blocked_statuses = {
+        "CONFIRM",
+        "AMBIGUOUS",
+        "CONFIRMATION_EXPIRED",
+        "CONFIRMATION_REJECTED",
+    }
+    if result.query_confirmation or result.resolution_status in blocked_statuses:
+        return
+    try:
+        conversation_service.append_turn(
+            session.access_token,
+            session_id,
+            result.original_question or request.question,
+            result.answer,
+            result.conversation_summary,
+        )
+    except SupabaseConversationError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+)
+def chat(
+    request: ChatRequest,
+    session: AuthenticatedSession | None = Depends(optional_current_session),
+) -> ChatResponse:
     """Safety Guard와 Intent 분류를 거쳐 선택된 챗봇 경로를 실행한다."""
     orchestrator = state.get("chat_orchestrator")
     if orchestrator is None:
@@ -195,11 +276,12 @@ def chat(request: ChatRequest) -> ChatResponse:
             detail="챗봇 오케스트레이터가 준비되지 않았습니다.",
         )
 
+    session_id, history, summary = _conversation_context(request, session)
     try:
         result = orchestrator.answer(
             request.question,
-            request.history,
-            request.summary,
+            history,
+            summary,
             confirmation_id=request.confirmation_id,
             confirmation_answer=request.confirmation_answer,
         )
@@ -208,11 +290,17 @@ def chat(request: ChatRequest) -> ChatResponse:
     except SearchUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    return _to_chat_response(request.question, result)
+    _persist_conversation_turn(request, result, session, session_id)
+    return _to_chat_response(request.question, result, session_id)
 
 
-@router.post("/chat/stream")
-def stream_chat(request: ChatRequest) -> StreamingResponse:
+@router.post(
+    "/chat/stream",
+)
+def stream_chat(
+    request: ChatRequest,
+    session: AuthenticatedSession | None = Depends(optional_current_session),
+) -> StreamingResponse:
     """LLM 토큰과 검증 완료 응답을 SSE로 순차 전송한다.
 
     작성자: 김진우
@@ -224,13 +312,15 @@ def stream_chat(request: ChatRequest) -> StreamingResponse:
             detail="챗봇 오케스트레이터가 준비되지 않았습니다.",
         )
 
+    session_id, history, summary = _conversation_context(request, session)
+
     def generate_events() -> Iterator[str]:
         label_filter = _CitationLabelStreamFilter()
         try:
             for stream_event in orchestrator.stream_answer(
                 request.question,
-                request.history,
-                request.summary,
+                history,
+                summary,
                 confirmation_id=request.confirmation_id,
                 confirmation_answer=request.confirmation_answer,
             ):
@@ -247,6 +337,13 @@ def stream_chat(request: ChatRequest) -> StreamingResponse:
                 response = _to_chat_response(
                     request.question,
                     stream_event.result,
+                    session_id,
+                )
+                _persist_conversation_turn(
+                    request,
+                    stream_event.result,
+                    session,
+                    session_id,
                 )
                 yield _sse_event(
                     "complete",

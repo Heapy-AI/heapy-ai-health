@@ -122,6 +122,7 @@ class ChatRequest(BaseModel):
     """최상위 Intent부터 자동 분기하는 통합 챗봇 요청."""
 
     question: str = Field(..., min_length=1, description="사용자 질문")
+    session_id: str = ""
     history: list[ChatTurn] = Field(default_factory=list)
     summary: str = ""
     confirmation_id: str = ""
@@ -154,6 +155,7 @@ class ChatResponse(BaseModel):
     """Intent 분류와 선택된 처리 경로의 통합 응답."""
 
     question: str
+    session_id: str = ""
     intent: str
     confidence: float
     probabilities: dict[str, float]

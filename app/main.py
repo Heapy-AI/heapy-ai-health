@@ -20,7 +20,7 @@ from app.core.config import (
     SEARCH_TOP_K_PER_COLLECTION,
 )
 from app.core.state import state
-from app.routers import ask, chat, intent
+from app.routers import ask, auth, chat, conversations, intent
 from app.services.chat_orchestrator import ChatOrchestrator
 from app.services.conversation_summary import build_conversation_summarizer
 from app.services.general_chat import build_general_chat_chain
@@ -116,6 +116,8 @@ async def lifespan(app: FastAPI):
     state.clear()                            # 종료 시 정리
 
 app = FastAPI(title="HEAPY RAG 서빙", version="1.0", lifespan=lifespan)
+app.include_router(auth.router)
+app.include_router(conversations.router)
 app.include_router(chat.router)
 app.include_router(ask.router)
 app.include_router(intent.router)

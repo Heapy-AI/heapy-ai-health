@@ -135,3 +135,16 @@ QUERY_RESOLUTION_AMBIGUITY_MARGIN = _non_negative_float_env(
     "QUERY_RESOLUTION_AMBIGUITY_MARGIN",
     0.05,
 )
+
+# Supabase Auth는 공개 가능한 publishable key(또는 기존 anon key)를 사용한다.
+# 작성자: 김진우
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_PUBLISHABLE_KEY = (
+    os.environ.get("SUPABASE_PUBLISHABLE_KEY")
+    or os.environ.get("SUPABASE_ANON_KEY")
+    or ""
+).strip()
+AUTH_COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "0").strip().lower() in {
+    "1",
+    "true",
+}

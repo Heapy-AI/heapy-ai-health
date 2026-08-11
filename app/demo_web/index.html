@@ -6,12 +6,41 @@
     <meta name="theme-color" content="#7b68e8" />
     <meta name="description" content="HEAPY 건강정보 AI 사용자 시연 서비스" />
     <title>HEAPY | 건강정보 AI</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260811-1" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260811-5" />
   </head>
   <body>
     <!-- 작성자: 김진우 -->
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="HEAPY 서비스 메뉴">
+    <main id="authScreen" class="auth-screen" aria-labelledby="loginTitle">
+      <section class="auth-card">
+        <span class="brand-mark auth-logo" aria-hidden="true"><img src="/images/heapy-logo.png" alt="" /></span>
+        <span class="welcome-kicker">YOUR HEALTH COMPANION</span>
+        <h1 id="loginTitle">다시 만나서 반가워요</h1>
+        <p id="authDescription">HEAPY 계정으로 로그인해 주세요.</p>
+        <div class="auth-mode-tabs" role="tablist" aria-label="인증 방식">
+          <button id="loginModeButton" class="active" type="button" role="tab">로그인</button>
+          <button id="signupModeButton" type="button" role="tab">회원가입</button>
+        </div>
+        <form id="loginForm" class="login-form">
+          <label for="emailInput">이메일</label>
+          <input id="emailInput" type="email" autocomplete="email" required />
+          <label for="passwordInput">비밀번호</label>
+          <input id="passwordInput" type="password" autocomplete="current-password" minlength="8" required />
+          <div id="signupFields" class="signup-fields" hidden>
+            <label for="nameInput">이름</label>
+            <input id="nameInput" type="text" autocomplete="name" maxlength="50" />
+            <label for="birthDateInput">생년월일</label>
+            <input id="birthDateInput" type="date" />
+            <label for="sexInput">성별</label>
+            <select id="sexInput"><option value="">선택해 주세요</option><option value="Female">여성</option><option value="Male">남성</option></select>
+          </div>
+          <p id="loginError" class="login-error" role="alert" hidden></p>
+          <button id="loginButton" class="login-button" type="submit">로그인</button>
+        </form>
+      </section>
+    </main>
+
+    <div id="appShell" class="app-shell" hidden>
+      <aside class="sidebar" aria-label="대화 세션">
         <a class="brand" href="/" aria-label="HEAPY 홈">
           <span class="brand-mark" aria-hidden="true">
             <img src="/images/heapy-logo.png" alt="" />
@@ -19,29 +48,20 @@
           <span>HEAPY</span>
         </a>
 
-        <nav class="service-menu" aria-label="주요 메뉴">
-          <span class="menu-label">SERVICE</span>
-          <a class="menu-item active" href="#chat" aria-current="page">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" /></svg>
-            <span><strong>건강정보 상담</strong><small>궁금한 건강정보 물어보기</small></span>
-          </a>
-          <a class="menu-item" href="#service-guide">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5m0-8h.01" /></svg>
-            <span><strong>서비스 안내</strong><small>HEAPY 이용 범위 확인</small></span>
-          </a>
-        </nav>
-
-        <section id="service-guide" class="guide-card" aria-label="서비스 이용 안내">
-          <span class="guide-icon" aria-hidden="true">✓</span>
-          <div>
-            <strong>안심하고 물어보세요</strong>
-            <p>공공 건강정보를 바탕으로 이해하기 쉽게 안내해 드려요.</p>
+        <section class="conversation-history" aria-label="대화 기록">
+          <div class="conversation-history-header">
+            <span class="menu-label">CONVERSATIONS</span>
+            <button id="newConversationButton" type="button">새 대화</button>
+          </div>
+          <div id="conversationList" class="conversation-list">
+            <p class="conversation-list-empty">저장된 대화가 없습니다.</p>
           </div>
         </section>
 
         <div class="sidebar-footer">
-          <div class="avatar">H</div>
-          <div><strong>HEAPY 체험판</strong><span>건강정보 AI 도우미</span></div>
+          <div id="userAvatar" class="avatar">사</div>
+          <div><strong id="userName">사용자</strong><span id="userEmail">로그인 계정</span></div>
+          <button id="logoutButton" class="logout-button" type="button">로그아웃</button>
         </div>
       </aside>
 
@@ -96,6 +116,11 @@
             </div>
           </div>
           <div id="messages" class="messages" hidden></div>
+          <div id="conversationLoading" class="conversation-loading" role="status" hidden>
+            <span class="session-loading-spinner" aria-hidden="true"></span>
+            <strong>대화를 불러오는 중이에요</strong>
+            <span>잠시만 기다려 주세요.</span>
+          </div>
         </section>
 
         <footer class="composer-wrap">
@@ -110,6 +135,6 @@
         </footer>
       </main>
     </div>
-    <script src="/assets/app.js?v=20260811-1" defer></script>
+    <script src="/assets/app.js?v=20260811-5" defer></script>
   </body>
 </html>

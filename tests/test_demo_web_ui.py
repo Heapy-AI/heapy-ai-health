@@ -32,12 +32,23 @@ class DemoWebUiTest(unittest.TestCase):
         markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
         self.assertIn('/assets/styles.css?v=', markup)
         self.assertIn('/assets/app.js?v=', markup)
+        self.assertIn('id="loginForm"', markup)
+        self.assertIn('id="logoutButton"', markup)
+        self.assertIn('id="conversationLoading"', markup)
+        self.assertIn('class="session-loading-spinner"', markup)
 
-    def test_sidebar_is_kept_without_project_environment(self) -> None:
+    def test_sidebar_shows_conversations_without_service_tabs(self) -> None:
         markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
+        styles = (DEMO_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn('class="sidebar"', markup)
-        self.assertIn("건강정보 상담", markup)
+        self.assertIn('id="conversationList"', markup)
+        self.assertIn('id="newConversationButton"', markup)
+        self.assertNotIn('class="service-menu"', markup)
+        self.assertNotIn("건강정보 상담", markup)
+        self.assertNotIn("서비스 안내", markup)
+        self.assertIn("white-space: nowrap", styles)
+        self.assertIn("min-width: max-content", styles)
         self.assertNotIn("PROJECT ENVIRONMENT", markup)
         self.assertNotIn("Pinecone collections", markup)
         self.assertNotIn("environment-card", markup)
@@ -62,8 +73,27 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertIn("sanitizeAnswerText", script)
         self.assertIn("history: conversationHistory", script)
         self.assertIn("summary: conversationSummary", script)
+        self.assertIn("session_id: currentSessionId", script)
+        self.assertIn('fetch("/auth/me"', script)
+        self.assertIn('fetchWithSession("/conversations"', script)
+        self.assertIn("loadConversation(session.session_id)", script)
+        self.assertIn("currentSessionId = sessionId", script)
+        self.assertIn("updateConversationSessionPreview(data)", script)
         self.assertNotIn("답변 출처", script)
         self.assertNotIn("source-details", script)
+
+    def test_session_loading_uses_centered_loader_instead_of_chat_bubble(self) -> None:
+        """세션 조회 중에는 답변 생성용 말풍선 대신 중앙 로더를 표시한다."""
+        script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (DEMO_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+        load_conversation = script.split("async function loadConversation(sessionId)", 1)[1]
+        load_conversation = load_conversation.split("function updateConversationSessionPreview", 1)[0]
+
+        self.assertIn("elements.conversationLoading.hidden = false", load_conversation)
+        self.assertIn("elements.conversationLoading.hidden = true", load_conversation)
+        self.assertNotIn("appendLoadingMessage()", load_conversation)
+        self.assertIn(".conversation-loading", styles)
+        self.assertIn("@keyframes session-loading-spin", styles)
 
     @patch("app.demo.requests.post")
     def test_chat_stream_is_proxied_without_buffering(self, post: Mock) -> None:
@@ -75,7 +105,9 @@ class DemoWebUiTest(unittest.TestCase):
         )
         post.return_value = backend_response
 
-        response = TestClient(app).post(
+        client = TestClient(app)
+        client.cookies.set("heapy_access_token", "access-token")
+        response = client.post(
             "/chat/stream",
             json={"question": "공복혈당이 무엇인가요?"},
         )
@@ -84,7 +116,52 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertEqual(response.headers["content-type"], "text/event-stream; charset=utf-8")
         self.assertIn("event: token", response.text)
         post.assert_called_once()
+        self.assertIn("heapy_access_token=access-token", post.call_args.kwargs["headers"]["Cookie"])
         backend_response.close.assert_called_once()
+
+    @patch("app.demo.requests.request")
+    def test_login_proxy_forwards_backend_session_cookie(self, request: Mock) -> None:
+        """백엔드 로그인 쿠키가 시연 UI 브라우저에 전달되는지 확인한다."""
+        raw_headers = Mock()
+        raw_headers.getlist.return_value = [
+            "heapy_access_token=access-token; HttpOnly; Path=/; SameSite=lax"
+        ]
+        backend_response = Mock(
+            status_code=200,
+            content=b'{"id":"user-id","email":"user@example.com"}',
+            headers={"content-type": "application/json"},
+            raw=Mock(headers=raw_headers),
+        )
+        request.return_value = backend_response
+
+        response = TestClient(app).post(
+            "/auth/login",
+            json={"email": "user@example.com", "password": "password123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("HttpOnly", response.headers["set-cookie"])
+        backend_response.close.assert_called_once()
+
+    @patch("app.demo.requests.request")
+    def test_conversation_list_proxy_forwards_auth_cookie(self, request: Mock) -> None:
+        """대화 세션 목록 조회가 인증 쿠키와 함께 메인 API로 전달되는지 확인한다."""
+        backend_response = Mock(
+            status_code=200,
+            content=b"[]",
+            headers={"content-type": "application/json"},
+            raw=Mock(headers=Mock(getlist=Mock(return_value=[]))),
+        )
+        request.return_value = backend_response
+        client = TestClient(app)
+        client.cookies.set("heapy_access_token", "access-token")
+
+        response = client.get("/conversations")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+        self.assertEqual(request.call_args.args[:2], ("GET", "http://localhost:8000/conversations"))
+        self.assertIn("heapy_access_token=access-token", request.call_args.kwargs["headers"]["Cookie"])
 
 
 if __name__ == "__main__":
