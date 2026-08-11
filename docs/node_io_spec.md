@@ -3,7 +3,7 @@
 팀 분업 개발용. 각 노드는 공유 State 객체를 받아 **입력 필드**를 읽고 **출력 필드**를 채운 뒤 다음 노드로 넘긴다. 자신이 맡은 노드의 입력/출력만 맞추면 된다.
 
 - 노드 간 전달: 메모리상 State 객체 참조 (직렬화 없음)
-- 직렬화(JSON/바이너리)는 경계에서만: 클라이언트 응답, vLLM 호출, Redis 저장
+- 직렬화(JSON/바이너리)는 경계에서만: 클라이언트 응답, vLLM 호출, Supabase 저장
 
 ---
 
@@ -52,9 +52,9 @@
 
 | 노드 | 입력 | 출력 |
 |---|---|---|
-| S1 세션 조회 | `raw_query` | `session_id` |
+| S1 세션 조회 | 로그인 사용자, `session_id` | `session_id` |
 | S1CHK 세션 존재 여부 | `session_id` | `is_new_session` |
-| S2 컨텍스트 로드 | `session_id` | `history`, `summary` |
+| S2 컨텍스트 로드 | `session_id` | Supabase의 최근 `history`, `summary` |
 | S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` (문맥 지시어·대상 생략·애매한 후속 질문을 재작성 모델이 판정) |
 | S4 신규 세션 초기화 | `raw_query` | `standalone_question`(=원문), `history`(=[]) |
 | QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status` |
@@ -107,3 +107,4 @@
 2. **`chunks` = null vs []** 구분을 지킬 것 — 검색 담당은 인프라 실패 시 null, 결과 없음 시 [] 를 반환해야 VCHK/결과유무 분기가 동작한다.
 3. **개인 컨텍스트(D1/D2)는 캐시 금지** — 사용자·시점마다 달라지므로 QCACHE에 넣지 않는다. VDB 청크만 캐시한다.
 4. **요약(summary)은 O3가 생성, S2가 로드** — S2는 직전 턴의 O3가 만들어 둔 요약을 읽기만 한다. S2에서 요약을 새로 만들지 않는다.
+5. **대화 저장은 사용자 JWT와 RLS 사용** — service role key로 소유권 검사를 우회하지 않으며, 메시지 두 건과 요약은 `append_chat_turn` RPC 한 트랜잭션으로 저장한다.

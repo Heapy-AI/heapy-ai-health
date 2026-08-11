@@ -1,5 +1,24 @@
 /** HEAPY 웹 앱 상호작용. 작성자: 김진우 */
 const elements = {
+  authScreen: document.querySelector("#authScreen"),
+  appShell: document.querySelector("#appShell"),
+  loginForm: document.querySelector("#loginForm"),
+  emailInput: document.querySelector("#emailInput"),
+  passwordInput: document.querySelector("#passwordInput"),
+  loginButton: document.querySelector("#loginButton"),
+  loginError: document.querySelector("#loginError"),
+  loginTitle: document.querySelector("#loginTitle"),
+  authDescription: document.querySelector("#authDescription"),
+  loginModeButton: document.querySelector("#loginModeButton"),
+  signupModeButton: document.querySelector("#signupModeButton"),
+  signupFields: document.querySelector("#signupFields"),
+  nameInput: document.querySelector("#nameInput"),
+  birthDateInput: document.querySelector("#birthDateInput"),
+  sexInput: document.querySelector("#sexInput"),
+  logoutButton: document.querySelector("#logoutButton"),
+  userAvatar: document.querySelector("#userAvatar"),
+  userName: document.querySelector("#userName"),
+  userEmail: document.querySelector("#userEmail"),
   form: document.querySelector("#chatForm"),
   input: document.querySelector("#questionInput"),
   sendButton: document.querySelector("#sendButton"),
@@ -17,6 +36,8 @@ const elements = {
   classifierLabel: document.querySelector("#classifierLabel"),
   collectionTotalLabel: document.querySelector("#collectionTotalLabel"),
   environmentCollectionList: document.querySelector("#environmentCollectionList"),
+  conversationList: document.querySelector("#conversationList"),
+  newConversationButton: document.querySelector("#newConversationButton"),
 };
 
 const intentNames = {
@@ -51,6 +72,232 @@ const STREAM_SENTENCE_DELAY_MS = 130;
 let isRequesting = false;
 let conversationHistory = [];
 let conversationSummary = "";
+let currentSessionId = "";
+let authMode = "login";
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const isSignup = mode === "signup";
+  elements.loginModeButton.classList.toggle("active", !isSignup);
+  elements.signupModeButton.classList.toggle("active", isSignup);
+  elements.signupFields.hidden = !isSignup;
+  elements.nameInput.required = isSignup;
+  elements.birthDateInput.required = isSignup;
+  elements.sexInput.required = isSignup;
+  elements.passwordInput.autocomplete = isSignup ? "new-password" : "current-password";
+  elements.loginTitle.textContent = isSignup ? "HEAPY와 함께 시작해요" : "다시 만나서 반가워요";
+  elements.authDescription.textContent = isSignup
+    ? "건강 프로필과 로그인 계정을 함께 만들어요."
+    : "Supabase에 등록된 계정으로 로그인해 주세요.";
+  elements.loginButton.textContent = isSignup ? "회원가입" : "로그인";
+  setLoginError();
+}
+
+function setLoginError(message = "") {
+  elements.loginError.textContent = message;
+  elements.loginError.hidden = !message;
+}
+
+function renderAuthenticatedUser(user) {
+  const email = String(user.email || "");
+  const displayName = String(user.display_name || email.split("@")[0] || "사용자");
+  elements.userName.textContent = displayName;
+  elements.userEmail.textContent = email;
+  elements.userAvatar.textContent = displayName.charAt(0).toUpperCase() || "사";
+  elements.authScreen.hidden = true;
+  elements.appShell.hidden = false;
+  loadConversationSessions();
+  elements.input.focus();
+}
+
+function showLoginScreen(message = "") {
+  elements.appShell.hidden = true;
+  elements.authScreen.hidden = false;
+  setLoginError(message);
+  elements.passwordInput.value = "";
+  setAuthMode("login");
+  elements.emailInput.focus();
+}
+
+async function refreshSession() {
+  const response = await fetch("/auth/refresh", { method: "POST" });
+  return response.ok;
+}
+
+async function fetchChatStream(options) {
+  let response = await fetch("/chat/stream", options);
+  if (response.status !== 401 || !(await refreshSession())) return response;
+  response = await fetch("/chat/stream", options);
+  return response;
+}
+
+async function restoreSession() {
+  let response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+  if (response.status === 401 && await refreshSession()) {
+    response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const message = response.status === 503
+      ? String(payload.detail || "Supabase 인증 설정이 필요합니다.")
+      : "";
+    showLoginScreen(message);
+    return;
+  }
+  renderAuthenticatedUser(await response.json());
+}
+
+async function requestLogin(payload) {
+  return fetch("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function requestSignup(payload) {
+  return fetch("/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function login(event) {
+  event.preventDefault();
+  setLoginError();
+  elements.loginButton.disabled = true;
+  const isSignup = authMode === "signup";
+  elements.loginButton.textContent = isSignup ? "가입 중..." : "로그인 중...";
+  try {
+    const payload = {
+      email: elements.emailInput.value.trim(),
+      password: elements.passwordInput.value,
+    };
+    if (isSignup) {
+      payload.name = elements.nameInput.value.trim();
+      payload.birth_date = elements.birthDateInput.value;
+      payload.sex = elements.sexInput.value;
+    }
+    const response = isSignup
+      ? await requestSignup(payload)
+      : await requestLogin(payload);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(String(result.detail || (isSignup ? "회원가입에 실패했습니다." : "로그인에 실패했습니다.")));
+    }
+    if (result.email_confirmation_required) {
+      setAuthMode("login");
+      setLoginError("가입 확인 메일을 확인한 뒤 로그인해 주세요.");
+      return;
+    }
+    renderAuthenticatedUser(result);
+  } catch (error) {
+    setLoginError(error instanceof Error ? error.message : "인증 처리에 실패했습니다.");
+  } finally {
+    elements.loginButton.disabled = false;
+    elements.loginButton.textContent = authMode === "signup" ? "회원가입" : "로그인";
+  }
+}
+
+async function logout() {
+  elements.logoutButton.disabled = true;
+  try {
+    await fetch("/auth/logout", { method: "POST" });
+  } finally {
+    resetConversation();
+    elements.conversationList.replaceChildren();
+    showLoginScreen();
+    elements.logoutButton.disabled = false;
+  }
+}
+
+async function fetchWithSession(resource, options = {}) {
+  let response = await fetch(resource, options);
+  if (response.status !== 401 || !(await refreshSession())) return response;
+  response = await fetch(resource, options);
+  return response;
+}
+
+function renderConversationSessions(sessions) {
+  elements.conversationList.replaceChildren();
+  if (!sessions.length) {
+    const empty = document.createElement("p");
+    empty.className = "conversation-list-empty";
+    empty.textContent = "저장된 대화가 없습니다.";
+    elements.conversationList.appendChild(empty);
+    return;
+  }
+  sessions.forEach((session) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "conversation-item";
+    button.classList.toggle("active", session.session_id === currentSessionId);
+    const title = document.createElement("strong");
+    title.textContent = session.title || "새 대화";
+    const time = document.createElement("time");
+    time.textContent = new Intl.DateTimeFormat("ko-KR", {
+      month: "numeric",
+      day: "numeric",
+    }).format(new Date(session.updated_at));
+    button.append(title, time);
+    button.addEventListener("click", () => loadConversation(session.session_id));
+    elements.conversationList.appendChild(button);
+  });
+}
+
+async function loadConversationSessions() {
+  try {
+    const response = await fetchWithSession("/conversations", {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return;
+    renderConversationSessions(await response.json());
+  } catch {
+    renderConversationSessions([]);
+  }
+}
+
+function appendStoredAssistantMessage(content) {
+  const message = document.createElement("div");
+  message.className = "message assistant";
+  message.appendChild(createAssistantAvatar());
+  const messageContent = document.createElement("div");
+  messageContent.className = "message-content";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.innerHTML = renderMarkdown(sanitizeAnswerText(content));
+  messageContent.appendChild(bubble);
+  message.appendChild(messageContent);
+  elements.messages.appendChild(message);
+}
+
+async function loadConversation(sessionId) {
+  if (isRequesting) return;
+  try {
+    const response = await fetchWithSession(`/conversations/${encodeURIComponent(sessionId)}`, {
+      headers: { Accept: "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail || "대화를 불러오지 못했습니다.");
+    currentSessionId = payload.session.session_id;
+    conversationSummary = payload.session.summary || "";
+    conversationHistory = (payload.messages || [])
+      .map((message) => ({ role: message.role, content: message.content }))
+      .slice(-6);
+    elements.messages.replaceChildren();
+    elements.welcome.hidden = true;
+    elements.messages.hidden = false;
+    (payload.messages || []).forEach((message) => {
+      if (message.role === "user") appendUserMessage(message.content);
+      if (message.role === "assistant") appendStoredAssistantMessage(message.content);
+    });
+    await loadConversationSessions();
+    scrollToLatest();
+  } catch (error) {
+    appendErrorMessage(error instanceof Error ? error.message : "대화를 불러오지 못했습니다.");
+  }
+}
 
 function selectRandomRecommendations(count) {
   const shuffled = [...recommendationPool];
@@ -781,6 +1028,7 @@ async function consumeChatStream(response) {
 }
 
 function updateConversationMemory(data) {
+  currentSessionId = data.session_id || currentSessionId;
   conversationSummary = data.conversation_summary || conversationSummary;
   const blockedStatuses = new Set([
     "CONFIRM",
@@ -794,6 +1042,7 @@ function updateConversationMemory(data) {
   if (userQuestion) conversationHistory.push({ role: "user", content: userQuestion });
   if (assistantAnswer) conversationHistory.push({ role: "assistant", content: assistantAnswer });
   conversationHistory = conversationHistory.slice(-6);
+  loadConversationSessions();
 }
 
 async function submitQuestion(question, options = {}) {
@@ -809,11 +1058,12 @@ async function submitQuestion(question, options = {}) {
   resizeInput();
 
   try {
-    const response = await fetch("/chat/stream", {
+    const response = await fetchChatStream({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question: normalized,
+        session_id: currentSessionId,
         history: conversationHistory,
         summary: conversationSummary,
         confirmation_id: options.confirmationId || "",
@@ -846,6 +1096,7 @@ function resetConversation() {
   elements.auditCountBadge.textContent = "0건";
   conversationHistory = [];
   conversationSummary = "";
+  currentSessionId = "";
   renderSuggestionCards();
   elements.input.value = "";
   resizeInput();
@@ -864,6 +1115,11 @@ elements.form.addEventListener("submit", (event) => {
   submitQuestion(elements.input.value);
 });
 elements.resetButton.addEventListener("click", resetConversation);
+elements.newConversationButton.addEventListener("click", resetConversation);
+elements.loginForm.addEventListener("submit", login);
+elements.loginModeButton.addEventListener("click", () => setAuthMode("login"));
+elements.signupModeButton.addEventListener("click", () => setAuthMode("signup"));
+elements.logoutButton.addEventListener("click", logout);
 document.querySelectorAll("[data-question]").forEach((button) => {
   button.addEventListener("click", () => submitQuestion(button.dataset.question || ""));
 });
@@ -871,3 +1127,4 @@ document.querySelectorAll("[data-question]").forEach((button) => {
 renderSuggestionCards();
 resizeInput();
 loadProjectEnvironment();
+restoreSession();

@@ -6,9 +6,10 @@
 import os
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import requests
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -49,8 +50,114 @@ def _stream_backend(response: requests.Response) -> Iterator[bytes]:
         response.close()
 
 
+def _request_headers(request: Request, *, accept: str = "application/json") -> dict[str, str]:
+    """브라우저 인증 쿠키를 백엔드 요청에 전달한다.
+
+    작성자: 김진우
+    """
+    headers = {"Accept": accept}
+    if cookie := request.headers.get("cookie"):
+        headers["Cookie"] = cookie
+    return headers
+
+
+def _proxy_json_response(response: requests.Response) -> Response:
+    """백엔드 본문과 인증 쿠키를 브라우저 응답으로 복사한다."""
+    proxied = Response(
+        content=response.content,
+        status_code=response.status_code,
+        media_type=response.headers.get("content-type", "application/json").split(
+            ";", maxsplit=1
+        )[0],
+    )
+    raw_headers = getattr(getattr(response, "raw", None), "headers", None)
+    cookies = raw_headers.getlist("Set-Cookie") if raw_headers else []
+    for cookie in cookies:
+        proxied.headers.append("set-cookie", cookie)
+    response.close()
+    return proxied
+
+
+def _proxy_auth_request(
+    method: str,
+    path: str,
+    request: Request,
+    payload: dict[str, Any] | None = None,
+) -> Response:
+    """사용자 시연 UI의 인증 요청을 메인 API로 중계한다."""
+    try:
+        backend_response = requests.request(
+            method,
+            f"{API_BASE_URL}{path}",
+            json=payload,
+            headers=_request_headers(request),
+            timeout=(5, 20),
+        )
+    except requests.RequestException:
+        return Response(
+            content='{"detail":"인증 서버에 연결할 수 없습니다."}',
+            status_code=503,
+            media_type="application/json",
+        )
+    return _proxy_json_response(backend_response)
+
+
+@app.post("/auth/signup", include_in_schema=False)
+def proxy_signup(payload: dict[str, Any], request: Request) -> Response:
+    """회원가입 요청과 발급 쿠키를 중계한다."""
+    return _proxy_auth_request("POST", "/auth/signup", request, payload)
+
+
+@app.post("/auth/login", include_in_schema=False)
+def proxy_login(payload: dict[str, Any], request: Request) -> Response:
+    """로그인 요청과 발급 쿠키를 중계한다."""
+    return _proxy_auth_request("POST", "/auth/login", request, payload)
+
+
+@app.get("/auth/me", include_in_schema=False)
+def proxy_me(request: Request) -> Response:
+    """현재 사용자 조회 요청을 중계한다."""
+    return _proxy_auth_request("GET", "/auth/me", request)
+
+
+@app.post("/auth/refresh", include_in_schema=False)
+def proxy_refresh(request: Request) -> Response:
+    """인증 세션 갱신과 교체 쿠키를 중계한다."""
+    return _proxy_auth_request("POST", "/auth/refresh", request)
+
+
+@app.post("/auth/logout", include_in_schema=False)
+def proxy_logout(request: Request) -> Response:
+    """로그아웃과 인증 쿠키 제거를 중계한다."""
+    return _proxy_auth_request("POST", "/auth/logout", request)
+
+
+@app.get("/conversations", include_in_schema=False)
+def proxy_conversation_list(request: Request) -> Response:
+    """현재 사용자의 대화 세션 목록을 중계한다."""
+    return _proxy_auth_request("GET", "/conversations", request)
+
+
+@app.post("/conversations", include_in_schema=False)
+def proxy_conversation_create(request: Request) -> Response:
+    """새 대화 세션 생성을 중계한다."""
+    return _proxy_auth_request("POST", "/conversations", request)
+
+
+@app.get("/conversations/{session_id}", include_in_schema=False)
+def proxy_conversation_detail(session_id: str, request: Request) -> Response:
+    """선택한 대화 세션과 메시지 조회를 중계한다."""
+    return _proxy_auth_request("GET", f"/conversations/{session_id}", request)
+
+
+@app.delete("/conversations/{session_id}", include_in_schema=False)
+def proxy_conversation_delete(session_id: str, request: Request) -> Response:
+    """선택한 대화 세션 삭제를 중계한다."""
+    return _proxy_auth_request("DELETE", f"/conversations/{session_id}", request)
+
+
 @app.post("/chat/stream", include_in_schema=False)
-def proxy_chat_stream(request: ChatRequest) -> Response:
+def proxy_chat_stream(payload: ChatRequest, request: Request) -> Response:
     """사용자 질문을 기존 FastAPI 스트리밍 API로 중계한다.
 
     작성자: 김진우
@@ -58,8 +165,8 @@ def proxy_chat_stream(request: ChatRequest) -> Response:
     try:
         backend_response = requests.post(
             f"{API_BASE_URL}/chat/stream",
-            json=request.model_dump(),
-            headers={"Accept": "text/event-stream"},
+            json=payload.model_dump(),
+            headers=_request_headers(request, accept="text/event-stream"),
             stream=True,
             timeout=(5, 180),
         )

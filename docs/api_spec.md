@@ -38,6 +38,61 @@ FastAPI와 함께 실행되는 개발·검증용 웹 앱을 반환한다. 중앙
 프로젝트 환경, 오른쪽에는 질문별 검색 결과 검사·안전 정책·사후 감사·원본 JSON을
 표시한다.
 
+## 인증 API
+
+Supabase Auth의 이메일·비밀번호 인증을 사용한다. 로그인 성공 시 access token과 refresh
+token은 응답 본문에 노출하지 않고 `HttpOnly`, `SameSite=Lax` 쿠키로 저장한다. Supabase가
+설정된 환경에서는 `POST /chat`, `POST /chat/stream` 호출에 유효한 로그인 세션이 필요하다.
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `POST` | `/auth/signup` | Auth 계정과 `public.users` 프로필 생성 및 가능한 경우 인증 쿠키 발급 |
+| `POST` | `/auth/login` | 이메일·비밀번호 로그인 및 인증 쿠키 발급 |
+| `GET` | `/auth/me` | Auth 서버 검증을 거친 현재 사용자 조회 |
+| `POST` | `/auth/refresh` | refresh token 회전 및 인증 쿠키 갱신 |
+| `POST` | `/auth/logout` | Supabase 세션 종료 및 인증 쿠키 제거 |
+
+로그인 요청:
+
+```json
+{"email":"user@example.com","password":"사용자 비밀번호"}
+```
+
+회원가입 요청:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "8자 이상 비밀번호",
+  "name": "김진우",
+  "birth_date": "1990-01-02",
+  "sex": "Male"
+}
+```
+
+이메일 확인이 활성화된 프로젝트는 `email_confirmation_required=true`를 반환하며 확인 후
+로그인해야 한다. 비활성화된 프로젝트는 즉시 인증 쿠키를 발급한다.
+
+사용자 응답은 `id`, `email`, `display_name`만 포함한다. 프로필·검진·복약 등 사용자 관련
+공개 테이블은 `auth.users.id`와 외래키로 연결하고 RLS에서 `auth.uid()`를 기준으로 접근을
+제한해야 한다.
+
+## 대화 세션 API
+
+모든 API는 로그인 세션이 필요하다. Data API에는 서버의 service role key가 아니라
+사용자의 access token을 전달하며, `auth.uid()` 기반 RLS로 본인 데이터만 처리한다.
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `GET` | `/conversations` | 최근 수정 순으로 현재 사용자의 세션 목록 조회 |
+| `POST` | `/conversations` | 빈 대화 세션 생성 |
+| `GET` | `/conversations/{session_id}` | 세션 요약과 전체 메시지 조회 |
+| `DELETE` | `/conversations/{session_id}` | 세션 및 종속 메시지 삭제 |
+
+세션은 `session_id`, `title`, `summary`, `created_at`, `updated_at`을 반환한다. 메시지는
+`message_id`, `role`, `content`, `created_at`을 반환한다. 다른 사용자의 세션 ID는 RLS에
+의해 조회되지 않으며 API에서는 찾을 수 없음으로 처리한다.
+
 ## `GET /health`
 
 Pinecone 연결, namespace별 적재 수, 임베딩 모델, Intent 모델 준비 상태를 반환한다.
@@ -100,13 +155,15 @@ Intent 분류와 독립적인 Safety Guard 정책을 함께 반환한다. Guard�
 
 Intent 분류부터 검색·생성·감사까지 실행한 전체 결과를 JSON으로 반환한다.
 
-멀티턴 요청은 최근 대화와 이전 응답의 요약을 함께 전달한다. 의료용어 확인 응답을
-이어갈 때는 서버가 반환한 `confirmation_id`와 사용자의 `confirmation_answer`를
-전달한다.
+로그인 환경의 멀티턴 요청은 `session_id`만 전달하면 서버가 `chat_messages`의 최근
+대화와 `chat_sessions.summary`를 로드한다. 클라이언트의 `history`, `summary`는 Supabase가
+설정되지 않은 로컬 호환 모드에서만 사용한다. 의료용어 확인 응답을 이어갈 때는 서버가
+반환한 `confirmation_id`와 사용자의 `confirmation_answer`를 전달한다.
 
 ```json
 {
   "question": "그 약 부작용은?",
+  "session_id": "대화 세션 UUID 또는 첫 질문일 때 빈 문자열",
   "history": [
     {"role": "user", "content": "부루펜을 먹었어"},
     {"role": "assistant", "content": "어떤 정보가 궁금하신가요?"}
@@ -151,6 +208,7 @@ RAG의 기본 검색 결과 검사는 다음을 구분한다.
 ```json
 {
   "question": "판콜에스내복액이 무슨 약이고 부작용은 뭐야?",
+  "session_id": "대화 세션 UUID",
   "intent": "simple_lookup",
   "confidence": 0.93,
   "probabilities": {},

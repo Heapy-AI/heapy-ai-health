@@ -1,8 +1,30 @@
 // HEAPY 사용자 시연 UI. 작성자: 김진우
 const elements = {
+  authScreen: document.querySelector("#authScreen"),
+  appShell: document.querySelector("#appShell"),
+  loginForm: document.querySelector("#loginForm"),
+  emailInput: document.querySelector("#emailInput"),
+  passwordInput: document.querySelector("#passwordInput"),
+  loginButton: document.querySelector("#loginButton"),
+  loginError: document.querySelector("#loginError"),
+  loginTitle: document.querySelector("#loginTitle"),
+  authDescription: document.querySelector("#authDescription"),
+  loginModeButton: document.querySelector("#loginModeButton"),
+  signupModeButton: document.querySelector("#signupModeButton"),
+  signupFields: document.querySelector("#signupFields"),
+  nameInput: document.querySelector("#nameInput"),
+  birthDateInput: document.querySelector("#birthDateInput"),
+  sexInput: document.querySelector("#sexInput"),
+  logoutButton: document.querySelector("#logoutButton"),
+  userAvatar: document.querySelector("#userAvatar"),
+  userName: document.querySelector("#userName"),
+  userEmail: document.querySelector("#userEmail"),
+  conversationList: document.querySelector("#conversationList"),
+  newConversationButton: document.querySelector("#newConversationButton"),
   conversation: document.querySelector("#conversation"),
   welcome: document.querySelector("#welcome"),
   messages: document.querySelector("#messages"),
+  conversationLoading: document.querySelector("#conversationLoading"),
   form: document.querySelector("#chatForm"),
   input: document.querySelector("#questionInput"),
   sendButton: document.querySelector("#sendButton"),
@@ -15,6 +37,250 @@ const STREAM_SENTENCE_DELAY_MS = 130;
 let isRequesting = false;
 let conversationHistory = [];
 let conversationSummary = "";
+let currentSessionId = "";
+let conversationSessions = [];
+let authMode = "login";
+let conversationLoadSequence = 0;
+
+function setLoginError(message = "") {
+  elements.loginError.textContent = message;
+  elements.loginError.hidden = !message;
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const isSignup = mode === "signup";
+  elements.loginModeButton.classList.toggle("active", !isSignup);
+  elements.signupModeButton.classList.toggle("active", isSignup);
+  elements.signupFields.hidden = !isSignup;
+  elements.nameInput.required = isSignup;
+  elements.birthDateInput.required = isSignup;
+  elements.sexInput.required = isSignup;
+  elements.loginTitle.textContent = isSignup ? "HEAPY와 함께 시작해요" : "다시 만나서 반가워요";
+  elements.authDescription.textContent = isSignup
+    ? "건강 프로필과 로그인 계정을 함께 만들어요."
+    : "HEAPY 계정으로 로그인해 주세요.";
+  elements.loginButton.textContent = isSignup ? "회원가입" : "로그인";
+  setLoginError();
+}
+
+function renderAuthenticatedUser(user) {
+  const email = String(user.email || "");
+  const displayName = String(user.display_name || email.split("@")[0] || "사용자");
+  elements.userName.textContent = displayName;
+  elements.userEmail.textContent = email;
+  elements.userAvatar.textContent = displayName.charAt(0).toUpperCase() || "사";
+  elements.authScreen.hidden = true;
+  elements.appShell.hidden = false;
+  loadConversationSessions();
+  elements.input.focus();
+}
+
+function showLoginScreen(message = "") {
+  elements.appShell.hidden = true;
+  elements.authScreen.hidden = false;
+  elements.passwordInput.value = "";
+  setAuthMode("login");
+  setLoginError(message);
+  elements.emailInput.focus();
+}
+
+async function refreshSession() {
+  const response = await fetch("/auth/refresh", { method: "POST" });
+  return response.ok;
+}
+
+async function fetchChatStream(options) {
+  let response = await fetch("/chat/stream", options);
+  if (response.status !== 401 || !(await refreshSession())) return response;
+  response = await fetch("/chat/stream", options);
+  return response;
+}
+
+async function restoreSession() {
+  let response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+  if (response.status === 401 && await refreshSession()) {
+    response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+  }
+  if (!response.ok) {
+    showLoginScreen();
+    return;
+  }
+  renderAuthenticatedUser(await response.json());
+}
+
+async function login(event) {
+  event.preventDefault();
+  setLoginError();
+  const isSignup = authMode === "signup";
+  elements.loginButton.disabled = true;
+  try {
+    const payload = {
+      email: elements.emailInput.value.trim(),
+      password: elements.passwordInput.value,
+    };
+    if (isSignup) {
+      payload.name = elements.nameInput.value.trim();
+      payload.birth_date = elements.birthDateInput.value;
+      payload.sex = elements.sexInput.value;
+    }
+    const response = await fetch(isSignup ? "/auth/signup" : "/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || "인증 처리에 실패했습니다.");
+    if (result.email_confirmation_required) {
+      setAuthMode("login");
+      setLoginError("가입 확인 메일을 확인한 뒤 로그인해 주세요.");
+      return;
+    }
+    renderAuthenticatedUser(result);
+  } catch (error) {
+    setLoginError(error instanceof Error ? error.message : "인증 처리에 실패했습니다.");
+  } finally {
+    elements.loginButton.disabled = false;
+    elements.loginButton.textContent = authMode === "signup" ? "회원가입" : "로그인";
+  }
+}
+
+async function logout() {
+  elements.logoutButton.disabled = true;
+  try {
+    await fetch("/auth/logout", { method: "POST" });
+  } finally {
+    resetConversation();
+    elements.conversationList.replaceChildren();
+    showLoginScreen();
+    elements.logoutButton.disabled = false;
+  }
+}
+
+async function fetchWithSession(resource, options = {}) {
+  let response = await fetch(resource, options);
+  if (response.status !== 401 || !(await refreshSession())) return response;
+  response = await fetch(resource, options);
+  return response;
+}
+
+function renderConversationSessions(sessions) {
+  conversationSessions = sessions;
+  elements.conversationList.replaceChildren();
+  if (!sessions.length) {
+    const empty = document.createElement("p");
+    empty.className = "conversation-list-empty";
+    empty.textContent = "저장된 대화가 없습니다.";
+    elements.conversationList.appendChild(empty);
+    return;
+  }
+  sessions.forEach((session) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "conversation-item";
+    button.classList.toggle("active", session.session_id === currentSessionId);
+    const title = document.createElement("strong");
+    title.textContent = session.title || "새 대화";
+    const time = document.createElement("time");
+    const updatedAt = new Date(session.updated_at);
+    time.textContent = Number.isNaN(updatedAt.getTime())
+      ? ""
+      : new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(updatedAt);
+    button.append(title, time);
+    button.addEventListener("click", () => loadConversation(session.session_id));
+    elements.conversationList.appendChild(button);
+  });
+}
+
+async function loadConversationSessions() {
+  try {
+    const response = await fetchWithSession("/conversations", {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return;
+    renderConversationSessions(await response.json());
+  } catch {
+    renderConversationSessions([]);
+  }
+}
+
+function appendStoredAssistantMessage(content) {
+  const message = document.createElement("div");
+  message.className = "message assistant";
+  message.appendChild(createAssistantAvatar());
+  const messageContent = document.createElement("div");
+  messageContent.className = "message-content";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.innerHTML = renderMarkdown(sanitizeAnswerText(content));
+  messageContent.appendChild(bubble);
+  message.appendChild(messageContent);
+  elements.messages.appendChild(message);
+}
+
+async function loadConversation(sessionId) {
+  if (isRequesting) return;
+  const loadSequence = ++conversationLoadSequence;
+  const previousSessionId = currentSessionId;
+  currentSessionId = sessionId;
+  renderConversationSessions(conversationSessions);
+  elements.welcome.hidden = true;
+  elements.messages.hidden = true;
+  elements.conversationLoading.hidden = false;
+  try {
+    const response = await fetchWithSession(`/conversations/${encodeURIComponent(sessionId)}`, {
+      headers: { Accept: "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (loadSequence !== conversationLoadSequence) return;
+    if (!response.ok) throw new Error(payload.detail || "대화를 불러오지 못했습니다.");
+    currentSessionId = payload.session.session_id;
+    conversationSummary = payload.session.summary || "";
+    conversationHistory = (payload.messages || [])
+      .map((message) => ({ role: message.role, content: message.content }))
+      .slice(-6);
+    elements.messages.replaceChildren();
+    elements.welcome.hidden = true;
+    elements.messages.hidden = false;
+    (payload.messages || []).forEach((message) => {
+      if (message.role === "user") appendUserMessage(message.content);
+      if (message.role === "assistant") appendStoredAssistantMessage(message.content);
+    });
+    scrollToLatest();
+  } catch (error) {
+    if (loadSequence !== conversationLoadSequence) return;
+    currentSessionId = previousSessionId;
+    renderConversationSessions(conversationSessions);
+    elements.messages.replaceChildren();
+    elements.messages.hidden = false;
+    appendErrorMessage(error instanceof Error ? error.message : "대화를 불러오지 못했습니다.");
+  } finally {
+    if (loadSequence === conversationLoadSequence) {
+      elements.conversationLoading.hidden = true;
+    }
+  }
+}
+
+function updateConversationSessionPreview(data) {
+  const sessionId = String(data.session_id || "");
+  if (!sessionId) return;
+  const existing = conversationSessions.find((session) => session.session_id === sessionId);
+  const question = String(data.original_question || data.question || "새 대화").trim();
+  const preview = {
+    session_id: sessionId,
+    title: existing?.title && existing.title !== "새 대화"
+      ? existing.title
+      : question.slice(0, 60) || "새 대화",
+    summary: data.conversation_summary || existing?.summary || "",
+    created_at: existing?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  conversationSessions = [
+    preview,
+    ...conversationSessions.filter((session) => session.session_id !== sessionId),
+  ];
+  renderConversationSessions(conversationSessions);
+}
 
 function resizeInput() {
   elements.input.style.height = "auto";
@@ -384,6 +650,7 @@ async function consumeChatStream(response) {
 }
 
 function updateConversationMemory(data) {
+  currentSessionId = data.session_id || currentSessionId;
   conversationSummary = data.conversation_summary || conversationSummary;
   const blockedStatuses = new Set([
     "CONFIRM",
@@ -397,6 +664,8 @@ function updateConversationMemory(data) {
   if (userQuestion) conversationHistory.push({ role: "user", content: userQuestion });
   if (assistantAnswer) conversationHistory.push({ role: "assistant", content: assistantAnswer });
   conversationHistory = conversationHistory.slice(-6);
+  updateConversationSessionPreview(data);
+  loadConversationSessions();
 }
 
 async function submitQuestion(question, options = {}) {
@@ -411,11 +680,12 @@ async function submitQuestion(question, options = {}) {
   resizeInput();
 
   try {
-    const response = await fetch("/chat/stream", {
+    const response = await fetchChatStream({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question: normalized,
+        session_id: currentSessionId,
         history: conversationHistory,
         summary: conversationSummary,
         confirmation_id: options.confirmationId || "",
@@ -438,11 +708,15 @@ async function submitQuestion(question, options = {}) {
 
 function resetConversation() {
   if (isRequesting) return;
+  conversationLoadSequence += 1;
+  elements.conversationLoading.hidden = true;
   elements.messages.replaceChildren();
   elements.messages.hidden = true;
   elements.welcome.hidden = false;
   conversationHistory = [];
   conversationSummary = "";
+  currentSessionId = "";
+  renderConversationSessions(conversationSessions);
   elements.input.value = "";
   resizeInput();
   elements.input.focus();
@@ -460,8 +734,17 @@ elements.form.addEventListener("submit", (event) => {
   submitQuestion(elements.input.value);
 });
 elements.resetButton.addEventListener("click", resetConversation);
+elements.newConversationButton.addEventListener("click", () => {
+  resetConversation();
+  loadConversationSessions();
+});
+elements.loginForm.addEventListener("submit", login);
+elements.loginModeButton.addEventListener("click", () => setAuthMode("login"));
+elements.signupModeButton.addEventListener("click", () => setAuthMode("signup"));
+elements.logoutButton.addEventListener("click", logout);
 document.querySelectorAll("[data-question]").forEach((button) => {
   button.addEventListener("click", () => submitQuestion(button.dataset.question || ""));
 });
 
 resizeInput();
+restoreSession();

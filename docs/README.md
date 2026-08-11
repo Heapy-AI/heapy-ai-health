@@ -13,14 +13,17 @@ Heapy AI health care의 요청 처리 파이프라인 설계 자료 모음이다
 | `general_chat` | 검색 없이 자유 대화 | 불필요 |
 | `ignore` | 주식·날씨·스포츠·코딩 등 건강 서비스 외 고정 문구 | 불필요 |
 
-핵심 설계 결정은 다음과 같다. 파이프라인은 단일 State 객체를 노드에서 노드로 흘려보내며, 각 노드는 필요한 필드를 읽고 결과 필드를 채운다. VDB 검색 결과(청크)는 캐시하지만 개인 데이터(RDB)는 캐시하지 않는다. 요약은 응답 완료 후 백그라운드에서 갱신하여 다음 턴이 로드한다.
+핵심 설계 결정은 다음과 같다. 파이프라인은 단일 State 객체를 노드에서 노드로 흘려보내며, 각 노드는 필요한 필드를 읽고 결과 필드를 채운다. VDB 검색 결과(청크)는 캐시하지만 개인 데이터(RDB)는 캐시하지 않는다. 로그인 사용자의 최근 메시지와 요약은 Supabase에서 로드하며, 답변 완료 시 한 트랜잭션으로 저장해 다음 턴이 사용한다.
 
-현재 MVP는 `POST /chat`과 `POST /chat/stream`에서 Intent v7과 Safety Guard를 독립 실행한다. Guard는 Intent를 `ignore`로 덮어쓰지 않고 위험 수준과 금지 행동만 기록한다. `simple_lookup`과 `comprehensive`는 Pinecone 다중 namespace 병렬 검색을 사용하고, `general_chat`은 검색 없는 Gemini 대화, `ignore`는 건강 서비스 외 고정 응답을 사용한다. RAG 경로는 검색 결과 존재·최소 유사도·명시 대상 일치를 코드로 확인한 뒤 근거가 있는 질문 항목만 답한다. 완료 후 근거 충족도와 안전 정책 준수 여부를 감사하며 이미 표시된 본문은 교체하지 않는다. 세션·검색 캐시·개인 RDB·히스토리 저장은 전체 설계에는 포함되지만 아직 통합 엔드포인트에 연결되지 않았다.
+현재 MVP는 `POST /chat`과 `POST /chat/stream`에서 Intent v7과 Safety Guard를 독립 실행한다. Guard는 Intent를 `ignore`로 덮어쓰지 않고 위험 수준과 금지 행동만 기록한다. `simple_lookup`과 `comprehensive`는 Pinecone 다중 namespace 병렬 검색을 사용하고, `general_chat`은 검색 없는 Gemini 대화, `ignore`는 건강 서비스 외 고정 응답을 사용한다. RAG 경로는 검색 결과 존재·최소 유사도·명시 대상 일치를 코드로 확인한 뒤 근거가 있는 질문 항목만 답한다. 완료 후 근거 충족도와 안전 정책 준수 여부를 감사하며 이미 표시된 본문은 교체하지 않는다. Supabase Auth, 사용자 프로필, 세션별 히스토리·요약 저장은 통합 엔드포인트에 연결되었다. 개인 검진 데이터 결합과 검색 캐시는 아직 연결되지 않았다.
 
 시연용 웹 앱은 FastAPI의 `GET /`에서 제공하며 `POST /chat/stream`의 SSE 응답 계약을
 사용한다. 사용자에게 보이는 답변 본문에서는 검증용 인용 라벨을 제거하고, 응답의
 Intent, 신뢰도, 위험 수준, 검색 결과 검사, 사후 감사, 근거 청크, 전체 JSON을 우측 패널의 질문별
 접이식 카드 목록에 표시한다.
+포트 3000 사용자 UI는 프로젝트 검사 메뉴 대신 로그인 사용자의 Supabase 대화 세션
+목록을 왼쪽에 표시하고, 선택한 세션의 저장 메시지와 요약을 복원한다.
+세션을 불러오는 동안에는 답변 생성용 말풍선 로더를 재사용하지 않고 대화 영역 중앙에 전용 로딩 애니메이션을 표시한다.
 
 웹 앱의 스트리밍 표시는 서버 수신과 분리된 프론트 표시 대기열을 사용한다. 서버는
 토큰과 검증 완료 결과를 가능한 즉시 전달하고, 웹 앱은 글자·문장부호 단위의 짧은
@@ -54,6 +57,8 @@ Intent, 신뢰도, 위험 수준, 검색 결과 검사, 사후 감사, 근거 �
 5. **[응답 설계 문서](.response_schema.py)** - intent 4개 분기별 최종 응답 JSON 구조와 예시. 어떤 분기에 어떤 필드(personal_data, next_action 등)가 들어가는지 정의. 파이프라인이 클라이언트에 내보내는 계약이므로, 백엔드뿐 아니라 프론트 개발자도 참조한다.
 
 6. **[다중 컬렉션 병렬 검색 방법론](./multi_collection_parallel_retrieval.md)** — Sub-intent 분류기 없이 여러 Pinecone namespace를 병렬 검색하고 결과를 병합하는 기준. 검색 상수는 전체 데이터 적재 후 평가를 통해 확정한다.
+
+7. **[Supabase 인증·대화 DB 설계](./supabase_auth_chat_db_design.md)** — Auth 계정과 공개 프로필의 연결, 기존 사용자 보존, RLS, 세션·메시지·요약 저장 경계.
 ```
 docs/
 ├── README.md                    (진입점)
@@ -62,6 +67,7 @@ docs/
 ├── node-io-spec.md              (노드 입출력 표)
 ├── node_stubs.py                (함수 시그니처 + 예시 + fixture)
 ├── response_schema.py           (응답 스키마 + 예시 + fixture)
+├── supabase_auth_chat_db_design.md (인증·대화 DB 설계)
 ├── multi_collection_parallel_retrieval.md (다중 namespace 검색 방법론)
 └── pipeline-state-design.md     (설계 배경)
 ```

@@ -40,6 +40,21 @@ class WebUiTest(unittest.TestCase):
         self.assertIn("data.answer", script)
         self.assertIn("data.intent", script)
 
+    def test_supabase_login_and_logout_are_wired(self) -> None:
+        """로그인 게이트와 세션 복원·로그아웃 연결을 확인한다."""
+        markup = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (WEB_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="loginForm"', markup)
+        self.assertIn('id="logoutButton"', markup)
+        self.assertIn('fetch("/auth/login"', script)
+        self.assertIn('fetch("/auth/signup"', script)
+        self.assertIn('fetchWithSession("/conversations"', script)
+        self.assertIn('fetch("/auth/me"', script)
+        self.assertIn('fetch("/auth/refresh"', script)
+        self.assertIn('fetch("/auth/logout"', script)
+        self.assertIn("fetchChatStream", script)
+
     def test_korean_mvp_status_is_visible(self) -> None:
         markup = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
         script = (WEB_ROOT / "assets" / "app.js").read_text(encoding="utf-8")

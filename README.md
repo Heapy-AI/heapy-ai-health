@@ -11,6 +11,7 @@ data/ 원천 데이터
   → jhgan/ko-sroberta-multitask 로컬 임베딩(768차원)
   → Pinecone dense index
   → namespace별 검색
+  → Supabase Auth 로그인 및 사용자별 대화 세션 로드
   → 멀티턴 후속 질문 재작성 및 RDB 의료용어 정규화
   → 설정된 전체 namespace 병렬 검색·근거 검사
   → FastAPI /search, /ask
@@ -47,7 +48,18 @@ pip install -r requirements.txt
 PINECONE_API_KEY=your_pinecone_api_key
 PINECONE_INDEX_NAME=heapy-rag
 GOOGLE_API_KEY=your_gemini_api_key
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+AUTH_COOKIE_SECURE=0
 ```
+
+`SUPABASE_PUBLISHABLE_KEY` 대신 레거시 `SUPABASE_ANON_KEY`도 사용할 수 있습니다.
+로컬 HTTP에서는 `AUTH_COOKIE_SECURE=0`, HTTPS 운영 환경에서는 반드시 `1`로 설정합니다.
+설정이 완료되면 웹 앱은 Supabase 이메일·비밀번호 로그인을 먼저 요구하고, 인증 세션은
+JavaScript에서 읽을 수 없는 HttpOnly 쿠키로 유지합니다.
+회원가입 시 `auth.users` 계정과 같은 UUID의 `public.users` 프로필이 생성됩니다. 대화는
+`chat_sessions`, `chat_messages`에 사용자별로 저장되며 RLS가 다른 사용자의 접근을 막습니다.
+기존 `public.users` 데이터는 마이그레이션에서 삭제하거나 변경하지 않습니다.
 
 기존 통합 임베딩 인덱스는 768차원 로컬 임베딩과 호환되지 않습니다. 별도의 `heapy-rag` dense 인덱스를 사용합니다.
 
@@ -170,9 +182,11 @@ python run_demo_ui.py
 - 사용자 UI: <http://localhost:3000>
 - API 서버: <http://localhost:8000>
 
-사용자 시연 UI는 기존 FastAPI 검증 화면과 별도로 실행됩니다. 왼쪽 서비스 메뉴와
-챗봇 화면만 제공하며 프로젝트 환경, Intent·감사 로그, 응답 원본 JSON은 표시하지
+사용자 시연 UI는 기존 FastAPI 검증 화면과 별도로 실행됩니다. 왼쪽 사용자별 대화
+세션 목록과 챗봇 화면을 제공하며 프로젝트 환경, Intent·감사 로그, 응답 원본 JSON은 표시하지
 않습니다. 실행 전에 FastAPI 서버가 `8000` 포트에서 실행 중이어야 합니다.
+회원가입·로그인·로그아웃 요청과 HttpOnly 인증 쿠키는 사용자 UI 서버가 메인 API로
+중계하며, 메인 웹 앱과 동일하게 Supabase의 세션별 대화 저장을 사용합니다.
 개발자용 웹과 동일하게 서버 토큰 수신과 분리된 표시 대기열을 사용하며,
 답변의 Markdown을 렌더링합니다. 사용자용 화면에서는 답변 하단의 출처 펼침기를 표시하지 않습니다.
 
@@ -180,6 +194,13 @@ python run_demo_ui.py
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
+| `POST` | `/auth/signup` | 회원가입 및 사용자 프로필 생성 |
+| `POST` | `/auth/login` | 로그인 및 HttpOnly 인증 쿠키 발급 |
+| `POST` | `/auth/logout` | 로그아웃 및 인증 쿠키 제거 |
+| `GET` | `/conversations` | 현재 사용자의 대화 세션 목록 |
+| `POST` | `/conversations` | 새 대화 세션 생성 |
+| `GET` | `/conversations/{session_id}` | 세션과 저장 메시지 조회 |
+| `DELETE` | `/conversations/{session_id}` | 대화 세션 삭제 |
 | `GET` | `/health` | Pinecone namespace별 적재 수 확인 |
 | `POST` | `/chat/stream` | SSE 기반 통합 챗봇 토큰 스트리밍 |
 | `POST` | `/search` | 로컬 질문 임베딩 후 Pinecone 검색 |
