@@ -6,11 +6,22 @@
     <meta name="theme-color" content="#7b68e8" />
     <meta name="description" content="HEAPY 건강정보 AI 사용자 시연 서비스" />
     <title>HEAPY | 건강정보 AI</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260811-5" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260811-8" />
   </head>
   <body>
     <!-- 작성자: 김진우 -->
-    <main id="authScreen" class="auth-screen" aria-labelledby="loginTitle">
+    <div id="initialLoadingScreen" class="initial-loading-screen" role="status" aria-live="polite">
+      <div class="initial-loading-visual" aria-hidden="true">
+        <span class="initial-loading-orbit orbit-one"></span>
+        <span class="initial-loading-orbit orbit-two"></span>
+        <span class="initial-loading-logo"><img src="/images/heapy-logo.png" alt="" /></span>
+      </div>
+      <strong class="initial-loading-brand">HEAPY</strong>
+      <p>건강한 대화를 준비하고 있어요</p>
+      <span class="initial-loading-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    </div>
+
+    <main id="authScreen" class="auth-screen" aria-labelledby="loginTitle" hidden>
       <section class="auth-card">
         <span class="brand-mark auth-logo" aria-hidden="true"><img src="/images/heapy-logo.png" alt="" /></span>
         <span class="welcome-kicker">YOUR HEALTH COMPANION</span>
@@ -135,6 +146,22 @@
         </footer>
       </main>
     </div>
-    <script src="/assets/app.js?v=20260811-5" defer></script>
+
+    <dialog id="deleteConversationDialog" class="delete-dialog" aria-labelledby="deleteDialogTitle">
+      <form method="dialog" class="delete-dialog-card">
+        <span class="delete-dialog-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6" /></svg>
+        </span>
+        <span class="welcome-kicker">DELETE CONVERSATION</span>
+        <h2 id="deleteDialogTitle">대화를 삭제할까요?</h2>
+        <p><strong id="deleteConversationTitle"></strong><br />삭제한 대화와 메시지는 복구할 수 없습니다.</p>
+        <div class="delete-dialog-actions">
+          <button class="delete-dialog-cancel" type="submit" value="cancel">취소</button>
+          <button class="delete-dialog-confirm" type="submit" value="confirm">삭제</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/assets/app.js?v=20260811-8" defer></script>
   </body>
 </html>

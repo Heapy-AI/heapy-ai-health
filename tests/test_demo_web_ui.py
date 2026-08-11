@@ -36,6 +36,23 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertIn('id="logoutButton"', markup)
         self.assertIn('id="conversationLoading"', markup)
         self.assertIn('class="session-loading-spinner"', markup)
+        self.assertIn('id="deleteConversationDialog"', markup)
+        self.assertIn('id="deleteConversationTitle"', markup)
+        self.assertIn('id="initialLoadingScreen"', markup)
+        self.assertIn('id="authScreen" class="auth-screen" aria-labelledby="loginTitle" hidden', markup)
+
+    def test_initial_loading_screen_hides_auth_flash_during_session_restore(self) -> None:
+        """세션 복원 전에는 전용 시작 화면만 표시한다."""
+        markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (DEMO_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("건강한 대화를 준비하고 있어요", markup)
+        self.assertIn("hideInitialLoadingScreen()", script)
+        self.assertIn("finally", script)
+        self.assertIn(".initial-loading-screen", styles)
+        self.assertIn("@keyframes initial-orbit-spin", styles)
+        self.assertIn("@keyframes initial-screen-out", styles)
 
     def test_sidebar_shows_conversations_without_service_tabs(self) -> None:
         markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
@@ -94,6 +111,22 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertNotIn("appendLoadingMessage()", load_conversation)
         self.assertIn(".conversation-loading", styles)
         self.assertIn("@keyframes session-loading-spin", styles)
+
+    def test_conversation_session_has_confirmed_delete_action(self) -> None:
+        """대화 세션은 확인 후 본인 세션 삭제 API를 호출한다."""
+        markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (DEMO_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("conversation-delete-button", script)
+        self.assertIn("confirmConversationDeletion", script)
+        self.assertIn("deleteConversationDialog.showModal()", script)
+        self.assertNotIn("window.confirm(", script)
+        self.assertIn('method: "DELETE"', script)
+        self.assertIn("deleteConversation(session.session_id", script)
+        self.assertIn("삭제한 대화와 메시지는 복구할 수 없습니다.", markup)
+        self.assertIn(".conversation-delete-button", styles)
+        self.assertIn(".delete-dialog::backdrop", styles)
 
     @patch("app.demo.requests.post")
     def test_chat_stream_is_proxied_without_buffering(self, post: Mock) -> None:

@@ -1,5 +1,6 @@
 // HEAPY 사용자 시연 UI. 작성자: 김진우
 const elements = {
+  initialLoadingScreen: document.querySelector("#initialLoadingScreen"),
   authScreen: document.querySelector("#authScreen"),
   appShell: document.querySelector("#appShell"),
   loginForm: document.querySelector("#loginForm"),
@@ -25,6 +26,8 @@ const elements = {
   welcome: document.querySelector("#welcome"),
   messages: document.querySelector("#messages"),
   conversationLoading: document.querySelector("#conversationLoading"),
+  deleteConversationDialog: document.querySelector("#deleteConversationDialog"),
+  deleteConversationTitle: document.querySelector("#deleteConversationTitle"),
   form: document.querySelector("#chatForm"),
   input: document.querySelector("#questionInput"),
   sendButton: document.querySelector("#sendButton"),
@@ -34,6 +37,8 @@ const elements = {
 const STREAM_CHARACTER_DELAY_MS = 28;
 const STREAM_COMMA_DELAY_MS = 70;
 const STREAM_SENTENCE_DELAY_MS = 130;
+const INITIAL_LOADING_MINIMUM_MS = 450;
+const initialLoadingStartedAt = performance.now();
 let isRequesting = false;
 let conversationHistory = [];
 let conversationSummary = "";
@@ -85,6 +90,17 @@ function showLoginScreen(message = "") {
   elements.emailInput.focus();
 }
 
+function hideInitialLoadingScreen() {
+  const elapsed = performance.now() - initialLoadingStartedAt;
+  const delay = Math.max(0, INITIAL_LOADING_MINIMUM_MS - elapsed);
+  window.setTimeout(() => {
+    elements.initialLoadingScreen.classList.add("leaving");
+    window.setTimeout(() => {
+      elements.initialLoadingScreen.hidden = true;
+    }, 240);
+  }, delay);
+}
+
 async function refreshSession() {
   const response = await fetch("/auth/refresh", { method: "POST" });
   return response.ok;
@@ -98,15 +114,21 @@ async function fetchChatStream(options) {
 }
 
 async function restoreSession() {
-  let response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
-  if (response.status === 401 && await refreshSession()) {
-    response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+  try {
+    let response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+    if (response.status === 401 && await refreshSession()) {
+      response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+    }
+    if (!response.ok) {
+      showLoginScreen();
+      return;
+    }
+    renderAuthenticatedUser(await response.json());
+  } catch {
+    showLoginScreen("로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.");
+  } finally {
+    hideInitialLoadingScreen();
   }
-  if (!response.ok) {
-    showLoginScreen();
-    return;
-  }
-  renderAuthenticatedUser(await response.json());
 }
 
 async function login(event) {
@@ -175,10 +197,12 @@ function renderConversationSessions(sessions) {
     return;
   }
   sessions.forEach((session) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "conversation-item";
-    button.classList.toggle("active", session.session_id === currentSessionId);
+    const item = document.createElement("div");
+    item.className = "conversation-item";
+    item.classList.toggle("active", session.session_id === currentSessionId);
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "conversation-item-main";
     const title = document.createElement("strong");
     title.textContent = session.title || "새 대화";
     const time = document.createElement("time");
@@ -186,10 +210,66 @@ function renderConversationSessions(sessions) {
     time.textContent = Number.isNaN(updatedAt.getTime())
       ? ""
       : new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(updatedAt);
-    button.append(title, time);
-    button.addEventListener("click", () => loadConversation(session.session_id));
-    elements.conversationList.appendChild(button);
+    openButton.append(title, time);
+    openButton.addEventListener("click", () => loadConversation(session.session_id));
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "conversation-delete-button";
+    deleteButton.setAttribute("aria-label", `${title.textContent} 대화 삭제`);
+    deleteButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6" /></svg>';
+    deleteButton.addEventListener("click", () => {
+      deleteConversation(session.session_id, title.textContent, deleteButton);
+    });
+
+    item.append(openButton, deleteButton);
+    elements.conversationList.appendChild(item);
   });
+}
+
+function confirmConversationDeletion(title) {
+  elements.deleteConversationTitle.textContent = `“${title || "새 대화"}”`;
+  elements.deleteConversationDialog.returnValue = "cancel";
+  return new Promise((resolve) => {
+    elements.deleteConversationDialog.addEventListener(
+      "close",
+      () => resolve(elements.deleteConversationDialog.returnValue === "confirm"),
+      { once: true },
+    );
+    elements.deleteConversationDialog.showModal();
+  });
+}
+
+async function deleteConversation(sessionId, title, deleteButton) {
+  if (isRequesting) {
+    window.alert("답변 생성이 끝난 후 대화를 삭제해 주세요.");
+    return;
+  }
+  const confirmed = await confirmConversationDeletion(title);
+  if (!confirmed) return;
+
+  deleteButton.disabled = true;
+  try {
+    const response = await fetchWithSession(`/conversations/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail || "대화를 삭제하지 못했습니다.");
+
+    conversationSessions = conversationSessions.filter(
+      (session) => session.session_id !== sessionId,
+    );
+    if (currentSessionId === sessionId) {
+      resetConversation();
+    } else {
+      renderConversationSessions(conversationSessions);
+    }
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "대화를 삭제하지 못했습니다.");
+  } finally {
+    deleteButton.disabled = false;
+  }
 }
 
 async function loadConversationSessions() {
@@ -742,6 +822,11 @@ elements.loginForm.addEventListener("submit", login);
 elements.loginModeButton.addEventListener("click", () => setAuthMode("login"));
 elements.signupModeButton.addEventListener("click", () => setAuthMode("signup"));
 elements.logoutButton.addEventListener("click", logout);
+elements.deleteConversationDialog.addEventListener("click", (event) => {
+  if (event.target === elements.deleteConversationDialog) {
+    elements.deleteConversationDialog.close("cancel");
+  }
+});
 document.querySelectorAll("[data-question]").forEach((button) => {
   button.addEventListener("click", () => submitQuestion(button.dataset.question || ""));
 });
