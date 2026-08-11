@@ -60,7 +60,7 @@ def _non_negative_float_env(name: str, default: float) -> float:
 
 _intent_model_value = os.environ.get(
     "INTENT_MODEL_PATH",
-    "classifier/artifacts/intent-v6/best_model.json",
+    "classifier/artifacts/intent-v7/best_model.json",
 )
 INTENT_MODEL_PATH = Path(_intent_model_value)
 if not INTENT_MODEL_PATH.is_absolute():
@@ -93,11 +93,45 @@ if not SEARCH_COLLECTIONS:
 # 데이터 적재 완료 후 평가를 통해 조정한다. 현재 값은 구조 검증용 기본값이다.
 SEARCH_TOP_K_PER_COLLECTION = _positive_int_env(
     "SEARCH_TOP_K_PER_COLLECTION",
-    SEARCH_TOP_K,
+    10,
 )
 SEARCH_FINAL_TOP_K = _positive_int_env("SEARCH_FINAL_TOP_K", 6)
 SEARCH_MAX_PER_COLLECTION = _positive_int_env(
     "SEARCH_MAX_PER_COLLECTION",
-    2,
+    6,
 )
 SEARCH_MIN_SCORE = _non_negative_float_env("SEARCH_MIN_SCORE", 0.0)
+
+# 멀티턴 질문 재작성과 요약 메모리는 클라이언트가 전달한 문맥만 사용한다.
+# 작성자: 김진우
+CHAT_HISTORY_MAX_TURNS = _positive_int_env("CHAT_HISTORY_MAX_TURNS", 6)
+CHAT_HISTORY_MAX_CHARS = _positive_int_env("CHAT_HISTORY_MAX_CHARS", 600)
+QUERY_REWRITE_ENABLED = os.environ.get("QUERY_REWRITE_ENABLED", "1").strip().lower() not in {
+    "0",
+    "false",
+}
+CONVERSATION_SUMMARY_ENABLED = os.environ.get(
+    "CONVERSATION_SUMMARY_ENABLED",
+    "1",
+).strip().lower() not in {"0", "false"}
+CONVERSATION_SUMMARY_MAX_CHARS = _positive_int_env(
+    "CONVERSATION_SUMMARY_MAX_CHARS",
+    400,
+)
+
+# 의료용어 정규화 저장소와 후보 판정 기준이다.
+# 작성자: 김진우
+RDB_DSN = (
+    os.environ.get("RDB_DSN")
+    or os.environ.get("DATABASE_URL")
+    or ""
+).strip()
+QUERY_RESOLUTION_MIN_SCORE = float(
+    os.environ.get("QUERY_RESOLUTION_MIN_SCORE", "0.66")
+)
+if not 0.0 <= QUERY_RESOLUTION_MIN_SCORE <= 1.0:
+    raise RuntimeError("QUERY_RESOLUTION_MIN_SCORE는 0 이상 1 이하이어야 합니다.")
+QUERY_RESOLUTION_AMBIGUITY_MARGIN = _non_negative_float_env(
+    "QUERY_RESOLUTION_AMBIGUITY_MARGIN",
+    0.05,
+)

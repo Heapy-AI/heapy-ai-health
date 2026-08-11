@@ -6,8 +6,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import (
+    CONVERSATION_SUMMARY_ENABLED,
     INTENT_MIN_CONFIDENCE,
     INTENT_MODEL_PATH,
+    QUERY_RESOLUTION_AMBIGUITY_MARGIN,
+    QUERY_RESOLUTION_MIN_SCORE,
+    QUERY_REWRITE_ENABLED,
+    RDB_DSN,
     SEARCH_COLLECTIONS,
     SEARCH_FINAL_TOP_K,
     SEARCH_MAX_PER_COLLECTION,
@@ -17,9 +22,13 @@ from app.core.config import (
 from app.core.state import state
 from app.routers import ask, chat, intent
 from app.services.chat_orchestrator import ChatOrchestrator
+from app.services.conversation_summary import build_conversation_summarizer
 from app.services.general_chat import build_general_chat_chain
 from app.services.grounded_rag import build_grounded_rag_service
 from app.services.intent_classifier import LinearIntentClassifier
+from app.services.query_confirmation import QueryConfirmationStore
+from app.services.query_resolver import build_query_resolver
+from app.services.query_rewriter import build_query_rewriter
 from app.services.rag import build_answer_chain
 from app.services.vector_search import build_pinecone_search_service
 
@@ -36,6 +45,20 @@ async def lifespan(app: FastAPI):
     state["grounded_rag_service"] = grounded_rag_service
     general_chat_chain = build_general_chat_chain()
     state["general_chat_chain"] = general_chat_chain
+    query_rewriter = build_query_rewriter() if QUERY_REWRITE_ENABLED else None
+    state["query_rewriter"] = query_rewriter
+    query_resolver = build_query_resolver(
+        RDB_DSN,
+        min_score=QUERY_RESOLUTION_MIN_SCORE,
+        ambiguity_margin=QUERY_RESOLUTION_AMBIGUITY_MARGIN,
+    )
+    state["query_resolver"] = query_resolver
+    conversation_summarizer = (
+        build_conversation_summarizer() if CONVERSATION_SUMMARY_ENABLED else None
+    )
+    state["conversation_summarizer"] = conversation_summarizer
+    confirmation_store = QueryConfirmationStore()
+    state["query_confirmation_store"] = confirmation_store
     state["backend"] = vector_search.backend_name
     state["embed_model"] = vector_search.embed_model
     state["indexed_chunks"] = counts
@@ -67,6 +90,19 @@ async def lifespan(app: FastAPI):
         final_top_k=SEARCH_FINAL_TOP_K,
         max_per_collection=SEARCH_MAX_PER_COLLECTION,
         min_score=SEARCH_MIN_SCORE,
+        query_rewriter=query_rewriter,
+        query_resolver=query_resolver,
+        conversation_summarizer=conversation_summarizer,
+        confirmation_store=confirmation_store,
+    )
+
+    print(
+        "[lifespan] 멀티턴 질문 재작성 "
+        + ("활성" if query_rewriter is not None else "비활성")
+        + " · 대화 요약 "
+        + ("활성" if conversation_summarizer is not None else "비활성")
+        + " · 의료용어 저장소 "
+        + ("RDB" if RDB_DSN else "미연결")
     )
 
     print(

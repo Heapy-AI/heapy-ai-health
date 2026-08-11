@@ -22,7 +22,15 @@ from app.services.intent_classifier import Intent
 class FakeStreamingOrchestrator:
     """토큰 두 건과 완료 결과를 순서대로 생성한다."""
 
-    def stream_answer(self, question: str):
+    def stream_answer(
+        self,
+        question: str,
+        history=(),
+        summary: str = "",
+        *,
+        confirmation_id: str = "",
+        confirmation_answer: bool | None = None,
+    ):
         yield ChatStreamEvent(event="token", text="안녕")
         yield ChatStreamEvent(event="token", text="하세요")
         yield ChatStreamEvent(
@@ -37,6 +45,10 @@ class FakeStreamingOrchestrator:
                 guard_triggered=False,
                 guard_reason=None,
                 matched_patterns=[],
+                risk_level="normal",
+                restricted_actions=[],
+                response_policy="standard_grounded",
+                emergency=False,
                 answer="안녕하세요",
                 grounded=None,
             ),
@@ -93,6 +105,14 @@ class ChatStreamApiTest(unittest.TestCase):
         output += label_filter.flush()
 
         self.assertEqual(output, "일반 [표시]와  근거")
+
+    def test_filter_removes_lowercase_and_multiple_citation_labels(self) -> None:
+        label_filter = _CitationLabelStreamFilter()
+
+        output = label_filter.feed("효능 설명[c1, c2] 다음 문장")
+        output += label_filter.flush()
+
+        self.assertEqual(output, "효능 설명 다음 문장")
 
 
 if __name__ == "__main__":

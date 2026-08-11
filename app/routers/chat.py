@@ -3,6 +3,7 @@
 작성자: 김진우
 """
 import json
+import re
 from collections.abc import Iterator
 
 from fastapi import APIRouter, HTTPException
@@ -62,16 +63,16 @@ class _CitationLabelStreamFilter:
 
     @staticmethod
     def _is_partial_label(value: str) -> bool:
-        if value in {"[", "[C"}:
+        if value == "[":
             return True
-        return value.startswith("[C") and value[2:].isdigit()
+        return bool(
+            re.fullmatch(r"\[[Cc]\d*(?:\s*,\s*[Cc]?\d*)*\s*", value)
+        )
 
     @staticmethod
     def _is_complete_label(value: str) -> bool:
-        return (
-            value.startswith("[C")
-            and value.endswith("]")
-            and value[2:-1].isdigit()
+        return bool(
+            re.fullmatch(r"\[[Cc]\d+(?:\s*,\s*[Cc]?\d+)*\s*]", value)
         )
 
 
@@ -135,6 +136,10 @@ def _to_chat_response(
         guard_triggered=result.guard_triggered,
         guard_reason=result.guard_reason,
         matched_patterns=result.matched_patterns,
+        risk_level=result.risk_level,
+        restricted_actions=result.restricted_actions,
+        response_policy=result.response_policy,
+        emergency=result.emergency,
         answer=result.answer,
         sources=sources,
         grounded=result.grounded,
@@ -144,12 +149,30 @@ def _to_chat_response(
         verification_reason=result.verification_reason,
         grounding_errors=result.grounding_errors,
         unsupported_claims=result.unsupported_claims,
-        grounding_plan=result.grounding_plan,
+        evidence_status=result.evidence_status,
+        retrieval_assessment=result.retrieval_assessment,
         audit_status=result.audit_status,
         audit_summary=result.audit_summary,
+        unanswered_items=result.unanswered_items,
+        safety_violations=result.safety_violations,
         searched_collections=result.searched_collections,
         failed_collections=result.failed_collections,
         personal_context_used=result.personal_context_used,
+        original_question=result.original_question or question,
+        standalone_question=result.standalone_question or question,
+        resolved_query=result.resolved_query or question,
+        query_rewritten=result.query_rewritten,
+        rewrite_reason=result.rewrite_reason,
+        rewrite_error=result.rewrite_error,
+        resolved_terms=result.resolved_terms,
+        resolution_status=result.resolution_status,
+        resolution_error=result.resolution_error,
+        query_confirmation=result.query_confirmation,
+        confirmation_question=result.confirmation_question,
+        confirmation_id=result.confirmation_id,
+        conversation_summary=result.conversation_summary,
+        summary_updated=result.summary_updated,
+        summary_reason=result.summary_reason,
     )
 
 
@@ -173,7 +196,13 @@ def chat(request: ChatRequest) -> ChatResponse:
         )
 
     try:
-        result = orchestrator.answer(request.question)
+        result = orchestrator.answer(
+            request.question,
+            request.history,
+            request.summary,
+            confirmation_id=request.confirmation_id,
+            confirmation_answer=request.confirmation_answer,
+        )
     except IntentClassifierUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SearchUnavailableError as exc:
@@ -198,7 +227,13 @@ def stream_chat(request: ChatRequest) -> StreamingResponse:
     def generate_events() -> Iterator[str]:
         label_filter = _CitationLabelStreamFilter()
         try:
-            for stream_event in orchestrator.stream_answer(request.question):
+            for stream_event in orchestrator.stream_answer(
+                request.question,
+                request.history,
+                request.summary,
+                confirmation_id=request.confirmation_id,
+                confirmation_answer=request.confirmation_answer,
+            ):
                 if stream_event.event == "token":
                     display_text = label_filter.feed(stream_event.text)
                     if display_text:

@@ -14,7 +14,9 @@
 | `session_id` | str | S1 |
 | `is_new_session` | bool | S1CHK |
 | `raw_query` | str | 입력 |
-| `resolved_query` | str | S3 / S4 |
+| `standalone_question` | str | S3 / S4 |
+| `resolved_query` | str | QN |
+| `resolution_status` | str | QN |
 | `history` | Turn[] | S2 / S4 |
 | `summary` | str \| null | S2 |
 | `query_embedding` | float[] | A1 |
@@ -26,7 +28,8 @@
 | `cache_hit` | bool | SC1 / BC1 |
 | `user_context` | object \| null | D2 |
 | `prompt` | str | C2 / B4 / C5 |
-| `grounding_plan` | object \| null | P1 |
+| `retrieval_assessment` | object \| null | RCHK |
+| `evidence_status` | str | APOST |
 | `audit_status` | str | APOST |
 | `audit_summary` | str | APOST |
 | `error` | str \| null | ERRMSG |
@@ -52,14 +55,15 @@
 | S1 세션 조회 | `raw_query` | `session_id` |
 | S1CHK 세션 존재 여부 | `session_id` | `is_new_session` |
 | S2 컨텍스트 로드 | `session_id` | `history`, `summary` |
-| S3 질문 재구성 | `raw_query`, `history`, `summary` | `resolved_query` |
-| S4 신규 세션 초기화 | `raw_query` | `resolved_query`(=원문), `history`(=[]) |
+| S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` (문맥 지시어·대상 생략·애매한 후속 질문을 재작성 모델이 판정) |
+| S4 신규 세션 초기화 | `raw_query` | `standalone_question`(=원문), `history`(=[]) |
+| QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status` |
 
 ### 의도 분류
 
 | 노드 | 입력 | 출력 |
 |---|---|---|
-| SG Safety Guard | `resolved_query` | `guard_triggered`, `guard_reason`, 차단 시 `intent=ignore` |
+| SG Safety Guard | `resolved_query` | `guard_triggered`, `guard_reason`, `risk_level`, `restricted_actions`, `response_policy`, `emergency` (위험 증상 + 개인·현재 상황 + 요청 행동 + 정보형 의문문 조합 판정) |
 | A1 임베딩 변환 | `resolved_query` | `query_embedding` |
 | A2~A3 분류기 | `query_embedding` | (내부 로짓/확률) |
 | A4 Intent 분류 | (확률) | `intent` |
@@ -90,10 +94,10 @@
 | C2 프롬프트 (simple) | `chunks`, `history` | `prompt` |
 | B4 프롬프트 (comprehensive) | `chunks`, `user_context`, `history`, `summary` | `prompt` |
 | C5 프롬프트 (chat) | `history`, `summary` | `prompt` |
-| P1 근거 계획 선검증 | `chunks`, `intent`, 질문 | `grounding_plan`, `grounded` |
-| L1 최종 답변 호출 | `grounding_plan` | (스트림 시작) |
+| RCHK 검색 결과 기본 검사 | `chunks`, 질문 | `retrieval_assessment`, `grounded` |
+| L1 최종 답변 호출 | `chunks`, 안전 정책 | (스트림 시작) |
 | L2 / L3 스트림 전송 | 최종 답변 토큰 | (클라이언트로 전송) |
-| APOST 사후 감사 | 최종 답변, `grounding_plan`, `chunks` | `audit_status`, `audit_summary`, `unsupported_claims` |
+| APOST 사후 감사 | 최종 답변, `chunks`, 안전 정책 | `audit_status`, `audit_summary`, `evidence_status`, `unanswered_items`, `unsupported_claims`, `safety_violations` |
 
 ---
 

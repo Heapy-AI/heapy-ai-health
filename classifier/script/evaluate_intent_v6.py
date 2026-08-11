@@ -59,16 +59,17 @@ def _embed(
 
 def _guard_rows(
     classifier_rows: list[dict[str, Any]],
+    *,
+    guard_routing: str = "legacy_ignore",
 ) -> list[dict[str, Any]]:
-    """Linear 예측을 보존하면서 Safety Guard 최종 결과를 추가한다."""
+    """Linear 예측에 Safety Guard 정책 메타데이터를 추가한다."""
     rows: list[dict[str, Any]] = []
     for classifier_row in classifier_rows:
         guard = check_safety_guard(classifier_row["text"])
-        final_label = (
-            "ignore" if guard.triggered else classifier_row["predicted_label"]
-        )
-        final_confidence = 1.0 if guard.triggered else classifier_row["confidence"]
-        final_uncertain = False if guard.triggered else classifier_row["uncertain"]
+        legacy_override = guard_routing == "legacy_ignore" and guard.triggered
+        final_label = "ignore" if legacy_override else classifier_row["predicted_label"]
+        final_confidence = 1.0 if legacy_override else classifier_row["confidence"]
+        final_uncertain = False if legacy_override else classifier_row["uncertain"]
         rows.append(
             {
                 "text": classifier_row["text"],
@@ -83,6 +84,10 @@ def _guard_rows(
                 "guard_triggered": guard.triggered,
                 "guard_reason": guard.reason,
                 "matched_patterns": guard.matched_patterns,
+                "risk_level": guard.risk_level.value,
+                "restricted_actions": guard.restricted_actions,
+                "response_policy": guard.response_policy,
+                "emergency": guard.emergency,
                 "correct": final_label == classifier_row["true_label"],
             }
         )
@@ -123,7 +128,10 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     for row in classifier_rows:
         row["correct"] = row["predicted_label"] == row["true_label"]
 
-    guard_rows = _guard_rows(classifier_rows)
+    guard_rows = _guard_rows(
+        classifier_rows,
+        guard_routing=args.guard_routing,
+    )
     guard_metrics = _metrics_for_guard_rows(guard_rows)
     classifier_errors = [row for row in classifier_rows if not row["correct"]]
     guard_errors = [row for row in guard_rows if not row["correct"]]
@@ -137,6 +145,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "embedding_model": checkpoint["embedding_model"],
         "labels": list(LABELS),
         "confidence_threshold": confidence_threshold,
+        "guard_routing": args.guard_routing,
         "classifier_only": {
             "metrics": classifier_metrics,
             "misclassified_count": len(classifier_errors),
@@ -152,14 +161,15 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         },
     }
 
-    prefix = f"{args.split}_v6"
+    version_tag = str(checkpoint["model_version"]).split("-")[1]
+    prefix = f"{args.split}_{version_tag}"
     write_json(output_dir / f"{prefix}_evaluation.json", result)
     write_jsonl(output_dir / f"{prefix}_predictions.jsonl", guard_rows)
     write_jsonl(output_dir / f"{prefix}_misclassified.jsonl", guard_errors)
 
     for name, metrics in (
         ("Linear classifier only", classifier_metrics),
-        ("Linear classifier + Safety Guard", guard_metrics),
+        (f"Linear classifier + Safety Guard ({args.guard_routing})", guard_metrics),
     ):
         loss_text = (
             f"{metrics['loss']:.4f}"
@@ -187,6 +197,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="기본 split 파일 대신 사용할 JSONL",
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--guard-routing",
+        choices=("legacy_ignore", "metadata_only"),
+        default="legacy_ignore",
+        help="Safety Guard가 intent를 ignore로 덮어쓸지 여부",
+    )
     return parser
 
 
