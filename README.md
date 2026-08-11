@@ -37,6 +37,8 @@
 | Chat API | [`app/routers/chat.py`](app/routers/chat.py), [`app/schemas/health_chatbot.py`](app/schemas/health_chatbot.py) | 확인 ID와 `confirmation_answer` 처리 |
 | 로컬 서버 | [`app/local_dev_server.py`](app/local_dev_server.py), [`app/services/local_dev.py`](app/services/local_dev.py) | 로컬 문서 인덱스, 검색 캐시, 테스트용 서버 |
 | Pinecone 연결 | [`app/services/vector_search.py`](app/services/vector_search.py) | 정규화 결과 공유 및 중복 resolver 호출 방지 |
+| Supabase migration | [`supabase/migrations/202608110001_medical_term_search.sql`](supabase/migrations/202608110001_medical_term_search.sql) | 표준용어·alias 테이블, 초성 검색 함수, trigram 인덱스와 Trigger 생성 |
+| alias 적재 | [`database/build_medical_term_catalog.py`](database/build_medical_term_catalog.py) | 원천 JSONL을 Supabase 적재용 표준용어·alias SQL로 변환 |
 | 웹 UI | [`app/web/assets/app.js`](app/web/assets/app.js), [`app/web/index.html`](app/web/index.html), [`app/web/assets/styles.css`](app/web/assets/styles.css) | `예/아니요` 확인 버튼과 confirmation ID 전송 |
 | 기존 질의 연결 | [`app/routers/ask.py`](app/routers/ask.py), [`app/routers/intent.py`](app/routers/intent.py), [`app/services/safety_guard.py`](app/services/safety_guard.py) | 기존 질의·의도·안전 처리와 정규화 결과 연결 |
 | 설정·스키마 | [`app/core/config.py`](app/core/config.py), [`app/main.py`](app/main.py), [`app/schemas/intent.py`](app/schemas/intent.py) | RDB/Pinecone/LLM 설정과 응답 구조 확장 |
@@ -71,4 +73,5 @@ PYTHONPATH=. python3 -m uvicorn app.local_dev_server:app \
 ## 관련 문서
 
 - [`QUERY_NORMALIZATION_README.md`](QUERY_NORMALIZATION_README.md): 정규화 규칙, API 요청 예시, RDB/Pinecone 운영 연동
+- [`supabase/README.md`](supabase/README.md): Supabase migration 적용과 alias 데이터 적재 순서
 - 브랜치: [`feat/query-normalization`](https://github.com/Heapy-AI/heapy-ai-health/tree/feat/query-normalization)
