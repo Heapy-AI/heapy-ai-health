@@ -86,18 +86,39 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 .message-avatar { width: 36px; height: 36px; overflow: hidden; flex: 0 0 auto; border: 2px solid #fff; border-radius: 50%; background: var(--mint-soft); box-shadow: 0 5px 15px rgba(91,70,170,.12); }
 .message-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .message-content { max-width: 78%; }
-.bubble { padding: 14px 17px; border-radius: 5px 19px 19px; color: #31413f; background: rgba(255,255,255,.96); box-shadow: 0 10px 28px rgba(91,70,170,.07); font-size: 13.5px; line-height: 1.75; white-space: pre-wrap; }
-.message.user .bubble { max-width: 78%; border-radius: 19px 19px 5px 19px; color: #fff; background: linear-gradient(145deg, #8c79ee, var(--purple)); box-shadow: 0 10px 26px rgba(123,104,232,.2); }
+.bubble { padding: 14px 17px; border-radius: 5px 19px 19px; color: #31413f; background: rgba(255,255,255,.96); box-shadow: 0 10px 28px rgba(91,70,170,.07); font-size: 13.5px; line-height: 1.75; }
+.message.user .bubble { max-width: 78%; border-radius: 19px 19px 5px 19px; color: #fff; background: linear-gradient(145deg, #8c79ee, var(--purple)); box-shadow: 0 10px 26px rgba(123,104,232,.2); white-space: pre-wrap; }
+.message.assistant .bubble p { margin: 0 0 10px; }
+.message.assistant .bubble p:last-child { margin-bottom: 0; }
+.message.assistant .bubble h1,
+.message.assistant .bubble h2,
+.message.assistant .bubble h3,
+.message.assistant .bubble h4 { margin: 14px 0 6px; color: var(--ink); line-height: 1.4; }
+.message.assistant .bubble h1:first-child,
+.message.assistant .bubble h2:first-child,
+.message.assistant .bubble h3:first-child,
+.message.assistant .bubble h4:first-child { margin-top: 0; }
+.message.assistant .bubble h1 { font-size: 17px; }
+.message.assistant .bubble h2 { font-size: 16px; }
+.message.assistant .bubble h3,
+.message.assistant .bubble h4 { font-size: 14px; }
+.message.assistant .bubble ul,
+.message.assistant .bubble ol { margin: 7px 0 11px; padding-left: 21px; }
+.message.assistant .bubble li + li { margin-top: 4px; }
+.message.assistant .bubble blockquote { margin: 9px 0; padding: 7px 11px; border-left: 3px solid #b9acf1; color: #586a66; background: #f6f3ff; }
+.message.assistant .bubble code { padding: 2px 5px; border-radius: 5px; color: #5947ad; background: #f0ecff; font-family: Consolas, "Courier New", monospace; font-size: .92em; }
+.message.assistant .bubble pre { overflow-x: auto; margin: 9px 0; padding: 11px 13px; border-radius: 9px; color: #e9f2ef; background: #26322f; line-height: 1.55; white-space: pre; }
+.message.assistant .bubble pre code { padding: 0; color: inherit; background: transparent; }
 .loading-bubble { min-width: 74px; display: flex; gap: 5px; padding: 17px; }
 .loading-bubble span { width: 6px; height: 6px; border-radius: 50%; background: #77918a; animation: bounce 1.2s infinite ease-in-out; }
 .loading-bubble span:nth-child(2) { animation-delay: .15s; }
 .loading-bubble span:nth-child(3) { animation-delay: .3s; }
 @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
-.source-details { margin: 9px 3px 0; color: #71807d; font-size: 10px; }
-.source-details summary { width: fit-content; padding: 5px 8px; border-radius: 999px; color: var(--purple-dark); background: #eee9ff; cursor: pointer; font-weight: 700; }
-.source-details ul { display: grid; gap: 6px; margin: 9px 0 0; padding: 12px 14px 12px 28px; border-radius: 13px; background: rgba(255,255,255,.82); line-height: 1.5; }
-.answer-notice { margin: 8px 3px 0; color: #98623c; font-size: 10px; }
 .message.error .bubble { color: #8c4242; background: #fff1f1; }
+.confirmation-actions { display: flex; gap: 8px; margin-top: 12px; }
+.confirmation-button { padding: 8px 16px; border: 1px solid #d9d2e9; border-radius: 999px; color: #3d3650; background: #fff; cursor: pointer; }
+.confirmation-button.primary { border-color: #7052b8; color: #fff; background: #7052b8; }
+.confirmation-button:disabled { cursor: default; opacity: .55; }
 
 .composer-wrap { padding: 12px clamp(22px, 5vw, 62px) 17px; border-top: 1px solid rgba(236,232,246,.85); background: rgba(255,255,255,.88); backdrop-filter: blur(18px); }
 .composer { width: min(810px, 100%); min-height: 54px; display: flex; align-items: flex-end; gap: 10px; margin: 0 auto; padding: 8px 8px 8px 18px; border: 1px solid #e2dcf7; border-radius: 24px; background: #f3efff; box-shadow: 0 10px 30px rgba(91,70,170,.09); }

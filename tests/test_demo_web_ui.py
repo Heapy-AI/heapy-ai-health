@@ -29,6 +29,10 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertTrue((DEMO_ROOT / "assets" / "styles.css").is_file())
         self.assertTrue((DEMO_ROOT / "assets" / "app.js").is_file())
 
+        markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertIn('/assets/styles.css?v=', markup)
+        self.assertIn('/assets/app.js?v=', markup)
+
     def test_sidebar_is_kept_without_project_environment(self) -> None:
         markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
 
@@ -47,14 +51,19 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertNotIn("응답 결과 JSON", script)
         self.assertNotIn("audit_status", script)
 
-    def test_streaming_chat_and_user_sources_are_wired(self) -> None:
+    def test_streaming_chat_matches_developer_chat_without_sources(self) -> None:
         script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
 
         self.assertIn('fetch("/chat/stream"', script)
         self.assertIn('eventName === "token"', script)
         self.assertIn('eventName === "complete"', script)
-        self.assertIn("답변 출처", script)
+        self.assertIn("createTokenPacer", script)
+        self.assertIn("renderMarkdown", script)
         self.assertIn("sanitizeAnswerText", script)
+        self.assertIn("history: conversationHistory", script)
+        self.assertIn("summary: conversationSummary", script)
+        self.assertNotIn("답변 출처", script)
+        self.assertNotIn("source-details", script)
 
     @patch("app.demo.requests.post")
     def test_chat_stream_is_proxied_without_buffering(self, post: Mock) -> None:
