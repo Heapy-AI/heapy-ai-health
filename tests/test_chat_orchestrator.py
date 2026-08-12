@@ -79,6 +79,8 @@ class FakeGroundedRagService:
         self.safety_policy = None
         self.audit = None
         self.personal_context = ""
+        self.original_question = ""
+        self.conversation_context = ""
 
     def answer(
         self,
@@ -88,11 +90,15 @@ class FakeGroundedRagService:
         safety_policy,
         audit=True,
         personal_context="",
+        original_question="",
+        conversation_context="",
     ):
         self.call_count += 1
         self.safety_policy = safety_policy
         self.audit = audit
         self.personal_context = personal_context
+        self.original_question = original_question
+        self.conversation_context = conversation_context
         return GroundedAnswerResult(
             answer="검색 근거 기반 답변",
             grounded=True,
@@ -119,11 +125,15 @@ class FakeGroundedRagService:
         safety_policy,
         audit=True,
         personal_context="",
+        original_question="",
+        conversation_context="",
     ):
         self.call_count += 1
         self.safety_policy = safety_policy
         self.audit = audit
         self.personal_context = personal_context
+        self.original_question = original_question
+        self.conversation_context = conversation_context
         yield "검색 근거 "
         yield "기반 답변"
         yield GroundedRagProgress(stage="answer_stream_complete")
@@ -339,6 +349,10 @@ class ChatOrchestratorTest(unittest.TestCase):
                         "제일 먼저 관리해야 할 것은 무엇인가요?"
                     ),
                     rewritten=True,
+                    is_follow_up=True,
+                    current_topic="개인 건강검진 관리",
+                    inherited_target="건강검진 결과의 주의 항목",
+                    personal_context_required=True,
                     reason="직전 개인 검진 결과를 복원",
                 )
             )
@@ -365,6 +379,45 @@ class ChatOrchestratorTest(unittest.TestCase):
             grounded_rag.personal_context,
             "2026-08-06 감마지티피 83 U/L 이상",
         )
+        self.assertTrue(result.is_follow_up)
+        self.assertEqual(result.current_topic, "개인 건강검진 관리")
+        self.assertTrue(result.personal_context_required)
+
+    def test_context_judgment_promotes_general_chat_to_personal_rag(self) -> None:
+        """문맥 LLM이 개인 검진 필요를 판정하면 분류 오차를 보완한다.
+
+        작성자: 김진우
+        """
+        orchestrator, _, grounded_rag, general_chat = _build_orchestrator(
+            Intent.GENERAL_CHAT,
+            documents=[_document()],
+        )
+        orchestrator._query_rewriter = QueryRewriter(
+            FakeQueryRewriteChain(
+                RewrittenQuery(
+                    standalone_question="내 건강검진의 이상 항목을 정리해줘",
+                    rewritten=True,
+                    is_follow_up=True,
+                    current_topic="개인 건강검진 이상 항목",
+                    inherited_target="내 건강검진 결과",
+                    personal_context_required=True,
+                    reason="직전 개인 검진 결과를 이어받음",
+                )
+            )
+        )
+
+        result = orchestrator.answer(
+            "그중 이상인 것만 정리해줘",
+            [{"role": "user", "content": "내 건강검진 결과를 알려줘"}],
+            personal_context_loader=lambda _question, _terms: (
+                "2026-08-06 감마지티피 83 U/L 이상"
+            ),
+        )
+
+        self.assertEqual(result.intent, Intent.COMPREHENSIVE)
+        self.assertTrue(result.personal_context_used)
+        self.assertEqual(grounded_rag.call_count, 1)
+        self.assertEqual(general_chat.call_count, 0)
 
     def test_other_person_checkup_without_personal_history_skips_context(self) -> None:
         """제3자 이름만 있는 첫 질문에는 로그인 사용자의 검진값을 결합하지 않는다."""

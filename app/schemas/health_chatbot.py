@@ -193,6 +193,10 @@ class ChatResponse(BaseModel):
     query_rewritten: bool = False
     rewrite_reason: str = ""
     rewrite_error: str | None = None
+    is_follow_up: bool = False
+    current_topic: str = ""
+    inherited_target: str = ""
+    personal_context_required: bool = False
     resolved_terms: list[dict[str, Any]] = Field(default_factory=list)
     resolution_status: str = "NO_MATCH"
     resolution_error: str | None = None

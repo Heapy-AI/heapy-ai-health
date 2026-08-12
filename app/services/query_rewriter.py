@@ -1,12 +1,11 @@
-"""직전 대화를 참고해 후속 질문을 독립형 질문으로 재작성한다.
+"""저장된 대화 요약과 최근 대화로 현재 질문의 문맥을 구조화한다.
 
-서버는 대화를 저장하지 않는다. 클라이언트가 매 요청에 최근 대화를 실어 보내고,
-이 서비스가 그것을 근거로 대명사·생략을 해소한 자족적인 질문 한 문장을 만든다.
-이후 파이프라인(Safety Guard·Intent 분류·검색·근거계획)은 재작성된 질문을 쓴다.
+첫 질문은 원문을 유지하고, 두 번째 질문부터는 Supabase 세션에서 로드한 요약과 최근
+대화를 LLM에 전달한다. LLM은 독립형 질문과 후속 여부, 현재 주제, 이어받은 대상,
+개인 건강검진 조회 필요 여부를 함께 반환한다. 이후 파이프라인의 순서는 유지한다.
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,13 +29,25 @@ class ConversationTurn:
 
 
 class RewrittenQuery(BaseModel):
-    """재작성 결과와 판단 근거."""
+    """LLM이 구조화해 반환하는 대화 문맥 판단 결과."""
 
     standalone_question: str = Field(
         description="직전 대화 없이도 단독으로 이해되는 한국어 질문 한 문장"
     )
     rewritten: bool = Field(
         description="원래 질문을 실제로 바꿨는지. 이미 자족적이면 false"
+    )
+    is_follow_up: bool = Field(
+        description="현재 질문이 이전 대화에서 이어지는 후속 질문인지"
+    )
+    current_topic: str = Field(
+        description="현재 질문의 핵심 주제. 확인할 수 없으면 빈 문자열"
+    )
+    inherited_target: str = Field(
+        description="이전 대화에서 이어받은 대상. 없으면 빈 문자열"
+    )
+    personal_context_required: bool = Field(
+        description="로그인 사용자의 건강검진 결과 조회가 필요한 질문인지"
     )
     reason: str = Field(description="재작성 여부 판단 이유")
 
@@ -49,11 +60,16 @@ class QueryRewriteResult:
     original_question: str
     rewritten: bool
     reason: str
+    is_follow_up: bool = False
+    current_topic: str = ""
+    inherited_target: str = ""
+    personal_context_required: bool = False
+    context_analysis_performed: bool = False
     error: str | None = None
 
 
-QUERY_REWRITE_PROMPT = """너는 건강정보 챗봇의 질문 정규화기다.
-직전 대화를 참고해, 사용자의 마지막 발화를 **단독으로 이해되는 질문 한 문장**으로 바꿔라.
+QUERY_REWRITE_PROMPT = """너는 건강정보 챗봇의 대화 문맥 해석기다.
+이전 대화 요약, 최근 대화, 사용자의 현재 질문을 함께 보고 구조화된 문맥 판단 결과를 반환하라.
 
 규칙:
 1. 대명사("그거", "이건")와 생략된 주제를 직전 대화에서 찾아 명시적으로 복원한다.
@@ -70,6 +86,14 @@ QUERY_REWRITE_PROMPT = """너는 건강정보 챗봇의 질문 정규화기다.
    않을 때만 참고하고, 요약에 있는 내용을 새 사실처럼 질문에 덧붙이지 않는다.
 8. 사용자의 1인칭 관점을 보존한다. 이전 대화가 사용자의 본인 정보에 관한 내용이면
    "내", "나의", "제", "저의"를 유지하고 사용자 이름이나 제3자 표현으로 바꾸지 않는다.
+9. is_follow_up은 현재 질문이 이전 질문이나 답변의 대상·결과·요청을 이어갈 때만 true다.
+10. current_topic에는 현재 질문의 핵심 의료 주제나 일반 대화 주제를 짧게 적는다.
+11. inherited_target에는 이전 대화에서 실제로 이어받은 검사, 질환, 약, 검진 결과 등의
+    대상을 적고, 새 주제이거나 이어받은 대상이 없으면 빈 문자열로 둔다.
+12. personal_context_required는 로그인 사용자의 실제 건강검진 기록·수치·판정·추이 또는
+    그 결과를 바탕으로 한 설명이 필요할 때만 true다. 일반적인 검사·질환·의약품 정보
+    질문에는 false다. 이전 턴에서 개인 검진 결과를 다뤘고 현재 질문이 그 결과를
+    이어받는다면 true를 유지한다.
 
 [이전 대화 요약]
 {summary}
@@ -80,61 +104,6 @@ QUERY_REWRITE_PROMPT = """너는 건강정보 챗봇의 질문 정규화기다.
 [사용자의 마지막 발화]
 {question}
 """
-
-
-CONTEXT_REFERENCE_PATTERN = re.compile(
-    r"(?:^|\s)(?:그거|그걸|그것|그건|그게|그 약|그 수치|그 검사|그 결과|"
-    r"이거|이걸|이것|이건|이게|저거|저걸|저것|아까|앞에서|방금|"
-    r"그러면|그럼|그렇게|그대로)(?:\s|은|는|이|가|을|를|도|의|로|\?|$)"
-)
-
-
-OMITTED_TARGET_FOLLOW_UP_PATTERN = re.compile(
-    r"^(?:더\s*)?(?:"
-    r"(?:낮추|높이|줄이|늘리|관리하|예방하|개선하|유지하|먹|복용하|끊|중단하)"
-    r"(?:려면|려면은|면|어도|아도|는\s*방법|는\s*법)|"
-    r"왜\s*(?:높|낮)(?:아|은|은\s*거|게|으면)|"
-    r"(?:(?:정상|적정|권장|위험|높은|낮은)\s*)?"
-    r"(?:수치|범위|기준|값|단위|부작용|효능|효과|원인|증상|예방법|주의사항)"
-    r"(?:은|는|이|가|을|를)?(?:\s|[?？]|$)|"
-    r"어떻게\s*(?:해야|관리|낮추|높이|줄이|늘리)"
-    r")"
-)
-
-
-EXPLICIT_TOPIC_PATTERN = re.compile(
-    r"(?:^|\s)[가-힣A-Za-z0-9][가-힣A-Za-z0-9·+\-/]{1,30}"
-    r"(?:을|를|은|는|이|가|의)(?=\s|[?？]|$)"
-)
-
-
-MEDICAL_ACRONYM_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9_])[A-Z][A-Z0-9_\-]{1,15}(?![A-Za-z0-9_])"
-)
-
-
-def needs_context_rewrite(question: str, history=(), summary: str = "") -> bool:
-    """이전 문맥이 필요할 가능성이 있는 질문을 재작성 대상으로 판정한다.
-
-    명확히 자족적인 질문만 건너뛰고, 어느 쪽인지 애매하면 재작성 LLM이
-    최종 판단하도록 전달한다. 의료용어 DB 연결 전에는 한국어 조사로 드러나는
-    명시적 주제를 사용하며, DB 연결 후에는 용어 탐지 결과를 추가할 수 있다.
-
-    작성자: 김진우
-    """
-    normalized = re.sub(r"\s+", " ", str(question or "").strip())
-    has_context = bool(history) or bool(str(summary or "").strip())
-    if not normalized or not has_context:
-        return False
-    if CONTEXT_REFERENCE_PATTERN.search(normalized):
-        return True
-    if OMITTED_TARGET_FOLLOW_UP_PATTERN.search(normalized):
-        return True
-    if MEDICAL_ACRONYM_PATTERN.search(normalized):
-        return False
-    if EXPLICIT_TOPIC_PATTERN.search(normalized):
-        return False
-    return True
 
 
 def normalize_history(turns) -> list[ConversationTurn]:
@@ -167,7 +136,7 @@ def _coerce(value: Any) -> RewrittenQuery:
 
 
 class QueryRewriter:
-    """직전 대화가 있을 때만 LLM을 호출해 질문을 독립형으로 만든다."""
+    """첫 질문을 제외한 모든 질문의 문맥을 LLM으로 구조화한다."""
 
     def __init__(self, chain) -> None:
         self._chain = chain
@@ -188,14 +157,6 @@ class QueryRewriter:
                 rewritten=False,
                 reason="직전 대화와 요약이 없어 재작성하지 않았습니다.",
             )
-        if not needs_context_rewrite(question, turns, summary_text):
-            return QueryRewriteResult(
-                question=question,
-                original_question=question,
-                rewritten=False,
-                reason="질문이 단독으로 이해되어 재작성하지 않았습니다.",
-            )
-
         try:
             result = _coerce(
                 self._chain.invoke(
@@ -212,6 +173,7 @@ class QueryRewriter:
                 original_question=question,
                 rewritten=False,
                 reason="질문 재작성에 실패해 원래 질문을 사용했습니다.",
+                context_analysis_performed=False,
                 error=f"{type(exc).__name__}: {exc}",
             )
 
@@ -222,6 +184,7 @@ class QueryRewriter:
                 original_question=question,
                 rewritten=False,
                 reason="재작성 결과가 비어 있어 원래 질문을 사용했습니다.",
+                context_analysis_performed=False,
                 error="empty_standalone_question",
             )
 
@@ -230,6 +193,11 @@ class QueryRewriter:
             original_question=question,
             rewritten=bool(result.rewritten) and standalone != question,
             reason=result.reason or "",
+            is_follow_up=result.is_follow_up,
+            current_topic=result.current_topic.strip(),
+            inherited_target=result.inherited_target.strip(),
+            personal_context_required=result.personal_context_required,
+            context_analysis_performed=True,
         )
 
 

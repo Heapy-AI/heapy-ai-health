@@ -33,6 +33,7 @@ from app.services.query_resolver import (
 from app.services.query_rewriter import (
     QueryRewriteResult,
     QueryRewriter,
+    format_history,
     normalize_history,
 )
 from app.services.safety_guard import GuardResult, RiskLevel, check_safety_guard
@@ -44,15 +45,6 @@ GENERAL_IGNORE_ANSWER = "죄송합니다. 건강 관련 문의만 도와드릴 �
 PERSONAL_HEALTH_QUESTION_PATTERN = re.compile(
     r"(?:^|\s)(?:내|나의|제|저의|내가|제가|나는|저는)(?:\s|$)"
 )
-PERSONAL_CHECKUP_CONTEXT_PATTERN = re.compile(
-    r"(?:건강\s*)?검진(?:\s*(?:결과|수치|기록|항목|상태))"
-)
-PERSONAL_CONTEXT_FOLLOW_UP_PATTERN = re.compile(
-    r"(?:그\s*중(?:에서)?|이\s*중(?:에서)?|그\s*결과|이\s*결과|"
-    r"그것들?\s*중|앞서\s*(?:말한|본)|아까\s*(?:말한|본))"
-)
-
-
 class IntentClassifierUnavailableError(RuntimeError):
     """Intent 모델이 준비되지 않아 오케스트레이션할 수 없는 경우."""
 
@@ -101,6 +93,10 @@ class ChatOrchestrationResult:
     query_rewritten: bool = False
     rewrite_reason: str = ""
     rewrite_error: str | None = None
+    is_follow_up: bool = False
+    current_topic: str = ""
+    inherited_target: str = ""
+    personal_context_required: bool = False
     resolved_terms: list[dict] = field(default_factory=list)
     resolution_status: str = "NO_MATCH"
     resolution_error: str | None = None
@@ -125,6 +121,11 @@ class PreparedQuery:
     query_rewritten: bool = False
     rewrite_reason: str = ""
     rewrite_error: str | None = None
+    is_follow_up: bool = False
+    current_topic: str = ""
+    inherited_target: str = ""
+    personal_context_required: bool = False
+    context_analysis_performed: bool = False
     resolved_terms: list[dict] = field(default_factory=list)
     resolution_status: str = "NO_MATCH"
     resolution_error: str | None = None
@@ -199,6 +200,7 @@ class ChatOrchestrator:
             confirmation_id=confirmation_id,
             confirmation_answer=confirmation_answer,
         )
+        conversation_context = self._format_recent_context(history)
         guard_result = self._combined_guard(question, prepared.resolved_query)
         if prepared.blocked_answer:
             result = self._build_query_blocked_response(prepared, guard_result)
@@ -233,6 +235,8 @@ class ChatOrchestrator:
                 prediction,
                 guard_result,
                 prepared,
+                original_question=question,
+                conversation_context=conversation_context,
             )
         else:
             result = self._build_rag_response(
@@ -242,6 +246,8 @@ class ChatOrchestrator:
                 guard_result,
                 prepared,
                 personal_context=personal_context,
+                original_question=question,
+                conversation_context=conversation_context,
             )
         return self._with_summary(result, question, history, summary)
 
@@ -267,6 +273,7 @@ class ChatOrchestrator:
             confirmation_id=confirmation_id,
             confirmation_answer=confirmation_answer,
         )
+        conversation_context = self._format_recent_context(history)
         guard_result = self._combined_guard(question, prepared.resolved_query)
         if prepared.blocked_answer:
             result = self._build_query_blocked_response(prepared, guard_result)
@@ -283,6 +290,20 @@ class ChatOrchestrator:
         yield ChatStreamEvent(event="progress", stage="classify_intent")
         query_embedding = self._vector_search.embed_query(prepared.resolved_query)
         prediction = self._intent_classifier.predict(query_embedding)
+        personal_context = None
+        if self._should_load_personal_context(
+            prepared,
+            prediction,
+            personal_context_loader,
+            history,
+            summary,
+        ):
+            yield ChatStreamEvent(event="progress", stage="load_health_context")
+            personal_context = personal_context_loader(
+                prepared.standalone_question,
+                prepared.resolved_terms,
+            )
+            prediction = self._promote_personal_intent(prediction, personal_context)
         if prediction.intent is Intent.IGNORE:
             yield from self._stream_fixed_result(
                 self._with_summary(
@@ -300,6 +321,8 @@ class ChatOrchestrator:
                 prediction,
                 guard_result,
                 prepared,
+                original_question=question,
+                conversation_context=conversation_context,
             ):
                 if event.event == "complete":
                     yield ChatStreamEvent(
@@ -308,20 +331,6 @@ class ChatOrchestrator:
                     )
                 yield self._summarized_stream_event(event, question, history, summary)
             return
-        personal_context = None
-        if self._should_load_personal_context(
-            prepared,
-            prediction,
-            personal_context_loader,
-            history,
-            summary,
-        ):
-            yield ChatStreamEvent(event="progress", stage="load_health_context")
-            personal_context = personal_context_loader(
-                prepared.standalone_question,
-                prepared.resolved_terms,
-            )
-            prediction = self._promote_personal_intent(prediction, personal_context)
         yield ChatStreamEvent(event="progress", stage="search_evidence")
         for event in self._stream_rag_response(
             prepared.resolved_query,
@@ -330,6 +339,8 @@ class ChatOrchestrator:
             guard_result,
             prepared,
             personal_context=personal_context,
+            original_question=question,
+            conversation_context=conversation_context,
         ):
             if event.event == "complete":
                 yield ChatStreamEvent(
@@ -400,6 +411,11 @@ class ChatOrchestrator:
             query_rewritten=rewrite.rewritten,
             rewrite_reason=rewrite.reason,
             rewrite_error=rewrite.error,
+            is_follow_up=rewrite.is_follow_up,
+            current_topic=rewrite.current_topic,
+            inherited_target=rewrite.inherited_target,
+            personal_context_required=rewrite.personal_context_required,
+            context_analysis_performed=rewrite.context_analysis_performed,
             resolved_terms=terms,
             resolution_status=resolution.resolution_status,
             resolution_error=resolution_error,
@@ -521,6 +537,10 @@ class ChatOrchestrator:
             "query_rewritten": prepared.query_rewritten,
             "rewrite_reason": prepared.rewrite_reason,
             "rewrite_error": prepared.rewrite_error,
+            "is_follow_up": prepared.is_follow_up,
+            "current_topic": prepared.current_topic,
+            "inherited_target": prepared.inherited_target,
+            "personal_context_required": prepared.personal_context_required,
             "resolved_terms": prepared.resolved_terms,
             "resolution_status": prepared.resolution_status,
             "resolution_error": prepared.resolution_error,
@@ -528,6 +548,14 @@ class ChatOrchestrator:
             "confirmation_question": prepared.confirmation_question,
             "confirmation_id": prepared.confirmation_id,
         }
+
+    @staticmethod
+    def _format_recent_context(history) -> str:
+        """최종 생성 LLM에 전달할 제한된 최근 대화 문맥을 만든다.
+
+        작성자: 김진우
+        """
+        return format_history(normalize_history(history)) or "(없음)"
 
     def _with_summary(
         self,
@@ -597,48 +625,35 @@ class ChatOrchestrator:
         history=(),
         summary: str = "",
     ) -> bool:
-        """개인 검진 질문이거나 그 문맥의 후속 질문일 때 RDB 조회를 시도한다.
+        """구조화된 문맥 판단에 따라 개인 건강검진 RDB 조회를 시도한다.
 
         작성자: 김진우
         """
         if loader is None:
             return False
+        if (
+            prepared.context_analysis_performed
+            and prepared.personal_context_required
+        ):
+            return True
         if prediction.intent is Intent.COMPREHENSIVE:
             return True
         if prediction.intent is not Intent.SIMPLE_LOOKUP:
             return False
 
+        if prepared.context_analysis_performed:
+            return False
+
+        # 첫 질문은 문맥 LLM을 생략하므로 기존 1인칭 검진 질문 감지만 보조로 유지한다.
+        # 문맥 LLM 호출이 실패한 경우에도 개인 검진 질문을 놓치지 않는 안전한 폴백이다.
         current_questions = (
             prepared.original_question,
             prepared.standalone_question,
             prepared.resolved_query,
         )
-        if any(
+        return any(
             PERSONAL_HEALTH_QUESTION_PATTERN.search(question)
             for question in current_questions
-        ):
-            return True
-
-        previous_context = " ".join(
-            [
-                *(turn.content for turn in normalize_history(history)),
-                str(summary or "").strip(),
-            ]
-        )
-        previous_personal_checkup = bool(
-            PERSONAL_HEALTH_QUESTION_PATTERN.search(previous_context)
-            and PERSONAL_CHECKUP_CONTEXT_PATTERN.search(previous_context)
-        )
-        current_checkup_reference = any(
-            PERSONAL_CHECKUP_CONTEXT_PATTERN.search(question)
-            for question in current_questions
-        )
-        contextual_follow_up = bool(
-            PERSONAL_CONTEXT_FOLLOW_UP_PATTERN.search(prepared.original_question)
-        )
-        return bool(
-            previous_personal_checkup
-            and (current_checkup_reference or contextual_follow_up)
         )
 
     @staticmethod
@@ -749,8 +764,19 @@ class ChatOrchestrator:
         prediction: IntentPrediction,
         guard_result: GuardResult,
         prepared: PreparedQuery,
+        *,
+        original_question: str,
+        conversation_context: str,
     ) -> ChatOrchestrationResult:
-        answer = str(self._general_chat_chain.invoke({"question": question})).strip()
+        answer = str(
+            self._general_chat_chain.invoke(
+                {
+                    "question": question,
+                    "original_question": original_question,
+                    "conversation_context": conversation_context,
+                }
+            )
+        ).strip()
         return ChatOrchestrationResult(
             **self._prediction_fields(prediction, guard_result),
             **self._query_fields(prepared),
@@ -766,13 +792,22 @@ class ChatOrchestrator:
         prediction: IntentPrediction,
         guard_result: GuardResult,
         prepared: PreparedQuery,
+        *,
+        original_question: str,
+        conversation_context: str,
     ) -> Iterator[ChatStreamEvent]:
         """검색 없는 일반 대화의 Gemini 토큰을 전달한다.
 
         작성자: 김진우
         """
         answer_parts: list[str] = []
-        for token in self._general_chat_chain.stream({"question": question}):
+        for token in self._general_chat_chain.stream(
+            {
+                "question": question,
+                "original_question": original_question,
+                "conversation_context": conversation_context,
+            }
+        ):
             text = str(token)
             if not text:
                 continue
@@ -799,6 +834,8 @@ class ChatOrchestrator:
         prepared: PreparedQuery,
         *,
         personal_context: str | None = None,
+        original_question: str,
+        conversation_context: str,
     ) -> ChatOrchestrationResult:
         documents, searched_collections, failed_collections = (
             self._search_rag_documents(query_embedding)
@@ -810,6 +847,8 @@ class ChatOrchestrator:
             safety_policy=guard_result,
             audit=False,
             personal_context=personal_context or "",
+            original_question=original_question,
+            conversation_context=conversation_context,
         )
         return ChatOrchestrationResult(
             **self._prediction_fields(prediction, guard_result),
@@ -842,6 +881,8 @@ class ChatOrchestrator:
         prepared: PreparedQuery,
         *,
         personal_context: str | None = None,
+        original_question: str,
+        conversation_context: str,
     ) -> Iterator[ChatStreamEvent]:
         """검색 기본 검사 후 최종 답변을 스트리밍하고 감사 결과를 반환한다.
 
@@ -858,6 +899,8 @@ class ChatOrchestrator:
             safety_policy=guard_result,
             audit=False,
             personal_context=personal_context or "",
+            original_question=original_question,
+            conversation_context=conversation_context,
         ):
             if isinstance(event, str):
                 yield ChatStreamEvent(event="token", text=event)

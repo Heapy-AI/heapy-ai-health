@@ -12,7 +12,6 @@ from app.services.query_rewriter import (
     QueryRewriter,
     RewrittenQuery,
     format_history,
-    needs_context_rewrite,
     normalize_history,
 )
 from tests.test_chat_orchestrator import _build_orchestrator, _document
@@ -43,22 +42,40 @@ class QueryRewriterTest(unittest.TestCase):
         self.assertFalse(result.rewritten)
         self.assertEqual(chain.calls, [])
 
-    def test_self_contained_follow_up_skips_llm(self) -> None:
-        chain = FakeChain(RuntimeError("호출되면 안 됩니다."))
+    def test_second_turn_always_uses_context_llm(self) -> None:
+        chain = FakeChain(
+            RewrittenQuery(
+                standalone_question="당뇨병 증상은 무엇인가요?",
+                rewritten=False,
+                is_follow_up=False,
+                current_topic="당뇨병 증상",
+                inherited_target="",
+                personal_context_required=False,
+                reason="새로운 독립 주제",
+            )
+        )
         result = QueryRewriter(chain).rewrite("당뇨병 증상은 무엇인가요?", HISTORY)
         self.assertFalse(result.rewritten)
-        self.assertEqual(chain.calls, [])
+        self.assertEqual(len(chain.calls), 1)
+        self.assertTrue(result.context_analysis_performed)
+        self.assertEqual(result.current_topic, "당뇨병 증상")
 
     def test_context_dependent_question_is_expanded(self) -> None:
         chain = FakeChain(
             RewrittenQuery(
                 standalone_question="고혈압 식단 관리 방법은 무엇인가요?",
                 rewritten=True,
+                is_follow_up=True,
+                current_topic="고혈압 식단 관리",
+                inherited_target="고혈압",
+                personal_context_required=False,
                 reason="직전 주제 복원",
             )
         )
         result = QueryRewriter(chain).rewrite("그럼 식단은요?", HISTORY)
         self.assertTrue(result.rewritten)
+        self.assertTrue(result.is_follow_up)
+        self.assertEqual(result.inherited_target, "고혈압")
         self.assertIn("고혈압", result.question)
         self.assertIn("사용자: 고혈압은", chain.calls[0]["history"])
 
@@ -69,6 +86,7 @@ class QueryRewriterTest(unittest.TestCase):
         )
         self.assertEqual(result.question, "그럼 식단은요?")
         self.assertFalse(result.rewritten)
+        self.assertFalse(result.context_analysis_performed)
         self.assertIn("RuntimeError", result.error or "")
 
     def test_history_normalization_and_format(self) -> None:
@@ -76,44 +94,16 @@ class QueryRewriterTest(unittest.TestCase):
             [{"role": "user", "content": " 안녕 "}, {"role": "system", "content": "제외"}]
         )
         self.assertEqual(format_history(turns), "사용자: 안녕")
-        self.assertTrue(needs_context_rewrite("그 약은요?", HISTORY))
-
-    def test_first_turn_never_requests_context_rewrite(self) -> None:
-        self.assertFalse(needs_context_rewrite("그거 낮추려면?", []))
-
-    def test_omitted_target_follow_up_requests_rewrite(self) -> None:
-        self.assertTrue(needs_context_rewrite("낮추려면 어떻게 해야돼?", HISTORY))
-        self.assertTrue(needs_context_rewrite("부작용은?", HISTORY))
-        self.assertTrue(needs_context_rewrite("정상범위는?", HISTORY))
-        self.assertTrue(needs_context_rewrite("정상 수치는?", HISTORY))
-        self.assertTrue(needs_context_rewrite("기준은?", HISTORY))
-        self.assertTrue(needs_context_rewrite("단위는?", HISTORY))
-
-    def test_explicit_topic_skips_rewrite(self) -> None:
-        self.assertFalse(
-            needs_context_rewrite("공복혈당을 낮추려면 어떻게 해야돼?", HISTORY)
-        )
-        self.assertFalse(
-            needs_context_rewrite("당뇨병 증상은 무엇인가요?", HISTORY)
-        )
-
-    def test_explicit_screening_acronym_skips_history_rewrite(self) -> None:
-        self.assertFalse(
-            needs_context_rewrite("나의 HDL 수치가 어떤 편이야?", HISTORY)
-        )
-        self.assertFalse(
-            needs_context_rewrite("나의 LDL 수치가 어떤 편이야?", HISTORY)
-        )
-
-    def test_ambiguous_follow_up_is_delegated_to_rewriter(self) -> None:
-        self.assertTrue(needs_context_rewrite("어떻게 생각해?", HISTORY))
-        self.assertTrue(needs_context_rewrite("낮추려면?", [], "공복혈당을 설명함"))
 
     def test_omitted_target_is_expanded_from_history(self) -> None:
         chain = FakeChain(
             RewrittenQuery(
                 standalone_question="공복혈당을 낮추려면 어떻게 해야 하나요?",
                 rewritten=True,
+                is_follow_up=True,
+                current_topic="공복혈당 관리",
+                inherited_target="공복혈당",
+                personal_context_required=False,
                 reason="직전 질문의 공복혈당을 목적어로 복원",
             )
         )
@@ -133,6 +123,10 @@ class QueryRewriterTest(unittest.TestCase):
             RewrittenQuery(
                 standalone_question="중성지방의 정상 수치는 얼마인가요?",
                 rewritten=True,
+                is_follow_up=True,
+                current_topic="중성지방 정상 수치",
+                inherited_target="중성지방",
+                personal_context_required=False,
                 reason="직전 질문의 중성지방을 측정 대상으로 복원",
             )
         )
@@ -152,6 +146,10 @@ class QueryRewriterTest(unittest.TestCase):
             RewrittenQuery(
                 standalone_question="오늘 기분은 어때요?",
                 rewritten=False,
+                is_follow_up=False,
+                current_topic="기분",
+                inherited_target="",
+                personal_context_required=False,
                 reason="새로운 독립 주제",
             )
         )
@@ -174,6 +172,10 @@ class OrchestratorMultiTurnTest(unittest.TestCase):
                 RewrittenQuery(
                     standalone_question="고혈압 식단 관리 방법은 무엇인가요?",
                     rewritten=True,
+                    is_follow_up=True,
+                    current_topic="고혈압 식단 관리",
+                    inherited_target="고혈압",
+                    personal_context_required=False,
                     reason="직전 주제 복원",
                 )
             )
@@ -199,6 +201,10 @@ class OrchestratorMultiTurnTest(unittest.TestCase):
                 RewrittenQuery(
                     standalone_question="제가 고혈압인지 진단해 주세요.",
                     rewritten=True,
+                    is_follow_up=True,
+                    current_topic="고혈압 여부",
+                    inherited_target="고혈압",
+                    personal_context_required=False,
                     reason="생략된 요청 복원",
                 )
             )

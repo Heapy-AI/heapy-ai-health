@@ -15,6 +15,10 @@
 | `is_new_session` | bool | S1CHK |
 | `raw_query` | str | 입력 |
 | `standalone_question` | str | S3 / S4 |
+| `is_follow_up` | bool | S3 |
+| `current_topic` | str | S3 |
+| `inherited_target` | str | S3 |
+| `personal_context_required` | bool | S3 |
 | `resolved_query` | str | QN |
 | `resolution_status` | str | QN |
 | `history` | Turn[] | S2 / S4 |
@@ -55,7 +59,7 @@
 | S1 세션 조회 | 로그인 사용자, `session_id` | `session_id` |
 | S1CHK 세션 존재 여부 | `session_id` | `is_new_session` |
 | S2 컨텍스트 로드 | `session_id` | Supabase의 최근 `history`, `summary` |
-| S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` (문맥 지시어·대상 생략·애매한 후속 질문을 재작성 모델이 판정) |
+| S3 문맥 판단·질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question`, `is_follow_up`, `current_topic`, `inherited_target`, `personal_context_required` (첫 질문 외 항상 구조화 LLM 호출) |
 | S4 신규 세션 초기화 | `raw_query` | `standalone_question`(=원문), `history`(=[]) |
 | QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status`, `resolved_terms[].canonical_key`, `resolved_terms[].canonical_keys` |
 
@@ -99,10 +103,10 @@ D1은 일반적인 검사항목 질문이면 최근 회차의 해당 항목만 �
 | 노드 | 입력 | 출력 |
 |---|---|---|
 | C2 프롬프트 (simple) | `chunks`, `history` | `prompt` |
-| B4 프롬프트 (comprehensive) | `chunks`, `user_context`, `history`, `summary` | `prompt` |
+| B4 프롬프트 (comprehensive) | `chunks`, `user_context`, `raw_query`, 제한된 `history` | `prompt` |
 | C5 프롬프트 (chat) | `history`, `summary` | `prompt` |
 | RCHK 검색 결과 기본 검사 | `chunks`, `user_context`, 질문 | `retrieval_assessment`, `grounded` (VDB가 부족해도 인증된 개인 검진 근거가 있으면 제한 생성 허용) |
-| L1 최종 답변 호출 | `chunks`, `user_context`, 안전 정책 | (스트림 시작) |
+| L1 최종 답변 호출 | 질문, `chunks`, `user_context`, 안전 정책 | 요청 범위 안의 근거만 사용한 최단 완전 답변 스트림 |
 | L2 / L3 스트림 전송 | 최종 답변 토큰 | (클라이언트로 전송) |
 | APOST 사후 감사 | 최종 답변, `chunks`, 안전 정책 | `audit_status`, `audit_summary`, `evidence_status`, `unanswered_items`, `unsupported_claims`, `safety_violations` |
 

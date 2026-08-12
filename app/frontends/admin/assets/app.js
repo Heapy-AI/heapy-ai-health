@@ -899,6 +899,10 @@ function updateInsight(data) {
   addMonitorItem(monitorList, "응답 정책", data.response_policy || "—");
   addMonitorItem(monitorList, "원문 질문", data.original_question || data.question || "—");
   addMonitorItem(monitorList, "독립형 질문", data.standalone_question || "—");
+  addMonitorItem(monitorList, "후속 질문", data.is_follow_up ? "예" : "아니요");
+  addMonitorItem(monitorList, "현재 주제", data.current_topic || "—");
+  addMonitorItem(monitorList, "이어받은 대상", data.inherited_target || "없음");
+  addMonitorItem(monitorList, "개인 검진 필요", data.personal_context_required ? "예" : "아니요");
   addMonitorItem(monitorList, "최종 검색 질문", data.resolved_query || "—");
   addMonitorItem(monitorList, "용어 정규화", data.resolution_status || "NO_MATCH");
   addMonitorItem(monitorList, "정규화 오류", data.resolution_error || "없음");

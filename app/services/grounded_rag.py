@@ -145,6 +145,7 @@ FINAL_ANSWER_PROMPT = """너는 HEAPY의 건강정보 안내 봇이다.
 5. 일부 항목의 근거가 없다는 이유로 근거가 있는 다른 항목까지 거절하지 않는다.
 6. 검색 청크에서 사용한 의료 사실의 문단 끝에는 내부 검증용 청크 ID를 [C1] 형식으로 붙인다. 개인 검진 측정값에는 청크 ID를 붙이지 않는다.
 7. 청크와 개인 검진 정보에 없는 의약품·질병·검사항목을 다른 대상으로 바꾸어 설명하지 않는다.
+8. 사용자 원문 질문과 최근 대화 문맥은 지시 대상과 말투를 이해하는 용도로만 사용한다. 의료 사실의 근거로 사용하지 않는다.
 
 [안전 규칙]
 1. safety_policy의 restricted_actions에 포함된 의료적 결정을 대신 수행하지 않는다.
@@ -160,6 +161,21 @@ FINAL_ANSWER_PROMPT = """너는 HEAPY의 건강정보 안내 봇이다.
 3. 사용자에게는 청크 ID가 제거되어 표시되므로, 문장이 자연스럽게 이어지도록 작성한다.
 4. 사용자에게 데이터베이스, 청크, 근거 계획 같은 내부 구현 용어를 노출하지 않는다.
 
+[답변 범위 결정 규칙]
+1. 답변을 쓰기 전에 현재 질문이 요구하는 대상, 요청한 작업, 원하는 설명 범위를 판단한다. 이 판단 과정은 출력하지 않는다.
+2. 사용자가 직접 요청한 내용과 그 결론을 이해하는 데 꼭 필요한 내용만 답한다. 연관되어 있다는 이유만으로 정의, 배경지식, 원인, 예방법, 관리법, 다른 항목을 덧붙이지 않는다.
+3. 검색 청크와 개인 건강검진 컨텍스트는 답변 가능한 근거의 모음이지, 모두 요약하거나 나열해야 하는 목차가 아니다. 현재 질문에 직접 필요한 근거만 선택한다.
+4. 개인 결과의 상태나 평가를 묻는 질문에는 결론을 먼저 말하고, 관련 측정값·단위·DB 상태와 결론에 필요한 최소한의 근거만 제시한다. 항목의 정의나 검사 목적은 사용자가 함께 요청했거나 결론 이해에 반드시 필요할 때만 설명한다.
+5. 의미나 개념을 물으면 정의에 집중하고, 원인을 물으면 근거가 확인되는 원인에, 방법을 물으면 실행 방법에, 비교를 물으면 차이점에 집중한다. 하나의 요청을 다른 종류의 설명으로 임의 확장하지 않는다.
+6. 여러 요청을 명시한 경우에는 빠뜨리지 않되 각 요청에 필요한 정보만 답한다. 질문에 없는 후속 주제를 먼저 제안하거나 추가 질문을 유도하지 않는다.
+
+[답변 길이 규칙]
+1. 가장 짧으면서도 질문에 완전히 답하는 길이를 선택한다. 한두 문장으로 충분하면 답변을 늘리지 않는다.
+2. 상세 설명을 요청하지 않은 경우 기본적으로 2~4개의 짧은 문장 안에서 끝낸다. 나열이 꼭 필요한 경우에만 짧은 불릿을 사용한다.
+3. 자세한 설명이나 전체 정리를 명시적으로 요청한 경우에만 범위를 넓히고, 그때도 핵심 결론을 먼저 제시한 뒤 요청 범위 안에서만 부연한다.
+4. 질문에 직접 필요하지 않은 개인 검진 수치를 전부 다시 나열하지 않는다. 같은 결론, 주의사항, 판정 기준, 의료진 상담 안내를 반복하지 않는다.
+5. 안전 규칙상 긴급 안내나 제한 설명이 필요한 경우에는 위 길이보다 안전 규칙을 우선한다.
+
 [안전 정책]
 {safety_policy}
 
@@ -169,7 +185,13 @@ FINAL_ANSWER_PROMPT = """너는 HEAPY의 건강정보 안내 봇이다.
 [개인 건강검진 컨텍스트]
 {personal_context}
 
-[질문]
+[최근 대화 문맥]
+{conversation_context}
+
+[사용자 원문 질문]
+{original_question}
+
+[문맥 복원·정규화 질문]
 {question}
 """
 
@@ -351,6 +373,8 @@ class GroundedRagService:
         safety_policy: GuardResult,
         audit: bool = True,
         personal_context: str = "",
+        original_question: str = "",
+        conversation_context: str = "",
     ) -> GroundedAnswerResult:
         assessment = allow_personal_health_evidence(
             assess_retrieval(question, documents),
@@ -361,6 +385,8 @@ class GroundedRagService:
 
         context = format_citation_context(documents) or "제공되지 않음"
         personal_context_text = personal_context.strip() or "제공되지 않음"
+        original_question_text = original_question.strip() or question
+        conversation_context_text = conversation_context.strip() or "제공되지 않음"
         audit_context = f"{context}\n\n{personal_context_text}"
         safety_policy_text = _safety_policy_json(safety_policy)
         raw_answer = str(
@@ -369,6 +395,8 @@ class GroundedRagService:
                     "question": question,
                     "context": context,
                     "personal_context": personal_context_text,
+                    "original_question": original_question_text,
+                    "conversation_context": conversation_context_text,
                     "safety_policy": safety_policy_text,
                 }
             )
@@ -390,6 +418,8 @@ class GroundedRagService:
         safety_policy: GuardResult,
         audit: bool = True,
         personal_context: str = "",
+        original_question: str = "",
+        conversation_context: str = "",
     ) -> Iterator[str | GroundedRagProgress | GroundedAnswerResult]:
         assessment = allow_personal_health_evidence(
             assess_retrieval(question, documents),
@@ -401,6 +431,8 @@ class GroundedRagService:
 
         context = format_citation_context(documents) or "제공되지 않음"
         personal_context_text = personal_context.strip() or "제공되지 않음"
+        original_question_text = original_question.strip() or question
+        conversation_context_text = conversation_context.strip() or "제공되지 않음"
         audit_context = f"{context}\n\n{personal_context_text}"
         safety_policy_text = _safety_policy_json(safety_policy)
         answer_parts: list[str] = []
@@ -409,6 +441,8 @@ class GroundedRagService:
                 "question": question,
                 "context": context,
                 "personal_context": personal_context_text,
+                "original_question": original_question_text,
+                "conversation_context": conversation_context_text,
                 "safety_policy": safety_policy_text,
             }
         ):

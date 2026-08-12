@@ -88,6 +88,10 @@ class QueryConfirmationTest(unittest.TestCase):
                 RewrittenQuery(
                     standalone_question="부루펜 부작용은?",
                     rewritten=True,
+                    is_follow_up=True,
+                    current_topic="부루펜 부작용",
+                    inherited_target="부루펜",
+                    personal_context_required=False,
                     reason="그 약의 대상을 복원",
                 )
             )

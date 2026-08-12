@@ -94,8 +94,34 @@ class GroundedRagServiceTest(unittest.TestCase):
         self.assertIn("질문의 핵심부터 답한다", FINAL_ANSWER_PROMPT)
         self.assertIn("긴급 안내만 하고 답변을 끝내지 말고", FINAL_ANSWER_PROMPT)
         self.assertIn("내부 구현 용어를 노출하지 않는다", FINAL_ANSWER_PROMPT)
+        self.assertIn("대상, 요청한 작업, 원하는 설명 범위를 판단", FINAL_ANSWER_PROMPT)
+        self.assertIn("근거의 모음이지", FINAL_ANSWER_PROMPT)
+        self.assertIn("가장 짧으면서도 질문에 완전히 답하는 길이", FINAL_ANSWER_PROMPT)
+        self.assertIn("2~4개의 짧은 문장", FINAL_ANSWER_PROMPT)
+        self.assertIn("하나의 요청을 다른 종류의 설명으로 임의 확장하지 않는다", FINAL_ANSWER_PROMPT)
+        self.assertNotIn("핵심 불릿 3~5개 또는 5~8문장 이내", FINAL_ANSWER_PROMPT)
+        self.assertIn("개인 검진 수치를 전부 다시 나열하지 않는다", FINAL_ANSWER_PROMPT)
         self.assertIn("{personal_context}", FINAL_ANSWER_PROMPT)
+        self.assertIn("{original_question}", FINAL_ANSWER_PROMPT)
+        self.assertIn("{conversation_context}", FINAL_ANSWER_PROMPT)
+        self.assertIn("의료 사실의 근거로 사용하지 않는다", FINAL_ANSWER_PROMPT)
         self.assertIn("개인 검진 측정값에는 청크 ID를 붙이지 않는다", FINAL_ANSWER_PROMPT)
+
+    def test_generator_receives_original_question_and_recent_context(self) -> None:
+        generator = FakeChain("검진 결과를 설명합니다.[C1]")
+        service = GroundedRagService(generator, FakeChain(_passed_audit()))
+
+        service.answer(
+            "내 AST 결과를 설명해줘",
+            _documents(),
+            safety_policy=check_safety_guard("그 결과는 어때?"),
+            audit=False,
+            original_question="그 결과는 어때?",
+            conversation_context="사용자: 내 AST 결과를 알려줘",
+        )
+
+        self.assertEqual(generator.values["original_question"], "그 결과는 어때?")
+        self.assertIn("AST", generator.values["conversation_context"])
 
     def test_emergency_information_request_still_uses_rag_generation(self) -> None:
         generator = FakeChain("즉시 119에 연락하세요. 호흡곤란은 숨쉬기 어려운 상태입니다.[C1]")
