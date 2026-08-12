@@ -3,16 +3,17 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# data/ 폴더를 위로 거슬러 찾아 ROOT 를 잡는다(어디서 실행해도 경로가 맞게)
+# app/ 폴더를 위로 거슬러 찾아 ROOT 를 잡는다(어디서 실행해도 경로가 맞게)
 def _find_root(start: Path) -> Path:
     for p in [start, *start.parents]:
-        if (p / "data").exists():
+        if (p / "app").is_dir() and (
+            (p / "README.md").exists() or (p / "requirements.txt").exists()
+        ):
             return p
-    # 로컬 `data/`가 없을 수 있는 환경을 허용한다. (모든 데이터가 원격(Pinecone/Supabase)에 있음)
     # 루트 대체안으로 패키지 위치에서 상위 2단계(레포 루트)를 반환한다.
     fallback = start.parents[2] if len(start.parents) >= 3 else start
     print(
-        f"[config] 'data' 폴더를 찾지 못했습니다. {fallback}을(를) ROOT로 사용합니다."
+        f"[config] 'app' 폴더를 찾지 못했습니다. {fallback}을(를) ROOT로 사용합니다."
     )
     return fallback
 
