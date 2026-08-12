@@ -1,12 +1,15 @@
 # HEAPY 건강정보 챗봇
 
 나의 데이터와 전문 의료지식을 종합적으로 고려해 질문에 응답해주는 챗봇 서비스입니다.   
-| 한국어 건강 의료정보 청크를 Pinecone에서 검색하고 사용자의 건강 정보를 Supabase에서 가져와, LLM이 응답해주는 FastAPI 서버입니다.
+> 한국어 건강 의료정보 청크를 Pinecone에서 검색하고 사용자의 건강 정보를 Supabase에서 가져와, LLM이 응답해주는 FastAPI 서버입니다.
 
-![웹앱 UI](docs/images/heapy_ui_01.png)
-![웹앱 UI](docs/images/heapy_ui_02.png)
-![웹앱 UI](docs/images/heapy_ui_03.png)
-
+<table>
+  <tr>
+    <td align="center"><img src="docs/ui_image/heapy_ui_01.png" width="230"</td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_02.png" width="230"</td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_03.png" width="230"</td>
+  </tr>
+</table>
 
 ## 시스템 동작 흐름
 
