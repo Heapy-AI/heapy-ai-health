@@ -84,51 +84,25 @@ if CHUNK_ROOT.exists():
 else:
     COLLECTIONS = {}
 
-# 기존: 로컬 `vdb/chunk` 하위 폴더를 기본 검색 컬렉션으로 사용
-# _search_collections_value = os.environ.get(
-#     "SEARCH_COLLECTIONS",
-#     ",".join(COLLECTIONS),
-# )
-# SEARCH_COLLECTIONS = tuple(
-#     dict.fromkeys(
-#         collection.strip()
-#         for collection in _search_collections_value.split(",")
-#         if collection.strip()
-#     )
-# )
-# 빈 목록일 때 예외를 던지던 기존 동작은 주석 처리합니다. 대신
-# 가능한 경우 Pinecone에서 실제 namespace 목록을 조회해 사용합니다.
-
-# 우선 환경변수로 명시된 값이 있으면 그것을 우선 사용합니다.
-env_collections = os.environ.get("SEARCH_COLLECTIONS", "").strip()
-if env_collections:
-    SEARCH_COLLECTIONS = tuple(
-        dict.fromkeys(c.strip() for c in env_collections.split(",") if c.strip())
+# 모듈 import 중 외부 네트워크를 호출하지 않고 설정값만으로 검색 대상을 확정한다.
+# 운영 환경에서는 SEARCH_COLLECTIONS로 명시적으로 덮어쓸 수 있다.
+# 작성자: 김진우
+_default_search_collections = tuple(COLLECTIONS) or (
+    "health_checkup_info",
+    "disease_info",
+    "medication_info",
+)
+_search_collections_value = os.environ.get(
+    "SEARCH_COLLECTIONS",
+    ",".join(_default_search_collections),
+)
+SEARCH_COLLECTIONS = tuple(
+    dict.fromkeys(
+        collection.strip()
+        for collection in _search_collections_value.split(",")
+        if collection.strip()
     )
-else:
-    # 환경변수가 없으면 Pinecone에서 네임스페이스를 조회 시도합니다.
-    SEARCH_COLLECTIONS = ()
-    try:
-        if PINECONE_API_KEY and PINECONE_INDEX_NAME:
-            from pinecone import Pinecone
-
-            client = Pinecone(api_key=PINECONE_API_KEY)
-            if client.has_index(PINECONE_INDEX_NAME):
-                # 인덱스 호스트를 얻어 Index 객체로 stats를 조회
-                desc = client.describe_index(PINECONE_INDEX_NAME)
-                host = desc.get("host") or getattr(desc, "host", None)
-                if host:
-                    idx = client.Index(host=host)
-                    stats = idx.describe_index_stats()
-                    namespaces = (stats or {}).get("namespaces", {}) or {}
-                    SEARCH_COLLECTIONS = tuple(namespaces.keys())
-    except Exception as exc:  # 실패 시 빈 튜플로 남기고 경고
-        print(f"[config] Pinecone 네임스페이스 조회 실패: {type(exc).__name__}: {exc}")
-
-if not SEARCH_COLLECTIONS:
-    print(
-        "[config] SEARCH_COLLECTIONS가 비어 있습니다. 환경변수 SEARCH_COLLECTIONS를 설정하거나 Pinecone 네임스페이스를 확인하세요."
-    )
+)
 
 # 데이터 적재 완료 후 평가를 통해 조정한다. 현재 값은 구조 검증용 기본값이다.
 SEARCH_TOP_K_PER_COLLECTION = _positive_int_env(

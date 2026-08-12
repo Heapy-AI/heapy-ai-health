@@ -1,84 +1,43 @@
 # HEAPY 건강정보 챗봇
 
-나의 데이터와 전문 의료지식을 종합적으로 고려해 질문에 응답해주는 챗봇 서비스입니다.   
-> 한국어 건강 의료정보 청크를 Pinecone에서 검색하고 사용자의 건강 정보를 Supabase에서 가져와, LLM이 응답해주는 FastAPI 서버입니다.
+사용자의 건강검진 데이터와 전문 의료정보를 함께 활용해 답변하는 FastAPI 기반 건강정보 챗봇입니다.
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/ui_image/heapy_ui_00.png" width="500"</td>
-    <td align="center"><img src="docs/ui_image/heapy_ui_01.png" width="500"</td>
-  </tr>
-    <tr>
-    <td align="center"><img src="docs/ui_image/heapy_ui_02.png" width="500"</td>
-    <td align="center"><img src="docs/ui_image/heapy_ui_03.png" width="500"</td>
-  </tr>
-</table>
+## 주요 기능
 
-## 시스템 동작 흐름
+- Supabase Auth 기반 회원가입, 로그인, 로그아웃 및 세션 복원
+- 사용자별 대화 세션과 메시지·요약 저장
+- 의료용어 정규화와 멀티턴 후속 질문 재작성
+- `simple_lookup`, `comprehensive`, `general_chat`, `ignore` Intent별 처리
+- 개인 건강 질문에 Supabase 건강검진 결과와 Pinecone 의료 근거 결합
+- SSE 기반 답변 스트리밍
+
+## 운영 구조
 
 ```text
-  → Supabase Auth 로그인 및 사용자별 대화 세션 로드
-  → 사용자 질의
-  → 의료용어 정규화
-  → 멀티턴 후속 질문 재작성
-  → Pinecone namespace 검색
-  → 검색·근거 검사
-  → FastAPI /search, /ask
-  → FastAPI 시연용 웹 앱
-```
-
-## VDB 적재 정보
-| 컬렉션 | Pinecone namespace | 적재 대상 |
-|---|---|---:|
-| 건강검진정보 | `health_checkup_info` | 30건 |
-| 질병정보 | `disease_info` | 15,349건 |
-| 복약정보 | `medication_info` | 43,330건 |
-
-## 환경
-
-- Python `3.11.9`
-- 임베딩 모델 `jhgan/ko-sroberta-multitask`
-- 벡터 차원 `768`
-- 거리 측정 `cosine`
-- Pinecone Serverless `aws / us-east-1`
-
-## 폴더구조
-
-```
 heapy-ai-health/
-├── app/                # FastAPI 서버, 라우터, 서비스, 스키마
-│   ├── core/
-│   ├── routers/
-│   ├── services/
-│   ├── schemas/
-│   ├── demo_web/
-│   ├── web/
-│   ├── demo.py
-│   └── main.py
-├── model/              # model 관리
-│   └── classifier/     # Intent 분류 모델 아티팩트 및 학습 스크립트
-├── tests/              # 단위 테스트
-├── evaluation/         # 성능 평가
-├── output/             # 출력 (요소별 디버깅, 성능평가 결과 등)
-├── run_ui.py           # FastAPI 우선 UI 실행 스크립트
-├── run_demo_ui.py      # 사용자 시연 UI 실행 스크립트
+├── app/
+│   ├── core/                # 설정 및 애플리케이션 상태
+│   ├── frontends/
+│   │   ├── user/           # 사용자 UI
+│   │   └── shared/         # 공용 이미지
+│   ├── routers/            # 인증·대화·챗봇 API
+│   ├── schemas/            # API 요청·응답 스키마
+│   ├── services/           # 챗봇 파이프라인과 외부 저장소 연동
+│   └── main.py             # FastAPI 진입점
+├── database/
+│   └── migrations/         # Supabase 스키마·RLS 마이그레이션
+├── model/
+│   └── classifier/
+│       └── artifacts/
+│           └── intent-v7/  # 운영 Intent 모델
 ├── requirements.txt
-├── .env                # 환경변수(로컬 환경에서만 사용)
-├── docs/               # 개발 문서
+├── LICENSE
 └── README.md
 ```
-(`data/`, `preprocessed/`, `vdb/` 등 VDB 구축 관련 폴더는 이 저장소에 포함되지 않으며,
-별도 레포지토리에서 관리됩니다.)
 
-## 설치
+## 환경변수
 
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-프로젝트 루트의 `.env`:
+프로젝트 루트에 `.env` 파일을 생성합니다.
 
 ```env
 PINECONE_API_KEY=your_pinecone_api_key
@@ -90,80 +49,62 @@ AUTH_COOKIE_SECURE=0
 SEARCH_COLLECTIONS=health_checkup_info,disease_info,medication_info
 ```
 
-- `SUPABASE_PUBLISHABLE_KEY` 대신 레거시 `SUPABASE_ANON_KEY`도 사용할 수 있습니다.
-- 로컬 HTTP에서는 `AUTH_COOKIE_SECURE=0`, HTTPS 운영 환경에서는 반드시 `1`로 설정합니다.  
-- 설정이 완료되면 웹 앱은 Supabase 이메일·비밀번호 로그인을 먼저 요구하고, 인증 세션은 JavaScript에서 읽을 수 없는 HttpOnly 쿠키로 유지합니다.
-- 회원가입 시 `auth.users` 계정과 같은 UUID의 `public.users` 프로필이 생성됩니다. 대화는 `chat_sessions`, `chat_messages`에 사용자별로 저장되며 RLS가 다른 사용자의 접근을 막습니다.
-- 기존 `public.users` 데이터는 마이그레이션에서 삭제하거나 변경하지 않습니다.
+- `SUPABASE_PUBLISHABLE_KEY` 대신 기존 `SUPABASE_ANON_KEY`도 사용할 수 있습니다.
+- 로컬 HTTP 환경에서는 `AUTH_COOKIE_SECURE=0`, HTTPS 운영 환경에서는 `1`로 설정합니다.
+- `.env`와 API 키는 Git에 커밋하지 않습니다.
 
-- 기존 통합 임베딩 인덱스는 768차원 로컬 임베딩과 호환되지 않습니다. 별도의 `heapy-rag` dense 인덱스를 사용합니다.
-
-## 서버 실행
-
-### 1. FastAPI 백엔드 실행
+## 설치 및 실행
 
 ```bash
+python -m venv .venv
+```
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-이 저장소는 FastAPI가 시연용 웹 앱을 함께 제공합니다. 
-웹 앱은 통합 챗봇 `POST /chat/stream`을 사용하며 Intent, 근거 검증, 출처 정보를 시각적으로 확인할 수 있습니다.
-
-
-### 2. UI 실행
+macOS 또는 Linux:
 
 ```bash
-python run_ui.py
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 ```
 
-- 웹 앱(검증용): <http://localhost:8000>
+- 사용자 UI: <http://localhost:8000>
 - Swagger: <http://localhost:8000/docs>
 
-```bash
-python run_demo_ui.py
-```
+FastAPI가 사용자 UI와 API를 함께 제공합니다. 별도의 프런트엔드 서버는 필요하지 않습니다.
 
-- 사용자 UI: <http://localhost:3000>
-- API 서버: <http://localhost:8000>
-
-사용자 시연 UI는 FastAPI 백엔드를 프록시하여 `localhost:3000`에서 별도 화면을 제공합니다.
-실행 전에 FastAPI 서버가 `8000` 포트에서 실행 중이어야 합니다.
-
-
-- 사용자 시연 UI는 기존 FastAPI 검증 화면과 별도로 실행됩니다. 왼쪽 사용자별 대화
-- 세션 목록과 챗봇 화면을 제공하며 프로젝트 환경, Intent·감사 로그, 응답 원본 JSON은 표시하지 않습니다. 
-- 실행 전에 FastAPI 서버가 `8000` 포트에서 실행 중이어야 합니다.
-- 회원가입·로그인·로그아웃 요청과 HttpOnly 인증 쿠키는 사용자 UI 서버가 메인 API로 중계하며, 메인 웹 앱과 동일하게 Supabase의 세션별 대화 저장을 사용합니다.
-- 개발자용 웹과 동일하게 서버 토큰 수신과 분리된 표시 대기열을 사용하며, 답변의 Markdown을 렌더링합니다. 사용자용 화면에서는 답변 하단의 출처 펼침기를 표시하지 않습니다.
-
-## API
+## 사용자 API
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | `POST` | `/auth/signup` | 회원가입 및 사용자 프로필 생성 |
 | `POST` | `/auth/login` | 로그인 및 HttpOnly 인증 쿠키 발급 |
+| `GET` | `/auth/me` | 현재 로그인 사용자 조회 |
+| `POST` | `/auth/refresh` | 로그인 세션 갱신 |
 | `POST` | `/auth/logout` | 로그아웃 및 인증 쿠키 제거 |
-| `GET` | `/conversations` | 현재 사용자의 대화 세션 목록 |
+| `GET` | `/conversations` | 현재 사용자의 대화 세션 목록 조회 |
 | `POST` | `/conversations` | 새 대화 세션 생성 |
 | `GET` | `/conversations/{session_id}` | 세션과 저장 메시지 조회 |
 | `DELETE` | `/conversations/{session_id}` | 대화 세션 삭제 |
-| `GET` | `/health` | Pinecone namespace별 적재 수 확인 |
-| `POST` | `/chat/stream` | SSE 기반 통합 챗봇 토큰 스트리밍 |
-| `POST` | `/search` | 로컬 질문 임베딩 후 Pinecone 검색 |
-| `POST` | `/ask` | 검색 청크 기반 Gemini 답변 |
+| `POST` | `/chat` | 통합 챗봇 응답 생성 |
+| `POST` | `/chat/stream` | SSE 기반 통합 챗봇 응답 스트리밍 |
 
-자세한 내용은 `docs/api_spec.md`, `docs/GRADIO_GUIDE.md`를 참고합니다.
+## Supabase 마이그레이션
+
+`database/migrations/`는 서버 요청 처리 중 직접 실행되지는 않지만, 운영 DB 스키마와 RLS 정책을 재현하고 변경 이력을 관리하기 위해 유지합니다.
+
+마이그레이션은 파일 번호 순서대로 Supabase SQL Editor 또는 배포 파이프라인에서 적용합니다. 기존 `public.users` 데이터는 삭제하지 않습니다.
 
 ## 운영 주의사항
 
-- `.env`, API Key, Gemini Key를 Git에 커밋하지 않습니다.
-- 개인 검진 수치와 식별정보를 공용 namespace에 적재하지 않습니다.
-- 청크 ID는 재실행과 갱신을 위해 안정적으로 유지합니다.
-- `--delete-stale`은 전체 원천 청크가 준비된 상태에서만 사용합니다.
-- 로컬 manifest는 적재 체크포인트이며 `vdb/manifest/`에 생성됩니다. (vdb 적재 레포지토리)
-
-## 참고 자료
-
-- Pinecone create index: <https://docs.pinecone.io/guides/index-data/create-an-index>
-- Pinecone upsert: <https://docs.pinecone.io/guides/index-data/upsert-data>
-- Pinecone namespaces: <https://docs.pinecone.io/guides/index-data/implement-multitenancy>
+- 개인 건강검진 데이터는 로그인 사용자의 Supabase access token과 RLS 정책을 통해서만 조회합니다.
+- 서비스에서 사용하는 Intent v7 모델 파일을 삭제하거나 경로를 변경하지 않습니다.
+- `SEARCH_COLLECTIONS`에는 실제 Pinecone namespace를 명시합니다.
+- 개발자 UI, 평가 결과, 테스트 및 개발 문서는 `dev` 브랜치에서 관리합니다.

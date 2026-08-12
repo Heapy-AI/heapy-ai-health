@@ -106,6 +106,11 @@ EXPLICIT_TOPIC_PATTERN = re.compile(
 )
 
 
+MEDICAL_ACRONYM_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_])[A-Z][A-Z0-9_\-]{1,15}(?![A-Za-z0-9_])"
+)
+
+
 def needs_context_rewrite(question: str, history=(), summary: str = "") -> bool:
     """이전 문맥이 필요할 가능성이 있는 질문을 재작성 대상으로 판정한다.
 
@@ -123,6 +128,8 @@ def needs_context_rewrite(question: str, history=(), summary: str = "") -> bool:
         return True
     if OMITTED_TARGET_FOLLOW_UP_PATTERN.search(normalized):
         return True
+    if MEDICAL_ACRONYM_PATTERN.search(normalized):
+        return False
     if EXPLICIT_TOPIC_PATTERN.search(normalized):
         return False
     return True
