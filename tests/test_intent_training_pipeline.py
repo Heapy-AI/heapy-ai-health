@@ -9,7 +9,7 @@ from pathlib import Path
 
 import torch
 
-from classifier.script.intent_v6_utils import (
+from model.classifier.script.intent_v6_utils import (
     EMBED_DIMENSION,
     LABELS,
     LABEL_TO_ID,
@@ -21,8 +21,8 @@ from classifier.script.intent_v6_utils import (
     prediction_rows,
     write_json,
 )
-from classifier.script.prepare_intent_v6_data import policy_label
-from classifier.script.prepare_intent_v7_data import policy_label as v7_policy_label
+from model.classifier.script.prepare_intent_v6_data import policy_label
+from model.classifier.script.prepare_intent_v7_data import policy_label as v7_policy_label
 
 
 class IntentTrainingPipelineTest(unittest.TestCase):

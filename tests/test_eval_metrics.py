@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 import unittest
 
-from tests.eval import metrics as M
+from evaluation.eval import metrics as M
 
 
 def _document(record_id: str, source: str = "https://example.com") -> dict:
