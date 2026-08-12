@@ -23,6 +23,7 @@ from app.services.query_resolver import (
     InMemoryMedicalTermRepository,
     MedicalQueryResolver,
 )
+from app.services.query_rewriter import QueryRewriter, RewrittenQuery
 from app.services.vector_search import MultiCollectionSearchResult
 
 
@@ -157,6 +158,16 @@ class FakeGeneralChatChain:
         self.call_count += 1
         yield "오늘도 무리하지 말고 "
         yield "천천히 해봐요."
+
+
+class FakeQueryRewriteChain:
+    """정해진 독립형 질문을 반환하는 테스트용 재작성 체인."""
+
+    def __init__(self, response: RewrittenQuery) -> None:
+        self.response = response
+
+    def invoke(self, _values):
+        return self.response
 
 
 def _document() -> Document:
@@ -313,6 +324,68 @@ class ChatOrchestratorTest(unittest.TestCase):
             grounded_rag.personal_context,
             "2026-08-06 HDL 45 mg/dL 정상",
         )
+
+    def test_personal_checkup_follow_up_loads_context_after_named_rewrite(self) -> None:
+        """재작성기가 이름을 사용해도 본인 검진 후속 질문은 RDB를 이어서 조회한다."""
+        orchestrator, _, grounded_rag, _ = _build_orchestrator(
+            Intent.SIMPLE_LOOKUP,
+            documents=[_document()],
+        )
+        orchestrator._query_rewriter = QueryRewriter(
+            FakeQueryRewriteChain(
+                RewrittenQuery(
+                    standalone_question=(
+                        "김민철님의 건강검진 결과에서 주의해야 할 부분들 중에서 "
+                        "제일 먼저 관리해야 할 것은 무엇인가요?"
+                    ),
+                    rewritten=True,
+                    reason="직전 개인 검진 결과를 복원",
+                )
+            )
+        )
+        history = [
+            {"role": "user", "content": "내 건강검진 결과를 전체적으로 설명해줘"},
+            {
+                "role": "assistant",
+                "content": "김민철님의 건강검진 결과에서 주의할 항목을 설명했습니다.",
+            },
+        ]
+
+        result = orchestrator.answer(
+            "그 중에서 제일 먼저 관리해야 할 건 뭐야?",
+            history,
+            personal_context_loader=lambda _question, _terms: (
+                "2026-08-06 감마지티피 83 U/L 이상"
+            ),
+        )
+
+        self.assertEqual(result.intent, Intent.COMPREHENSIVE)
+        self.assertTrue(result.personal_context_used)
+        self.assertEqual(
+            grounded_rag.personal_context,
+            "2026-08-06 감마지티피 83 U/L 이상",
+        )
+
+    def test_other_person_checkup_without_personal_history_skips_context(self) -> None:
+        """제3자 이름만 있는 첫 질문에는 로그인 사용자의 검진값을 결합하지 않는다."""
+        orchestrator, _, _, _ = _build_orchestrator(
+            Intent.SIMPLE_LOOKUP,
+            documents=[_document()],
+        )
+        load_count = 0
+
+        def load(_question: str, _terms: list[dict]) -> str:
+            nonlocal load_count
+            load_count += 1
+            return "로그인 사용자의 검진 결과"
+
+        result = orchestrator.answer(
+            "홍길동님의 건강검진 결과를 설명해줘",
+            personal_context_loader=load,
+        )
+
+        self.assertEqual(load_count, 0)
+        self.assertFalse(result.personal_context_used)
 
     def test_personal_context_loader_receives_dictionary_canonical_keys(self) -> None:
         orchestrator, _, _, _ = _build_orchestrator(

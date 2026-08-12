@@ -17,6 +17,10 @@ Heapy AI health care의 요청 처리 파이프라인 설계 자료 모음이다
 
 현재 MVP는 `POST /chat`과 `POST /chat/stream`에서 Intent v7과 Safety Guard를 독립 실행한다. Guard는 Intent를 `ignore`로 덮어쓰지 않고 위험 수준과 금지 행동만 기록한다. `simple_lookup`과 `comprehensive`는 Pinecone 다중 namespace 병렬 검색을 사용하고, `general_chat`은 검색 없는 Gemini 대화, `ignore`는 건강 서비스 외 고정 응답을 사용한다. RAG 경로는 검색 결과 존재·최소 유사도·명시 대상 일치를 코드로 확인한 뒤 근거가 있는 질문 항목만 답한다. 사용자 채팅은 생성된 본문을 변경하지 않는 사후 감사 LLM 호출을 생략하고, 개발자용 RAG 서비스는 기본 감사 옵션을 유지한다. Supabase Auth, 사용자 프로필, 세션별 히스토리·요약 저장은 통합 엔드포인트에 연결되었다. `comprehensive`는 로그인 사용자의 질문 관련 검진 결과를 Supabase RDB에서 조회해 Pinecone 공용 의학 근거와 결합한다. 개인 데이터는 캐시하지 않으며, 검색 캐시는 아직 연결되지 않았다.
 
+개인 검진 결과를 사용한 직전 턴의 후속 질문은 재작성 결과가 로그인 사용자 이름으로
+표현되더라도 본인 검진 문맥을 이어서 Supabase RDB를 조회한다. 단, 제3자 이름만 있는
+첫 질문에는 로그인 사용자의 검진 데이터를 결합하지 않는다.
+
 스트리밍 UI는 실제 백엔드 단계 진입 시 전달되는 SSE `progress` 이벤트를 사용해 말풍선 아래에 고정 안내 문구를 표시한다. 답변 토큰 표시가 끝나면 요약·저장이 남아 있어도 진행 문구를 제거하며, 문구 생성에 LLM을 사용하지 않는다.
 
 사용자 UI는 FastAPI의 `GET /`에서 제공하며 `POST /chat/stream`의 SSE 응답 계약을
