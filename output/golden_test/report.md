@@ -296,13 +296,13 @@
 PYTHONPATH=. python -m pytest tests -q
 
 # 2) 골든셋 종단 실행
-PYTHONPATH=. python tests/eval/run_golden_eval.py --sample-size 300 --workers 6 --seed 20260806
+PYTHONPATH=. python evaluation/eval/run_golden_eval.py --sample-size 300 --workers 6 --seed 20260806
 
 # 3) ragas 채점
-PYTHONPATH=. python tests/eval/score_ragas.py --workers 4
+PYTHONPATH=. python evaluation/eval/score_ragas.py --workers 4
 
 # 4) 집계 및 리포트
-PYTHONPATH=. python tests/eval/aggregate_report.py
+PYTHONPATH=. python evaluation/eval/aggregate_report.py
 ```
 
 ## 13. 산출물

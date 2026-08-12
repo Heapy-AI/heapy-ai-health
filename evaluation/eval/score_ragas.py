@@ -1,7 +1,7 @@
 """ragas LLM 심판 지표(근거충실도·정답일치율·근거재현율·근거정밀도)를 계산한다.
 
 실행 예:
-    PYTHONPATH=. python tests/eval/score_ragas.py --limit 0 --workers 4
+    PYTHONPATH=. python evaluation/eval/score_ragas.py --limit 0 --workers 4
 """
 from __future__ import annotations
 

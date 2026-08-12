@@ -1,7 +1,7 @@
 """골든 데이터셋으로 RAG 종단 파이프라인을 실행하고 원시 결과를 기록한다.
 
 실행 예:
-    PYTHONPATH=. python tests/eval/run_golden_eval.py --sample-size 150 --workers 4
+    PYTHONPATH=. python evaluation/eval/run_golden_eval.py --sample-size 150 --workers 4
 """
 from __future__ import annotations
 
@@ -30,14 +30,14 @@ from app.services.chat_orchestrator import (  # noqa: E402
 )
 from app.services.grounded_rag import NOT_GROUNDED_ANSWER  # noqa: E402
 
-from tests.eval import metrics as M  # noqa: E402
-from tests.eval.golden_dataset import (  # noqa: E402
+from evaluation.eval import metrics as M  # noqa: E402
+from evaluation.eval.golden_dataset import (  # noqa: E402
     DEFAULT_DATASET,
     GoldenItem,
     load_dataset,
     stratified_sample,
 )
-from tests.eval.instrumentation import (  # noqa: E402
+from evaluation.eval.instrumentation import (  # noqa: E402
     SharedServices,
     StageTimings,
     build_instrumented_orchestrator,
