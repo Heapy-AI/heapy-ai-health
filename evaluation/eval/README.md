@@ -32,4 +32,4 @@ PYTHONPATH=. python evaluation/eval/score_ragas.py --workers 8
 PYTHONPATH=. python evaluation/eval/aggregate_report.py
 ```
 
-산출물은 기본적으로 `output/golden_test/`에 저장됩니다 (`--out-dir`로 변경).
+산출물은 기본적으로 `output/golden_eval/`에 저장됩니다 (`--out-dir`로 변경).

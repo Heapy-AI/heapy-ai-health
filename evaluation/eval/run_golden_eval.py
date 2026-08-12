@@ -236,7 +236,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=20260806)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--max-retries", type=int, default=2)
-    parser.add_argument("--out-dir", type=Path, default=Path("output") / "golden_test")
+    parser.add_argument("--out-dir", type=Path, default=Path("output") / "golden_eval")
     parser.add_argument(
         "--split",
         default="",

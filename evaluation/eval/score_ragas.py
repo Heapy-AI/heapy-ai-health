@@ -103,7 +103,7 @@ def build_samples(records: list[dict]) -> tuple[list[SingleTurnSample], list[str
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="ragas 기반 RAG 품질 채점")
-    parser.add_argument("--in-dir", type=Path, default=Path("output") / "golden_test")
+    parser.add_argument("--in-dir", type=Path, default=Path("output") / "golden_eval")
     parser.add_argument("--limit", type=int, default=0, help="앞 N건만 채점(0=전량)")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--timeout", type=int, default=300)
