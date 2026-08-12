@@ -4,8 +4,8 @@
 엉뚱한 청크로 밀릴 수 있다. 이 모듈은 질문에서 의료용어 후보를 추출하고,
 RDB가 반환한 정확명/별칭/유사도 결과를 이용해 검색용 질문을 재작성한다.
 
-RDB가 연결되지 않은 개발 환경에서는 ``NullMedicalTermRepository``가 사용되어
-기존 검색 동작을 그대로 유지한다. 실제 운영에서는 ``RDB_DSN``을 설정한다.
+직접 RDB가 연결되지 않아도 Supabase Data API 설정이 있으면 의료용어 일괄 검색 RPC를
+사용한다. 두 저장소가 모두 없을 때만 ``NullMedicalTermRepository``로 기존 검색을 유지한다.
 """
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from functools import lru_cache
 from typing import Any, Protocol
+
+import requests
 
 
 LOGGER = logging.getLogger(__name__)
@@ -67,6 +69,9 @@ KOREAN_PARTICLES = (
 MEDICATION_QUERY_LEXEMES = frozenset(
     {"약", "약물", "약품", "복약", "복용", "처방"}
 )
+MEDICAL_QUERY_CONTEXT_LEXEMES = frozenset(
+    {"건강", "검사", "검진", "결과", "상태", "수치", "정도", "항목", "이상"}
+)
 # 의료용어 목록이 아니라 한국어 문장 성분을 판별하기 위한 일반적인
 # 활용 어미 규칙이다. 완성형 동사·형용사 어절이 초성 부분열만으로
 # 의료용어 후보가 되는 것을 막고, 해당 어절은 검색 문맥으로 보존한다.
@@ -82,6 +87,29 @@ def normalize_search_text(value: str) -> str:
     """
     normalized = _normalize_korean_input(value)
     return re.sub(r"[^0-9a-z가-힣ㄱ-ㅎㅏ-ㅣ]+", "", normalized)
+
+
+def is_medical_query_context(value: str) -> bool:
+    """일반 문맥어만 이어진 표현인지 판별한다.
+
+    ``검진 결과``나 ``이상 수치``처럼 여러 문맥어가 붙은 표현도 의료용어
+    부분 일치 후보로 승격하지 않는다. 검사항목명 목록은 Supabase 용어집이
+    계속 담당하므로 애플리케이션에 항목별 예외를 추가하지 않는다.
+
+    작성자: 김진우
+    """
+    normalized = normalize_search_text(value)
+    if not normalized:
+        return False
+
+    reachable = {0}
+    for start in range(len(normalized)):
+        if start not in reachable:
+            continue
+        for lexeme in MEDICAL_QUERY_CONTEXT_LEXEMES:
+            if normalized.startswith(lexeme, start):
+                reachable.add(start + len(lexeme))
+    return len(normalized) in reachable
 
 
 def _normalize_korean_input(value: str) -> str:
@@ -231,6 +259,7 @@ class MedicalTermMatch:
     score: float
     match_kind: str
     priority: int = 0
+    canonical_keys: tuple[str, ...] = ()
 
 
 class MedicalTermRepository(Protocol):
@@ -486,6 +515,74 @@ class RdbMedicalTermRepository:
         return {query: tuple(grouped.get(query, ())) for query in queries}
 
 
+class SupabaseMedicalTermRepository:
+    """Supabase Data API의 의료용어 일괄 검색 RPC 어댑터."""
+
+    def __init__(self, url: str, publishable_key: str, *, request_factory=None) -> None:
+        if not url.strip() or not publishable_key.strip():
+            raise ValueError("Supabase 의료용어 검색 설정이 필요합니다.")
+        self._url = url.rstrip("/")
+        self._publishable_key = publishable_key
+        self._request_factory = request_factory or requests.post
+
+    def search(self, query: str, *, limit: int = 8) -> Sequence[MedicalTermMatch]:
+        return self.search_many([query], limit=limit).get(query, ())
+
+    def search_many(
+        self,
+        queries: Sequence[str],
+        *,
+        limit: int = 8,
+    ) -> dict[str, Sequence[MedicalTermMatch]]:
+        """여러 의료용어 후보를 한 번의 Supabase RPC로 조회한다."""
+        unique_queries = [
+            query
+            for query in dict.fromkeys(queries)
+            if len(normalize_search_text(query)) >= 2
+        ]
+        grouped: dict[str, list[MedicalTermMatch]] = {
+            query: [] for query in unique_queries
+        }
+        if not unique_queries:
+            return {query: () for query in queries}
+
+        try:
+            response = self._request_factory(
+                f"{self._url}/rest/v1/rpc/search_medical_terms_batch",
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "apikey": self._publishable_key,
+                },
+                json={
+                    "p_queries": unique_queries,
+                    "p_limit": max(1, min(limit, 20)),
+                },
+                timeout=(5, 15),
+            )
+            response.raise_for_status()
+            rows = response.json()
+        except (requests.RequestException, ValueError) as exc:
+            raise RuntimeError("Supabase 의료용어 검색에 실패했습니다.") from exc
+
+        for row in rows if isinstance(rows, list) else []:
+            input_query = str(row.get("input_query", ""))
+            if input_query not in grouped:
+                continue
+            grouped[input_query].append(
+                MedicalTermMatch(
+                    canonical_key=str(row.get("canonical_key", "")),
+                    canonical_name=str(row.get("canonical_name", "")),
+                    term_type=str(row.get("term_type", "")),
+                    matched_alias=str(row.get("matched_alias", "")),
+                    score=float(row.get("match_score", 0.0) or 0.0),
+                    match_kind=str(row.get("match_kind", "")),
+                    priority=int(row.get("match_priority", 0) or 0),
+                )
+            )
+        return {query: tuple(grouped.get(query, ())) for query in queries}
+
+
 @dataclass(frozen=True)
 class ResolvedQueryTerm:
     """질문 안의 입력 표현과 RDB 표준용어의 연결 결과."""
@@ -497,8 +594,10 @@ class ResolvedQueryTerm:
     score: float
     match_kind: str
     matched_alias: str = ""
+    canonical_keys: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
+        canonical_keys = self.canonical_keys or (self.canonical_key,)
         return {
             "input": self.source_text,
             "canonical_key": self.canonical_key,
@@ -507,6 +606,7 @@ class ResolvedQueryTerm:
             "score": round(self.score, 4),
             "match_kind": self.match_kind,
             "matched_alias": self.matched_alias,
+            "canonical_keys": list(canonical_keys),
         }
 
 
@@ -573,6 +673,11 @@ def build_confirmed_query_resolution(
         score=1.0,
         match_kind="confirmed",
         matched_alias=str(confirmed_term.get("matched_alias", canonical)),
+        canonical_keys=tuple(
+            str(key)
+            for key in confirmed_term.get("canonical_keys", ())
+            if str(key).strip()
+        ),
     )
     return QueryResolution(
         original_query=original,
@@ -620,8 +725,14 @@ class MedicalQueryResolver:
         """질의를 캐시된 표준화 결과로 변환한다."""
         return self._resolve_uncached(str(question or "").strip())
 
-    @lru_cache(maxsize=512)
     def _resolve_uncached(self, original: str) -> QueryResolution:
+        """최신 RDB 용어 사전을 사용해 질문을 정규화한다.
+
+        외부 의료용어 DB 결과는 프로세스 수명 동안 캐시하지 않는다. 운영 중 별칭이
+        보완된 뒤에도 과거의 잘못된 확인 후보가 남는 것을 방지하기 위함이다.
+
+        작성자: 김진우
+        """
         domain_hint = self._infer_domain_hint(original)
         if not original:
             return QueryResolution(original, original, domain_hint=domain_hint)
@@ -649,8 +760,11 @@ class MedicalQueryResolver:
                 for match in matches_by_query.get(span.text, ())
                 if self._is_candidate_match(span, match)
             ]
-            best = self._select_best(matches)
-            has_ambiguity = has_ambiguity or self._is_ambiguous(matches)
+            best = self._select_best(matches, query=span.text)
+            has_ambiguity = has_ambiguity or self._is_ambiguous(
+                matches,
+                query=span.text,
+            )
             if best is not None:
                 candidates.append((span, best))
         full_span = _QuerySpan(0, len(original), original)
@@ -659,9 +773,10 @@ class MedicalQueryResolver:
             for match in matches_by_query.get(original, ())
             if self._is_candidate_match(full_span, match)
         ]
-        full_best = self._select_best(full_matches)
+        full_best = self._select_best(full_matches, query=original)
         has_ambiguity = has_ambiguity or self._is_ambiguous(
-            full_matches
+            full_matches,
+            query=original,
         )
         if full_best is not None:
             is_exact_full = (
@@ -693,6 +808,22 @@ class MedicalQueryResolver:
             for span, match in selected
             if match.score >= self.min_score
         ]
+        strong_match_kinds = {
+            "exact",
+            "substring",
+            "alias_group_exact",
+            "alias_group_substring",
+        }
+        strong_selected = [
+            (span, match)
+            for span, match in selected_valid
+            if match.match_kind in strong_match_kinds
+        ]
+        if strong_selected:
+            # HDL·AST처럼 명시적으로 일치한 검사항목이 있는데 문장 속 일반어인
+            # ``수치``가 ``간수치``의 약한 초성·오타 후보로 다시 잡히면 잘못된
+            # 확인 질문이 생긴다. 정확한 DB 근거가 있으면 약한 후보는 폐기한다.
+            selected_valid = strong_selected
         if any(
             match.term_type.strip().upper() == "MEDICATION"
             for _, match in selected_valid
@@ -707,6 +838,7 @@ class MedicalQueryResolver:
                 score=match.score,
                 match_kind=match.match_kind,
                 matched_alias=match.matched_alias,
+                canonical_keys=match.canonical_keys,
             )
             for span, match in selected_valid
         )
@@ -750,6 +882,7 @@ class MedicalQueryResolver:
                 score=match.score,
                 match_kind=match.match_kind,
                 matched_alias=match.matched_alias,
+                canonical_keys=match.canonical_keys,
             )
             return QueryResolution(
                 original_query=original,
@@ -836,7 +969,17 @@ class MedicalQueryResolver:
         독립적인 증거가 있을 때만 약한 후보를 통과시킨다.
         """
         kind = match.match_kind.strip().lower()
-        strong_kinds = {"exact", "substring", "alias_group_exact"}
+        if (
+            is_medical_query_context(span.text)
+            and kind not in {"exact", "alias_group_exact"}
+        ):
+            return False
+        strong_kinds = {
+            "exact",
+            "substring",
+            "alias_group_exact",
+            "alias_group_substring",
+        }
         if kind in strong_kinds:
             return True
 
@@ -908,7 +1051,12 @@ class MedicalQueryResolver:
                 return _QuerySpan(span.start, span.end - len(particle), span.text[: -len(particle)])
         return span
 
-    def _select_best(self, matches: Sequence[MedicalTermMatch]) -> MedicalTermMatch | None:
+    def _select_best(
+        self,
+        matches: Sequence[MedicalTermMatch],
+        *,
+        query: str = "",
+    ) -> MedicalTermMatch | None:
         ranked = sorted(
             matches,
             key=lambda item: (-item.score, -item.priority, item.canonical_key),
@@ -920,9 +1068,9 @@ class MedicalQueryResolver:
             and ranked[0].score < self.fuzzy_min_score
         ):
             return None
-        shared_alias = self._shared_alias_group(ranked)
+        shared_alias = self._shared_alias_group(ranked, query=query)
         if shared_alias is not None:
-            return self._build_alias_group_match(shared_alias)
+            return self._build_alias_group_match(shared_alias, query=query)
         if len(ranked) > 1 and ranked[0].canonical_key != ranked[1].canonical_key:
             if (
                 ranked[0].match_kind == "exact"
@@ -934,7 +1082,12 @@ class MedicalQueryResolver:
                 return None
         return ranked[0]
 
-    def _is_ambiguous(self, matches: Sequence[MedicalTermMatch]) -> bool:
+    def _is_ambiguous(
+        self,
+        matches: Sequence[MedicalTermMatch],
+        *,
+        query: str = "",
+    ) -> bool:
         ranked = sorted(
             (
                 match
@@ -949,7 +1102,7 @@ class MedicalQueryResolver:
         )
         if len(ranked) < 2 or ranked[0].canonical_key == ranked[1].canonical_key:
             return False
-        if self._shared_alias_group(ranked) is not None:
+        if self._shared_alias_group(ranked, query=query) is not None:
             return False
         if (
             ranked[0].match_kind == "exact"
@@ -962,6 +1115,8 @@ class MedicalQueryResolver:
     def _shared_alias_group(
         self,
         ranked: Sequence[MedicalTermMatch],
+        *,
+        query: str = "",
     ) -> tuple[MedicalTermMatch, ...] | None:
         """같은 사용자 표현이 여러 표준항목의 alias인 경우를 묶는다.
 
@@ -983,6 +1138,15 @@ class MedicalQueryResolver:
             if normalize_search_text(match.matched_alias) == alias_key
             and top.score - match.score < self.ambiguity_margin
         )
+        query_key = normalize_search_text(query)
+        if len({match.canonical_key for match in group}) < 2 and query_key:
+            group = tuple(
+                match
+                for match in ranked
+                if match.term_type.strip().upper() == "SCREENING"
+                and query_key in normalize_search_text(match.matched_alias)
+                and top.score - match.score < self.ambiguity_margin
+            )
         canonical_keys = {match.canonical_key for match in group}
         term_types = {match.term_type.strip().upper() for match in group}
         if len(canonical_keys) < 2 or len(term_types) != 1:
@@ -992,15 +1156,22 @@ class MedicalQueryResolver:
     @staticmethod
     def _build_alias_group_match(
         group: Sequence[MedicalTermMatch],
+        *,
+        query: str = "",
     ) -> MedicalTermMatch:
         top = group[0]
         if all(match.match_kind == "exact" for match in group):
             match_kind = "alias_group_exact"
+        elif all(
+            match.match_kind in {"exact", "substring"}
+            for match in group
+        ):
+            match_kind = "alias_group_substring"
         elif any(match.match_kind in {"initials", "initials_substring"} for match in group):
             match_kind = "alias_group_initials"
         else:
             match_kind = "alias_group_fuzzy"
-        alias = top.matched_alias
+        alias = query.strip() or top.matched_alias
         alias_key = normalize_search_text(alias)
         return MedicalTermMatch(
             canonical_key=f"ALIAS_GROUP:{alias_key}",
@@ -1010,6 +1181,9 @@ class MedicalQueryResolver:
             score=top.score,
             match_kind=match_kind,
             priority=max(match.priority for match in group),
+            canonical_keys=tuple(
+                sorted({match.canonical_key for match in group})
+            ),
         )
 
     @staticmethod
@@ -1020,6 +1194,8 @@ class MedicalQueryResolver:
 def build_query_resolver(
     dsn: str = "",
     *,
+    supabase_url: str = "",
+    supabase_publishable_key: str = "",
     min_score: float = 0.66,
     ambiguity_margin: float = 0.05,
 ) -> MedicalQueryResolver:
@@ -1027,6 +1203,11 @@ def build_query_resolver(
     repository: MedicalTermRepository
     if dsn.strip():
         repository = RdbMedicalTermRepository(dsn)
+    elif supabase_url.strip() and supabase_publishable_key.strip():
+        repository = SupabaseMedicalTermRepository(
+            supabase_url,
+            supabase_publishable_key,
+        )
     else:
         repository = NullMedicalTermRepository()
     return MedicalQueryResolver(

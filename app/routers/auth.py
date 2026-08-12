@@ -21,6 +21,7 @@ from app.services.supabase_conversation import (
     SupabaseConversationError,
     SupabaseConversationService,
 )
+from app.services.supabase_health_context import SupabaseHealthContextService
 from app.services.supabase_auth import (
     SupabaseAuthConfigurationError,
     SupabaseAuthError,
@@ -34,6 +35,10 @@ VERIFIED_USER_CACHE_TTL_SECONDS = 30.0
 router = APIRouter(prefix="/auth", tags=["auth"])
 auth_service = SupabaseAuthService(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
 conversation_service = SupabaseConversationService(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY,
+)
+health_context_service = SupabaseHealthContextService(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY,
 )

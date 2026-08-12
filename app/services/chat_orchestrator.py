@@ -4,13 +4,15 @@
 """
 from __future__ import annotations
 
-from collections.abc import Iterator
+import re
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 
 from langchain_core.documents import Document
 
 from app.services.grounded_rag import (
     GroundedAnswerResult,
+    GroundedRagProgress,
     GroundedRagService,
 )
 from app.services.intent_classifier import (
@@ -39,6 +41,9 @@ from app.services.vector_search import PineconeSearchService
 
 
 GENERAL_IGNORE_ANSWER = "죄송합니다. 건강 관련 문의만 도와드릴 수 있어요."
+PERSONAL_HEALTH_QUESTION_PATTERN = re.compile(
+    r"(?:^|\s)(?:내|나의|제|저의|내가|제가|나는|저는)(?:\s|$)"
+)
 
 
 class IntentClassifierUnavailableError(RuntimeError):
@@ -131,6 +136,7 @@ class ChatStreamEvent:
 
     event: str
     text: str = ""
+    stage: str = ""
     result: ChatOrchestrationResult | None = None
 
 
@@ -176,6 +182,7 @@ class ChatOrchestrator:
         *,
         confirmation_id: str = "",
         confirmation_answer: bool | None = None,
+        personal_context_loader: Callable[[str, list[dict]], str | None] | None = None,
     ) -> ChatOrchestrationResult:
         """질문을 준비한 뒤 선택된 Intent 경로의 최종 응답을 반환한다."""
         prepared = self._prepare_query(
@@ -198,6 +205,17 @@ class ChatOrchestrator:
         query_embedding = self._vector_search.embed_query(prepared.resolved_query)
         prediction = self._intent_classifier.predict(query_embedding)
 
+        personal_context = None
+        if self._should_load_personal_context(
+            prepared,
+            prediction,
+            personal_context_loader,
+        ):
+            personal_context = personal_context_loader(
+                prepared.standalone_question,
+                prepared.resolved_terms,
+            )
+            prediction = self._promote_personal_intent(prediction, personal_context)
         if prediction.intent is Intent.IGNORE:
             result = self._build_ignore_response(prediction, guard_result, prepared)
         elif prediction.intent is Intent.GENERAL_CHAT:
@@ -214,6 +232,7 @@ class ChatOrchestrator:
                 prediction,
                 guard_result,
                 prepared,
+                personal_context=personal_context,
             )
         return self._with_summary(result, question, history, summary)
 
@@ -225,11 +244,13 @@ class ChatOrchestrator:
         *,
         confirmation_id: str = "",
         confirmation_answer: bool | None = None,
+        personal_context_loader: Callable[[str, list[dict]], str | None] | None = None,
     ) -> Iterator[ChatStreamEvent]:
         """Intent 경로에 따라 LLM 토큰과 검증 완료 결과를 순서대로 전달한다.
 
         작성자: 김진우
         """
+        yield ChatStreamEvent(event="progress", stage="prepare_query")
         prepared = self._prepare_query(
             question,
             history,
@@ -250,6 +271,7 @@ class ChatOrchestrator:
                 "학습된 intent 모델이 없어 챗봇 경로를 선택할 수 없습니다."
             )
 
+        yield ChatStreamEvent(event="progress", stage="classify_intent")
         query_embedding = self._vector_search.embed_query(prepared.resolved_query)
         prediction = self._intent_classifier.predict(query_embedding)
         if prediction.intent is Intent.IGNORE:
@@ -263,23 +285,46 @@ class ChatOrchestrator:
             )
             return
         if prediction.intent is Intent.GENERAL_CHAT:
+            yield ChatStreamEvent(event="progress", stage="generate_answer")
             for event in self._stream_general_chat_response(
                 prepared.resolved_query,
                 prediction,
                 guard_result,
                 prepared,
             ):
-                yield self._summarized_stream_event(
-                    event, question, history, summary
-                )
+                if event.event == "complete":
+                    yield ChatStreamEvent(
+                        event="progress",
+                        stage="summarize_conversation",
+                    )
+                yield self._summarized_stream_event(event, question, history, summary)
             return
+        personal_context = None
+        if self._should_load_personal_context(
+            prepared,
+            prediction,
+            personal_context_loader,
+        ):
+            yield ChatStreamEvent(event="progress", stage="load_health_context")
+            personal_context = personal_context_loader(
+                prepared.standalone_question,
+                prepared.resolved_terms,
+            )
+            prediction = self._promote_personal_intent(prediction, personal_context)
+        yield ChatStreamEvent(event="progress", stage="search_evidence")
         for event in self._stream_rag_response(
             prepared.resolved_query,
             query_embedding,
             prediction,
             guard_result,
             prepared,
+            personal_context=personal_context,
         ):
+            if event.event == "complete":
+                yield ChatStreamEvent(
+                    event="progress",
+                    stage="summarize_conversation",
+                )
             yield self._summarized_stream_event(event, question, history, summary)
 
     def _prepare_query(
@@ -534,17 +579,62 @@ class ChatOrchestrator:
         )
 
     @staticmethod
+    def _should_load_personal_context(
+        prepared: PreparedQuery,
+        prediction: IntentPrediction,
+        loader: Callable[[str, list[dict]], str | None] | None,
+    ) -> bool:
+        """개인 검진 질문이거나 comprehensive일 때만 RDB 조회를 시도한다.
+
+        작성자: 김진우
+        """
+        return bool(
+            loader is not None
+            and (
+                prediction.intent is Intent.COMPREHENSIVE
+                or (
+                    prediction.intent is Intent.SIMPLE_LOOKUP
+                    and PERSONAL_HEALTH_QUESTION_PATTERN.search(
+                        prepared.standalone_question
+                    )
+                )
+            )
+        )
+
+    @staticmethod
+    def _promote_personal_intent(
+        prediction: IntentPrediction,
+        personal_context: str | None,
+    ) -> IntentPrediction:
+        """실제 개인 검진값이 조회되면 comprehensive 경로로 승격한다.
+
+        작성자: 김진우
+        """
+        if not personal_context or prediction.intent is Intent.COMPREHENSIVE:
+            return prediction
+        return replace(prediction, intent=Intent.COMPREHENSIVE)
+
+    @staticmethod
     def _prediction_fields(
         prediction: IntentPrediction,
         guard_result: GuardResult,
     ) -> dict:
+        model_intent = max(
+            prediction.probabilities,
+            key=prediction.probabilities.get,
+            default=prediction.intent.value,
+        )
         return {
             "intent": prediction.intent,
             "confidence": prediction.confidence,
             "probabilities": prediction.probabilities,
             "uncertain": prediction.uncertain,
             "model_version": prediction.model_version,
-            "intent_source": "linear_classifier",
+            "intent_source": (
+                "personal_health_context_override"
+                if model_intent != prediction.intent.value
+                else "linear_classifier"
+            ),
             "guard_triggered": guard_result.triggered,
             "guard_reason": guard_result.reason,
             "matched_patterns": guard_result.matched_patterns,
@@ -649,6 +739,7 @@ class ChatOrchestrator:
             answer_parts.append(text)
             yield ChatStreamEvent(event="token", text=text)
 
+        yield ChatStreamEvent(event="progress", stage="answer_stream_complete")
         result = ChatOrchestrationResult(
             **self._prediction_fields(prediction, guard_result),
             **self._query_fields(prepared),
@@ -666,6 +757,8 @@ class ChatOrchestrator:
         prediction: IntentPrediction,
         guard_result: GuardResult,
         prepared: PreparedQuery,
+        *,
+        personal_context: str | None = None,
     ) -> ChatOrchestrationResult:
         documents, searched_collections, failed_collections = (
             self._search_rag_documents(query_embedding)
@@ -675,6 +768,8 @@ class ChatOrchestrator:
             question,
             documents,
             safety_policy=guard_result,
+            audit=False,
+            personal_context=personal_context or "",
         )
         return ChatOrchestrationResult(
             **self._prediction_fields(prediction, guard_result),
@@ -695,7 +790,7 @@ class ChatOrchestrator:
             safety_violations=grounded_result.safety_violations or [],
             searched_collections=searched_collections,
             failed_collections=failed_collections,
-            personal_context_used=False,
+            personal_context_used=bool(personal_context),
         )
 
     def _stream_rag_response(
@@ -705,6 +800,8 @@ class ChatOrchestrator:
         prediction: IntentPrediction,
         guard_result: GuardResult,
         prepared: PreparedQuery,
+        *,
+        personal_context: str | None = None,
     ) -> Iterator[ChatStreamEvent]:
         """검색 기본 검사 후 최종 답변을 스트리밍하고 감사 결과를 반환한다.
 
@@ -714,13 +811,19 @@ class ChatOrchestrator:
             self._search_rag_documents(query_embedding)
         )
         verification_reason = self._verification_reason(prediction, guard_result)
+        yield ChatStreamEvent(event="progress", stage="generate_answer")
         for event in self._grounded_rag_service.stream_answer(
             question,
             documents,
             safety_policy=guard_result,
+            audit=False,
+            personal_context=personal_context or "",
         ):
             if isinstance(event, str):
                 yield ChatStreamEvent(event="token", text=event)
+                continue
+            if isinstance(event, GroundedRagProgress):
+                yield ChatStreamEvent(event="progress", stage=event.stage)
                 continue
             result = ChatOrchestrationResult(
                 **self._prediction_fields(prediction, guard_result),
@@ -741,7 +844,7 @@ class ChatOrchestrator:
                 safety_violations=event.safety_violations or [],
                 searched_collections=searched_collections,
                 failed_collections=failed_collections,
-                personal_context_used=False,
+                personal_context_used=bool(personal_context),
             )
             yield ChatStreamEvent(event="complete", result=result)
 
@@ -800,4 +903,5 @@ class ChatOrchestrator:
         작성자: 김진우
         """
         yield ChatStreamEvent(event="token", text=result.answer)
+        yield ChatStreamEvent(event="progress", stage="answer_stream_complete")
         yield ChatStreamEvent(event="complete", result=result)

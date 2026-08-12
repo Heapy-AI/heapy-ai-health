@@ -14,6 +14,7 @@ from app.core.state import state
 from app.routers.auth import (
     AuthenticatedSession,
     conversation_service,
+    health_context_service,
     optional_current_session,
 )
 from app.schemas.health_chatbot import (
@@ -32,6 +33,19 @@ from app.services.supabase_conversation import SupabaseConversationError
 
 
 router = APIRouter(tags=["chat"])
+
+
+PROGRESS_MESSAGES = {
+    "load_conversation": "이전 대화 내용을 불러오는 중입니다",
+    "prepare_query": "질문과 의료용어를 정리하는 중입니다",
+    "classify_intent": "질문의 유형과 안전 기준을 확인하는 중입니다",
+    "load_health_context": "관련 건강검진 결과를 확인하는 중입니다",
+    "search_evidence": "관련 건강정보 근거를 찾는 중입니다",
+    "generate_answer": "답변을 생성하는 중입니다",
+    "verify_answer": "최종 결과를 확인하는 중입니다",
+    "summarize_conversation": "대화 내용을 요약하는 중입니다",
+    "save_conversation": "대화 내용을 저장하는 중입니다",
+}
 
 
 class _CitationLabelStreamFilter:
@@ -231,6 +245,27 @@ def _conversation_context(
         raise HTTPException(status_code=status_code, detail=str(error)) from error
 
 
+def _personal_context_loader(session: AuthenticatedSession | None):
+    """현재 로그인 사용자의 질문 관련 검진 컨텍스트 로더를 만든다.
+
+    작성자: 김진우
+    """
+    if session is None:
+        return None
+    user_id = str(session.user.get("id", ""))
+
+    def load(question: str, resolved_terms: list[dict]) -> str | None:
+        context = health_context_service.get_relevant_context(
+            session.access_token,
+            user_id,
+            question,
+            tuple(resolved_terms),
+        )
+        return context.prompt_text if context is not None else None
+
+    return load
+
+
 def _persist_conversation_turn(
     request: ChatRequest,
     result: ChatOrchestrationResult,
@@ -260,6 +295,29 @@ def _persist_conversation_turn(
         raise HTTPException(status_code=502, detail=str(error)) from error
 
 
+def _should_persist_conversation_turn(
+    result: ChatOrchestrationResult,
+    session: AuthenticatedSession | None,
+    session_id: str,
+) -> bool:
+    """현재 완료 결과가 실제 Supabase 저장 대상인지 확인한다.
+
+    작성자: 김진우
+    """
+    blocked_statuses = {
+        "CONFIRM",
+        "AMBIGUOUS",
+        "CONFIRMATION_EXPIRED",
+        "CONFIRMATION_REJECTED",
+    }
+    return bool(
+        session is not None
+        and session_id
+        and not result.query_confirmation
+        and result.resolution_status not in blocked_statuses
+    )
+
+
 @router.post(
     "/chat",
     response_model=ChatResponse,
@@ -284,11 +342,15 @@ def chat(
             summary,
             confirmation_id=request.confirmation_id,
             confirmation_answer=request.confirmation_answer,
+            personal_context_loader=_personal_context_loader(session),
         )
     except IntentClassifierUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SearchUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except SupabaseConversationError as exc:
+        status_code = exc.status_code if exc.status_code in {400, 403, 404, 503} else 502
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
     _persist_conversation_turn(request, result, session, session_id)
     return _to_chat_response(request.question, result, session_id)
@@ -312,18 +374,39 @@ def stream_chat(
             detail="챗봇 오케스트레이터가 준비되지 않았습니다.",
         )
 
-    session_id, history, summary = _conversation_context(request, session)
-
     def generate_events() -> Iterator[str]:
         label_filter = _CitationLabelStreamFilter()
         try:
+            yield _sse_event(
+                "progress",
+                {
+                    "stage": "load_conversation",
+                    "message": PROGRESS_MESSAGES["load_conversation"],
+                },
+            )
+            session_id, history, summary = _conversation_context(request, session)
             for stream_event in orchestrator.stream_answer(
                 request.question,
                 history,
                 summary,
                 confirmation_id=request.confirmation_id,
                 confirmation_answer=request.confirmation_answer,
+                personal_context_loader=_personal_context_loader(session),
             ):
+                if stream_event.event == "progress":
+                    if stream_event.stage == "answer_stream_complete":
+                        yield _sse_event(
+                            "progress",
+                            {"stage": stream_event.stage, "message": ""},
+                        )
+                        continue
+                    message = PROGRESS_MESSAGES.get(stream_event.stage)
+                    if message:
+                        yield _sse_event(
+                            "progress",
+                            {"stage": stream_event.stage, "message": message},
+                        )
+                    continue
                 if stream_event.event == "token":
                     display_text = label_filter.feed(stream_event.text)
                     if display_text:
@@ -339,6 +422,18 @@ def stream_chat(
                     stream_event.result,
                     session_id,
                 )
+                if _should_persist_conversation_turn(
+                    stream_event.result,
+                    session,
+                    session_id,
+                ):
+                    yield _sse_event(
+                        "progress",
+                        {
+                            "stage": "save_conversation",
+                            "message": PROGRESS_MESSAGES["save_conversation"],
+                        },
+                    )
                 _persist_conversation_turn(
                     request,
                     stream_event.result,
@@ -351,6 +446,10 @@ def stream_chat(
                 )
         except (IntentClassifierUnavailableError, SearchUnavailableError) as exc:
             yield _sse_event("error", {"message": str(exc)})
+        except SupabaseConversationError as exc:
+            yield _sse_event("error", {"message": str(exc)})
+        except HTTPException as exc:
+            yield _sse_event("error", {"message": str(exc.detail)})
         except Exception:
             yield _sse_event(
                 "error",
