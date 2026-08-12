@@ -1,4 +1,4 @@
-"""HEAPY 사용자 시연용 웹 UI 서버.
+"""HEAPY 개발자 모니터링 UI 프록시 서버.
 
 작성자: 김진우
 """
@@ -17,26 +17,35 @@ from app.schemas.health_chatbot import ChatRequest
 
 
 API_BASE_URL = os.getenv("HEAPY_API_BASE_URL", "http://localhost:8000").rstrip("/")
-DEMO_ROOT = Path(__file__).resolve().parent / "demo_web"
-IMAGE_ROOT = Path(__file__).resolve().parent / "web" / "assets" / "images"
+FRONTEND_ROOT = Path(__file__).resolve().parent / "frontends"
+ADMIN_FRONTEND_ROOT = FRONTEND_ROOT / "admin"
+SHARED_FRONTEND_ROOT = FRONTEND_ROOT / "shared"
 
 app = FastAPI(
-    title="HEAPY 사용자 시연 UI",
+    title="HEAPY 개발자 모니터링 UI",
     version="1.0",
     docs_url=None,
     redoc_url=None,
 )
-app.mount("/assets", StaticFiles(directory=DEMO_ROOT / "assets"), name="demo-assets")
-app.mount("/images", StaticFiles(directory=IMAGE_ROOT), name="demo-images")
+app.mount(
+    "/assets",
+    StaticFiles(directory=ADMIN_FRONTEND_ROOT / "assets"),
+    name="admin-assets",
+)
+app.mount(
+    "/images",
+    StaticFiles(directory=SHARED_FRONTEND_ROOT / "images"),
+    name="shared-images",
+)
 
 
 @app.get("/", include_in_schema=False)
-def demo_web_app() -> FileResponse:
-    """사용자 시연용 챗봇 화면을 반환한다.
+def admin_web_app() -> FileResponse:
+    """개발자 모니터링 화면을 반환한다.
 
     작성자: 김진우
     """
-    return FileResponse(DEMO_ROOT / "index.html")
+    return FileResponse(ADMIN_FRONTEND_ROOT / "index.html")
 
 
 def _stream_backend(response: requests.Response) -> Iterator[bytes]:
@@ -78,13 +87,13 @@ def _proxy_json_response(response: requests.Response) -> Response:
     return proxied
 
 
-def _proxy_auth_request(
+def _proxy_json_request(
     method: str,
     path: str,
     request: Request,
     payload: dict[str, Any] | None = None,
 ) -> Response:
-    """사용자 시연 UI의 인증 요청을 메인 API로 중계한다."""
+    """개발자 UI의 JSON API 요청을 메인 API로 중계한다."""
     try:
         backend_response = requests.request(
             method,
@@ -105,60 +114,66 @@ def _proxy_auth_request(
 @app.post("/auth/signup", include_in_schema=False)
 def proxy_signup(payload: dict[str, Any], request: Request) -> Response:
     """회원가입 요청과 발급 쿠키를 중계한다."""
-    return _proxy_auth_request("POST", "/auth/signup", request, payload)
+    return _proxy_json_request("POST", "/auth/signup", request, payload)
 
 
 @app.post("/auth/login", include_in_schema=False)
 def proxy_login(payload: dict[str, Any], request: Request) -> Response:
     """로그인 요청과 발급 쿠키를 중계한다."""
-    return _proxy_auth_request("POST", "/auth/login", request, payload)
+    return _proxy_json_request("POST", "/auth/login", request, payload)
 
 
 @app.get("/auth/me", include_in_schema=False)
 def proxy_me(request: Request) -> Response:
     """현재 사용자 조회 요청을 중계한다."""
-    return _proxy_auth_request("GET", "/auth/me", request)
+    return _proxy_json_request("GET", "/auth/me", request)
 
 
 @app.post("/auth/refresh", include_in_schema=False)
 def proxy_refresh(request: Request) -> Response:
     """인증 세션 갱신과 교체 쿠키를 중계한다."""
-    return _proxy_auth_request("POST", "/auth/refresh", request)
+    return _proxy_json_request("POST", "/auth/refresh", request)
 
 
 @app.post("/auth/logout", include_in_schema=False)
 def proxy_logout(request: Request) -> Response:
     """로그아웃과 인증 쿠키 제거를 중계한다."""
-    return _proxy_auth_request("POST", "/auth/logout", request)
+    return _proxy_json_request("POST", "/auth/logout", request)
+
+
+@app.get("/health", include_in_schema=False)
+def proxy_health(request: Request) -> Response:
+    """개발자 UI의 백엔드 상태 조회를 중계한다."""
+    return _proxy_json_request("GET", "/health", request)
 
 
 @app.get("/conversations", include_in_schema=False)
 def proxy_conversation_list(request: Request) -> Response:
     """현재 사용자의 대화 세션 목록을 중계한다."""
-    return _proxy_auth_request("GET", "/conversations", request)
+    return _proxy_json_request("GET", "/conversations", request)
 
 
 @app.post("/conversations", include_in_schema=False)
 def proxy_conversation_create(request: Request) -> Response:
     """새 대화 세션 생성을 중계한다."""
-    return _proxy_auth_request("POST", "/conversations", request)
+    return _proxy_json_request("POST", "/conversations", request)
 
 
 @app.get("/conversations/{session_id}", include_in_schema=False)
 def proxy_conversation_detail(session_id: str, request: Request) -> Response:
     """선택한 대화 세션과 메시지 조회를 중계한다."""
-    return _proxy_auth_request("GET", f"/conversations/{session_id}", request)
+    return _proxy_json_request("GET", f"/conversations/{session_id}", request)
 
 
 @app.delete("/conversations/{session_id}", include_in_schema=False)
 def proxy_conversation_delete(session_id: str, request: Request) -> Response:
     """선택한 대화 세션 삭제를 중계한다."""
-    return _proxy_auth_request("DELETE", f"/conversations/{session_id}", request)
+    return _proxy_json_request("DELETE", f"/conversations/{session_id}", request)
 
 
 @app.post("/chat/stream", include_in_schema=False)
 def proxy_chat_stream(payload: ChatRequest, request: Request) -> Response:
-    """사용자 질문을 기존 FastAPI 스트리밍 API로 중계한다.
+    """개발자 UI 질문을 메인 FastAPI 스트리밍 API로 중계한다.
 
     작성자: 김진우
     """

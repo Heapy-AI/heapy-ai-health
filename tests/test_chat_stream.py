@@ -31,9 +31,12 @@ class FakeStreamingOrchestrator:
         *,
         confirmation_id: str = "",
         confirmation_answer: bool | None = None,
+        personal_context_loader=None,
     ):
+        yield ChatStreamEvent(event="progress", stage="generate_answer")
         yield ChatStreamEvent(event="token", text="안녕")
         yield ChatStreamEvent(event="token", text="하세요")
+        yield ChatStreamEvent(event="progress", stage="answer_stream_complete")
         yield ChatStreamEvent(
             event="complete",
             result=ChatOrchestrationResult(
@@ -94,7 +97,19 @@ class ChatStreamApiTest(unittest.TestCase):
             response.headers["content-type"].startswith("text/event-stream")
         )
         events = _parse_sse(response.text)
-        self.assertEqual([event for event, _ in events], ["token", "token", "complete"])
+        self.assertEqual(
+            [event for event, _ in events],
+            ["progress", "progress", "token", "token", "progress", "complete"],
+        )
+        self.assertEqual(events[0][1]["stage"], "load_conversation")
+        self.assertEqual(
+            events[0][1]["message"],
+            "이전 대화 내용을 불러오는 중입니다",
+        )
+        self.assertEqual(events[1][1]["stage"], "generate_answer")
+        self.assertEqual(events[1][1]["message"], "답변을 생성하는 중입니다")
+        self.assertEqual(events[-2][1]["stage"], "answer_stream_complete")
+        self.assertEqual(events[-2][1]["message"], "")
         self.assertEqual(
             "".join(data["text"] for event, data in events if event == "token"),
             events[-1][1]["answer"],

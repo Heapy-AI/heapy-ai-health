@@ -57,7 +57,7 @@
 | S2 컨텍스트 로드 | `session_id` | Supabase의 최근 `history`, `summary` |
 | S3 질문 재구성 | `raw_query`, `history`, `summary` | `standalone_question` (문맥 지시어·대상 생략·애매한 후속 질문을 재작성 모델이 판정) |
 | S4 신규 세션 초기화 | `raw_query` | `standalone_question`(=원문), `history`(=[]) |
-| QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status` |
+| QN 의료용어 정규화 | `standalone_question` | `resolved_query`, `resolution_status`, `resolved_terms[].canonical_key`, `resolved_terms[].canonical_keys` |
 
 ### 의도 분류
 
@@ -83,9 +83,16 @@
 
 | 노드 | 입력 | 출력 |
 |---|---|---|
-| AU1 접근권한 확인 | `session_id` | (분기만) |
-| D1 프로필 조회 | `session_id` | (원시 프로필) |
-| D2 데이터 조합 | (원시 프로필) | `user_context` |
+| AU1 접근권한 확인 | 사용자 JWT | `auth.uid()`로 본인 여부를 검증하는 RLS 분기 |
+| D1 프로필·검진 조회 | `auth.uid()`, `standalone_question`, QN의 표준 검사항목 코드 | `users`, `health_checkup_records`, 질문 관련 `health_checkup_results`, `master_checkup_item` |
+| D2 데이터 조합 | 프로필, 검진 회차, 검진 결과 | 측정일·항목·값·단위·저장 `status`를 포함한 `user_context` |
+
+D1은 일반적인 검사항목 질문이면 최근 회차의 해당 항목만 조회하고,
+추이·변화 질문에서만 과거 회차까지 조회한다. 개인 컨텍스트는 캐시하지 않으며
+`simple_lookup`, `general_chat`, `ignore`에서는 D1/D2를 실행하지 않는다.
+검사항목 선택은 QN이 Supabase 용어집에서 반환한 `canonical_key` 또는
+`canonical_keys`를 `master_checkup_item.item_code`와 연결하며, 특정 검사항목을
+애플리케이션 코드에 별도 매핑하지 않는다.
 
 ### 프롬프트 · LLM
 
@@ -94,8 +101,8 @@
 | C2 프롬프트 (simple) | `chunks`, `history` | `prompt` |
 | B4 프롬프트 (comprehensive) | `chunks`, `user_context`, `history`, `summary` | `prompt` |
 | C5 프롬프트 (chat) | `history`, `summary` | `prompt` |
-| RCHK 검색 결과 기본 검사 | `chunks`, 질문 | `retrieval_assessment`, `grounded` |
-| L1 최종 답변 호출 | `chunks`, 안전 정책 | (스트림 시작) |
+| RCHK 검색 결과 기본 검사 | `chunks`, `user_context`, 질문 | `retrieval_assessment`, `grounded` (VDB가 부족해도 인증된 개인 검진 근거가 있으면 제한 생성 허용) |
+| L1 최종 답변 호출 | `chunks`, `user_context`, 안전 정책 | (스트림 시작) |
 | L2 / L3 스트림 전송 | 최종 답변 토큰 | (클라이언트로 전송) |
 | APOST 사후 감사 | 최종 답변, `chunks`, 안전 정책 | `audit_status`, `audit_summary`, `evidence_status`, `unanswered_items`, `unsupported_claims`, `safety_violations` |
 

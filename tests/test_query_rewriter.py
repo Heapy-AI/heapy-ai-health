@@ -97,6 +97,14 @@ class QueryRewriterTest(unittest.TestCase):
             needs_context_rewrite("당뇨병 증상은 무엇인가요?", HISTORY)
         )
 
+    def test_explicit_screening_acronym_skips_history_rewrite(self) -> None:
+        self.assertFalse(
+            needs_context_rewrite("나의 HDL 수치가 어떤 편이야?", HISTORY)
+        )
+        self.assertFalse(
+            needs_context_rewrite("나의 LDL 수치가 어떤 편이야?", HISTORY)
+        )
+
     def test_ambiguous_follow_up_is_delegated_to_rewriter(self) -> None:
         self.assertTrue(needs_context_rewrite("어떻게 생각해?", HISTORY))
         self.assertTrue(needs_context_rewrite("낮추려면?", [], "공복혈당을 설명함"))

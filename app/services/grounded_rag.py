@@ -124,15 +124,27 @@ class GroundedAnswerResult:
     safety_violations: list[str] | None = None
 
 
+@dataclass(frozen=True)
+class GroundedRagProgress:
+    """근거 기반 답변 스트림의 실제 처리 단계 이벤트.
+
+    작성자: 김진우
+    """
+
+    stage: str
+
+
 FINAL_ANSWER_PROMPT = """너는 HEAPY의 건강정보 안내 봇이다.
 사용자 질문에 대해 아래 검색 청크와 안전 정책만 사용해 한국어 답변을 작성하라.
 
 [근거 사용 규칙]
 1. 검색 청크가 직접 뒷받침하는 의료 사실만 말한다. 사전학습 기억으로 보충하거나 추측하지 않는다.
-2. 질문에 여러 항목이 있으면 항목별로 판단한다. 근거가 있는 항목은 답하고, 없는 항목은 "현재 확인 가능한 정보에서는 구체적인 내용을 찾지 못했다"고 자연스럽게 구분한다.
-3. 일부 항목의 근거가 없다는 이유로 근거가 있는 다른 항목까지 거절하지 않는다.
-4. 의료 사실을 사용한 문단 끝에는 내부 검증용 청크 ID를 [C1] 형식으로 붙인다. 존재하지 않는 ID는 만들지 않는다.
-5. 청크의 대상 의약품·질병·검사항목을 다른 대상으로 바꾸어 설명하지 않는다.
+2. 인증된 사용자 건강검진 정보가 제공되면 질문에 해당하는 측정일·값·단위·DB 상태를 그대로 반영한다. 제공되지 않은 개인 수치는 추측하지 않는다.
+3. 개인 건강검진 정보만 있고 검색 청크가 없으면 측정값·DB 상태 사이의 관계만 요약하고, 의학적 원인·진단·일반 기준은 추측하지 않는다.
+4. 질문에 여러 항목이 있으면 항목별로 판단한다. 근거가 있는 항목은 답하고, 없는 항목은 "현재 확인 가능한 정보에서는 구체적인 내용을 찾지 못했다"고 자연스럽게 구분한다.
+5. 일부 항목의 근거가 없다는 이유로 근거가 있는 다른 항목까지 거절하지 않는다.
+6. 검색 청크에서 사용한 의료 사실의 문단 끝에는 내부 검증용 청크 ID를 [C1] 형식으로 붙인다. 개인 검진 측정값에는 청크 ID를 붙이지 않는다.
+7. 청크와 개인 검진 정보에 없는 의약품·질병·검사항목을 다른 대상으로 바꾸어 설명하지 않는다.
 
 [안전 규칙]
 1. safety_policy의 restricted_actions에 포함된 의료적 결정을 대신 수행하지 않는다.
@@ -154,6 +166,9 @@ FINAL_ANSWER_PROMPT = """너는 HEAPY의 건강정보 안내 봇이다.
 [검색 청크]
 {context}
 
+[개인 건강검진 컨텍스트]
+{personal_context}
+
 [질문]
 {question}
 """
@@ -163,7 +178,7 @@ POST_AUDIT_PROMPT = """너는 HEAPY 건강정보 답변의 사후 품질 감사�
 이미 사용자에게 스트리밍된 답변을 검색 청크와 안전 정책에 대조하라. 답변 본문은 수정하지 않고 모니터링 결과만 기록한다.
 
 감사 규칙:
-1. 답변의 모든 의료 사실이 검색 청크에 직접 근거하는지 확인한다.
+1. 답변의 일반 의료 사실은 검색 청크에, 개인 측정일·값·단위·DB 상태는 개인 건강검진 컨텍스트에 직접 근거하는지 확인한다.
 2. 질문의 여러 요청 중 답한 항목과 근거 부족으로 답하지 않은 항목을 구분한다.
 3. 일부만 답했으며 부족한 항목을 명확히 밝혔으면 coverage_status=partial로 기록하되 그 이유만으로 실패 처리하지 않는다.
 4. 근거 없는 사실을 추가했거나 안전 정책의 금지 행동을 수행했으면 passed=false다.
@@ -262,6 +277,29 @@ def assess_retrieval(
     )
 
 
+def allow_personal_health_evidence(
+    assessment: RetrievalAssessment,
+    personal_context: str,
+) -> RetrievalAssessment:
+    """개인 검진 RDB 근거가 있으면 VDB 부족만으로 생성을 막지 않는다.
+
+    작성자: 김진우
+    """
+    if assessment.eligible or not personal_context.strip():
+        return assessment
+    return RetrievalAssessment(
+        status="personal_evidence_available",
+        eligible=True,
+        reason=(
+            f"{assessment.reason} 인증된 개인 건강검진 컨텍스트를 근거로 "
+            "제한된 답변 생성을 허용합니다."
+        ),
+        max_score=assessment.max_score,
+        query_entities=assessment.query_entities,
+        matched_entities=assessment.matched_entities,
+    )
+
+
 def format_citation_context(documents: list[Document]) -> str:
     """최종 청크에 C1부터 순서대로 내부 검증 ID를 부여한다."""
     return "\n\n".join(
@@ -311,28 +349,37 @@ class GroundedRagService:
         documents: list[Document],
         *,
         safety_policy: GuardResult,
+        audit: bool = True,
+        personal_context: str = "",
     ) -> GroundedAnswerResult:
-        assessment = assess_retrieval(question, documents)
+        assessment = allow_personal_health_evidence(
+            assess_retrieval(question, documents),
+            personal_context,
+        )
         if not assessment.eligible:
             return self._rejected_retrieval_result(assessment, safety_policy)
 
-        context = format_citation_context(documents)
+        context = format_citation_context(documents) or "제공되지 않음"
+        personal_context_text = personal_context.strip() or "제공되지 않음"
+        audit_context = f"{context}\n\n{personal_context_text}"
         safety_policy_text = _safety_policy_json(safety_policy)
         raw_answer = str(
             self._generator.invoke(
                 {
                     "question": question,
                     "context": context,
+                    "personal_context": personal_context_text,
                     "safety_policy": safety_policy_text,
                 }
             )
         ).strip()
-        return self._build_audited_result(
+        return self._build_result(
             question=question,
-            context=context,
+            context=audit_context,
             safety_policy_text=safety_policy_text,
             raw_answer=raw_answer,
             assessment=assessment,
+            audit=audit,
         )
 
     def stream_answer(
@@ -341,19 +388,27 @@ class GroundedRagService:
         documents: list[Document],
         *,
         safety_policy: GuardResult,
-    ) -> Iterator[str | GroundedAnswerResult]:
-        assessment = assess_retrieval(question, documents)
+        audit: bool = True,
+        personal_context: str = "",
+    ) -> Iterator[str | GroundedRagProgress | GroundedAnswerResult]:
+        assessment = allow_personal_health_evidence(
+            assess_retrieval(question, documents),
+            personal_context,
+        )
         if not assessment.eligible:
             yield self._rejected_retrieval_result(assessment, safety_policy)
             return
 
-        context = format_citation_context(documents)
+        context = format_citation_context(documents) or "제공되지 않음"
+        personal_context_text = personal_context.strip() or "제공되지 않음"
+        audit_context = f"{context}\n\n{personal_context_text}"
         safety_policy_text = _safety_policy_json(safety_policy)
         answer_parts: list[str] = []
         for token in self._stream_generator.stream(
             {
                 "question": question,
                 "context": context,
+                "personal_context": personal_context_text,
                 "safety_policy": safety_policy_text,
             }
         ):
@@ -363,15 +418,19 @@ class GroundedRagService:
             answer_parts.append(text)
             yield text
 
-        yield self._build_audited_result(
+        yield GroundedRagProgress(stage="answer_stream_complete")
+        if audit:
+            yield GroundedRagProgress(stage="verify_answer")
+        yield self._build_result(
             question=question,
-            context=context,
+            context=audit_context,
             safety_policy_text=safety_policy_text,
             raw_answer="".join(answer_parts),
             assessment=assessment,
+            audit=audit,
         )
 
-    def _build_audited_result(
+    def _build_result(
         self,
         *,
         question: str,
@@ -379,6 +438,7 @@ class GroundedRagService:
         safety_policy_text: str,
         raw_answer: str,
         assessment: RetrievalAssessment,
+        audit: bool = True,
     ) -> GroundedAnswerResult:
         cited_chunk_ids = list(
             dict.fromkeys(
@@ -388,6 +448,21 @@ class GroundedRagService:
             )
         )
         answer = strip_citation_labels(raw_answer)
+        if not audit:
+            return GroundedAnswerResult(
+                answer=answer,
+                grounded=True,
+                cited_chunk_ids=cited_chunk_ids,
+                verification_method="retrieval_check",
+                grounding_errors=[],
+                unsupported_claims=[],
+                evidence_status=assessment.status,
+                retrieval_assessment=assessment,
+                audit_status="not_run",
+                audit_summary="",
+                unanswered_items=[],
+                safety_violations=[],
+            )
         try:
             audit = _coerce_model(
                 self._auditor.invoke(

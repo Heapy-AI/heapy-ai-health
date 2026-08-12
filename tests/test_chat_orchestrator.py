@@ -13,8 +13,16 @@ from app.services.chat_orchestrator import (
     ChatOrchestrator,
     GENERAL_IGNORE_ANSWER,
 )
-from app.services.grounded_rag import GroundedAnswerResult, RetrievalAssessment
+from app.services.grounded_rag import (
+    GroundedAnswerResult,
+    GroundedRagProgress,
+    RetrievalAssessment,
+)
 from app.services.intent_classifier import Intent, IntentPrediction
+from app.services.query_resolver import (
+    InMemoryMedicalTermRepository,
+    MedicalQueryResolver,
+)
 from app.services.vector_search import MultiCollectionSearchResult
 
 
@@ -68,10 +76,22 @@ class FakeGroundedRagService:
     def __init__(self) -> None:
         self.call_count = 0
         self.safety_policy = None
+        self.audit = None
+        self.personal_context = ""
 
-    def answer(self, question, documents, *, safety_policy):
+    def answer(
+        self,
+        question,
+        documents,
+        *,
+        safety_policy,
+        audit=True,
+        personal_context="",
+    ):
         self.call_count += 1
         self.safety_policy = safety_policy
+        self.audit = audit
+        self.personal_context = personal_context
         return GroundedAnswerResult(
             answer="검색 근거 기반 답변",
             grounded=True,
@@ -90,11 +110,22 @@ class FakeGroundedRagService:
             ),
         )
 
-    def stream_answer(self, question, documents, *, safety_policy):
+    def stream_answer(
+        self,
+        question,
+        documents,
+        *,
+        safety_policy,
+        audit=True,
+        personal_context="",
+    ):
         self.call_count += 1
         self.safety_policy = safety_policy
+        self.audit = audit
+        self.personal_context = personal_context
         yield "검색 근거 "
         yield "기반 답변"
+        yield GroundedRagProgress(stage="answer_stream_complete")
         yield GroundedAnswerResult(
             answer="검색 근거 기반 답변",
             grounded=True,
@@ -171,14 +202,26 @@ class ChatOrchestratorTest(unittest.TestCase):
 
         events = list(orchestrator.stream_answer("공복혈당이 뭐야?"))
 
-        self.assertEqual([event.event for event in events], ["token", "token", "complete"])
         self.assertEqual(
-            "".join(event.text for event in events[:-1]),
+            [event.stage for event in events if event.event == "progress"],
+            [
+                "prepare_query",
+                "classify_intent",
+                "search_evidence",
+                "generate_answer",
+                "answer_stream_complete",
+                "summarize_conversation",
+            ],
+        )
+        token_events = [event for event in events if event.event == "token"]
+        self.assertEqual(
+            "".join(event.text for event in token_events),
             events[-1].result.answer,
         )
         self.assertTrue(events[-1].result.grounded)
         self.assertEqual(vector_search.embed_count, 1)
         self.assertEqual(grounded_rag.safety_policy.risk_level.value, "normal")
+        self.assertFalse(grounded_rag.audit)
 
     def test_general_chat_uses_chain_stream(self) -> None:
         orchestrator, vector_search, _, general_chat = _build_orchestrator(
@@ -199,7 +242,8 @@ class ChatOrchestratorTest(unittest.TestCase):
 
         events = list(orchestrator.stream_answer("오늘 환율 알려줘"))
 
-        self.assertEqual(events[0].text, GENERAL_IGNORE_ANSWER)
+        token_event = next(event for event in events if event.event == "token")
+        self.assertEqual(token_event.text, GENERAL_IGNORE_ANSWER)
         self.assertEqual(events[-1].result.answer, GENERAL_IGNORE_ANSWER)
         self.assertEqual(grounded_rag.call_count, 0)
         self.assertEqual(general_chat.call_count, 0)
@@ -215,6 +259,7 @@ class ChatOrchestratorTest(unittest.TestCase):
         self.assertEqual(vector_search.embed_count, 1)
         self.assertEqual(vector_search.search_count, 1)
         self.assertEqual(grounded_rag.safety_policy.risk_level.value, "normal")
+        self.assertFalse(grounded_rag.audit)
         self.assertEqual(general_chat.call_count, 0)
 
     def test_comprehensive_uses_same_retrieval_flow(self) -> None:
@@ -228,6 +273,104 @@ class ChatOrchestratorTest(unittest.TestCase):
         self.assertEqual(result.intent, Intent.COMPREHENSIVE)
         self.assertEqual(grounded_rag.call_count, 1)
         self.assertFalse(result.personal_context_used)
+
+    def test_comprehensive_combines_personal_context_with_rag(self) -> None:
+        orchestrator, _, grounded_rag, _ = _build_orchestrator(
+            Intent.COMPREHENSIVE,
+            documents=[_document()],
+        )
+
+        result = orchestrator.answer(
+            "내 AST 수치를 설명해줘",
+            personal_context_loader=lambda _question, _terms: (
+                "2026-08-06 AST 54 U/L 이상"
+            ),
+        )
+
+        self.assertTrue(result.personal_context_used)
+        self.assertEqual(
+            grounded_rag.personal_context,
+            "2026-08-06 AST 54 U/L 이상",
+        )
+
+    def test_personal_result_promotes_simple_model_result_to_comprehensive(self) -> None:
+        orchestrator, _, grounded_rag, _ = _build_orchestrator(
+            Intent.SIMPLE_LOOKUP,
+            documents=[_document()],
+        )
+
+        result = orchestrator.answer(
+            "나의 HDL 수치가 어떤 편이야?",
+            personal_context_loader=lambda _question, _terms: (
+                "2026-08-06 HDL 45 mg/dL 정상"
+            ),
+        )
+
+        self.assertEqual(result.intent, Intent.COMPREHENSIVE)
+        self.assertEqual(result.intent_source, "personal_health_context_override")
+        self.assertTrue(result.personal_context_used)
+        self.assertEqual(
+            grounded_rag.personal_context,
+            "2026-08-06 HDL 45 mg/dL 정상",
+        )
+
+    def test_personal_context_loader_receives_dictionary_canonical_keys(self) -> None:
+        orchestrator, _, _, _ = _build_orchestrator(
+            Intent.SIMPLE_LOOKUP,
+            documents=[_document()],
+        )
+        orchestrator._query_resolver = MedicalQueryResolver(
+            InMemoryMedicalTermRepository(
+                [
+                    {
+                        "canonical_key": "HDL_CHOLESTEROL",
+                        "canonical_name": "HDL 콜레스테롤",
+                        "term_type": "SCREENING",
+                        "aliases": ["HDL"],
+                    }
+                ]
+            )
+        )
+        received_terms: list[dict] = []
+
+        def load(_question: str, terms: list[dict]) -> str:
+            received_terms.extend(terms)
+            return "2026-08-06 HDL 45 mg/dL 정상"
+
+        orchestrator.answer(
+            "나의 HDL 수치가 어떤 편이야?",
+            personal_context_loader=load,
+        )
+
+        self.assertEqual(
+            received_terms[0]["canonical_keys"],
+            ["HDL_CHOLESTEROL"],
+        )
+
+    def test_comprehensive_stream_reports_and_uses_personal_context(self) -> None:
+        orchestrator, _, grounded_rag, _ = _build_orchestrator(
+            Intent.COMPREHENSIVE,
+            documents=[_document()],
+        )
+
+        events = list(
+            orchestrator.stream_answer(
+                "내 AST 수치를 설명해줘",
+                personal_context_loader=lambda _question, _terms: (
+                    "2026-08-06 AST 54 U/L 이상"
+                ),
+            )
+        )
+
+        progress_stages = [
+            event.stage for event in events if event.event == "progress"
+        ]
+        self.assertIn("load_health_context", progress_stages)
+        self.assertTrue(events[-1].result.personal_context_used)
+        self.assertEqual(
+            grounded_rag.personal_context,
+            "2026-08-06 AST 54 U/L 이상",
+        )
 
     def test_general_chat_skips_search(self) -> None:
         orchestrator, vector_search, grounded_rag, general_chat = (

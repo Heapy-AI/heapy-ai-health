@@ -11,6 +11,7 @@ from langchain_core.documents import Document
 from app.services.grounded_rag import (
     FINAL_ANSWER_PROMPT,
     GroundedAnswerResult,
+    GroundedRagProgress,
     GroundedRagService,
     GroundingAudit,
     NOT_GROUNDED_ANSWER,
@@ -93,6 +94,8 @@ class GroundedRagServiceTest(unittest.TestCase):
         self.assertIn("질문의 핵심부터 답한다", FINAL_ANSWER_PROMPT)
         self.assertIn("긴급 안내만 하고 답변을 끝내지 말고", FINAL_ANSWER_PROMPT)
         self.assertIn("내부 구현 용어를 노출하지 않는다", FINAL_ANSWER_PROMPT)
+        self.assertIn("{personal_context}", FINAL_ANSWER_PROMPT)
+        self.assertIn("개인 검진 측정값에는 청크 ID를 붙이지 않는다", FINAL_ANSWER_PROMPT)
 
     def test_emergency_information_request_still_uses_rag_generation(self) -> None:
         generator = FakeChain("즉시 119에 연락하세요. 호흡곤란은 숨쉬기 어려운 상태입니다.[C1]")
@@ -127,12 +130,43 @@ class GroundedRagServiceTest(unittest.TestCase):
         )
 
         self.assertEqual(events[:2], stream_generator.tokens)
+        self.assertIsInstance(events[-2], GroundedRagProgress)
+        self.assertEqual(events[-2].stage, "verify_answer")
         self.assertIsInstance(events[-1], GroundedAnswerResult)
         self.assertEqual(events[-1].answer, "AST는 여러 조직에 존재하는 효소입니다.")
         self.assertTrue(events[-1].grounded)
         self.assertEqual(events[-1].audit_status, "passed")
         self.assertEqual(events[-1].cited_chunk_ids, ["C1"])
         self.assertEqual(auditor.call_count, 1)
+
+    def test_user_stream_skips_post_audit_without_changing_answer(self) -> None:
+        """사용자 스트림은 답변 본문을 바꾸지 않는 사후 감사 호출을 생략한다.
+
+        작성자: 김진우
+        """
+        auditor = FakeChain(_passed_audit())
+        stream_generator = FakeStreamChain(["AST 설명입니다.[C1]"])
+        service = GroundedRagService(FakeChain(""), auditor, stream_generator)
+
+        events = list(
+            service.stream_answer(
+                "AST가 무엇인가요?",
+                _documents(),
+                safety_policy=check_safety_guard("AST가 무엇인가요?"),
+                audit=False,
+            )
+        )
+
+        progress_events = [
+            event for event in events if isinstance(event, GroundedRagProgress)
+        ]
+        self.assertEqual(
+            [event.stage for event in progress_events],
+            ["answer_stream_complete"],
+        )
+        self.assertEqual(auditor.call_count, 0)
+        self.assertEqual(events[-1].answer, "AST 설명입니다.")
+        self.assertEqual(events[-1].audit_status, "not_run")
 
     def test_entity_mismatch_stops_generation_without_llm_call(self) -> None:
         generator = FakeChain("생성하면 안 되는 답변")
@@ -213,6 +247,42 @@ class GroundedRagServiceTest(unittest.TestCase):
         self.assertFalse(result.grounded)
         self.assertEqual(result.evidence_status, "no_evidence")
         self.assertEqual(generator.call_count, 0)
+
+    def test_personal_context_allows_generation_without_vdb_documents(self) -> None:
+        generator = FakeChain("최근 검진에서 AST는 54 U/L이고 DB 상태는 이상입니다.")
+        service = GroundedRagService(generator, FakeChain(_passed_audit()))
+
+        result = service.answer(
+            "내 검진 결과를 설명해줘",
+            [],
+            safety_policy=check_safety_guard("내 검진 결과를 설명해줘"),
+            audit=False,
+            personal_context=(
+                "측정일: 2026-08-06\n"
+                "- AST: 54 U/L (DB 상태: 이상)"
+            ),
+        )
+
+        self.assertTrue(result.grounded)
+        self.assertEqual(result.evidence_status, "personal_evidence_available")
+        self.assertEqual(generator.call_count, 1)
+        self.assertEqual(generator.values["context"], "제공되지 않음")
+
+    def test_personal_context_overrides_vdb_entity_mismatch(self) -> None:
+        generator = FakeChain("개인 검진값을 기준으로 설명합니다.")
+        service = GroundedRagService(generator, FakeChain(_passed_audit()))
+
+        result = service.answer(
+            "내 고혈압 관련 검진 결과를 설명해줘",
+            _documents(),
+            safety_policy=check_safety_guard("내 고혈압 관련 검진 결과를 설명해줘"),
+            audit=False,
+            personal_context="혈압: 130/85 mmHg (DB 상태: 경계)",
+        )
+
+        self.assertTrue(result.grounded)
+        self.assertEqual(result.evidence_status, "personal_evidence_available")
+        self.assertEqual(generator.call_count, 1)
 
     def test_assessment_accepts_matching_medication_entity(self) -> None:
         documents = [

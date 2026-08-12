@@ -17,7 +17,7 @@ Safety Guard와 RAG 검색 검사에서 판단하며 Intent 라벨로 대신 표
 | Intent | 질문 목적 | 현재 처리 |
 |---|---|---|
 | `simple_lookup` | 일반 질병·검사·의약품 정보 조회 | Pinecone 병렬 검색 기반 RAG |
-| `comprehensive` | 사용자의 증상·상황·개인 데이터가 필요한 질문 | Pinecone RAG, 향후 개인 RDB 결합 |
+| `comprehensive` | 사용자의 증상·상황·개인 데이터가 필요한 질문 | Pinecone RAG + 질문 관련 개인 검진 RDB 결합 |
 | `general_chat` | 인사·감사·가벼운 대화 | 검색 없는 일반 대화 |
 | `ignore` | 주식·날씨·스포츠·코딩 등 건강 서비스 외 질문 | 고정 범위 안내 |
 

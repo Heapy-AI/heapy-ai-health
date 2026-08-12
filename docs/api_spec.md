@@ -15,7 +15,8 @@
 → 정규화 질문 임베딩 및 Intent v7 분류
 → 원문·정규화 질문의 Safety Guard 정책 병합
 → Intent별 처리
-  ├─ simple_lookup / comprehensive: Pinecone 병렬 검색
+  ├─ simple_lookup: Pinecone 병렬 검색
+  ├─ comprehensive: 질문 관련 개인 검진 RDB 조회 + Pinecone 병렬 검색
   ├─ general_chat: 검색 없는 일반 대화
   └─ ignore: 건강 서비스 외 고정 응답
 → 검색 결과 기본 검사
@@ -153,7 +154,8 @@ Intent 분류와 독립적인 Safety Guard 정책을 함께 반환한다. Guard�
 
 ## `POST /chat`
 
-Intent 분류부터 검색·생성·감사까지 실행한 전체 결과를 JSON으로 반환한다.
+Intent 분류부터 검색·생성까지 실행한 사용자 채팅 결과를 JSON으로 반환한다.
+사용자 채팅의 감사 필드는 호환성을 위해 유지하되 `audit_status=not_run`으로 반환한다.
 
 로그인 환경의 멀티턴 요청은 `session_id`만 전달하면 서버가 `chat_messages`의 최근
 대화와 `chat_sessions.summary`를 로드한다. 클라이언트의 `history`, `summary`는 Supabase가
@@ -178,6 +180,17 @@ Intent 분류부터 검색·생성·감사까지 실행한 전체 결과를 JSON
 `resolved_query`(의료용어 정규화 및 실제 임베딩·검색 질문)로 구분한다. 응답에는
 `query_rewritten`, `resolved_terms`, `resolution_status`, `conversation_summary`도
 포함된다. `resolution_status=CONFIRM` 또는 `AMBIGUOUS`이면 임베딩과 검색을 보류한다.
+의료용어 정규화는 직접 PostgreSQL 연결이 없을 때 Supabase의 `medical_term`,
+`medical_term_alias`, `medical_term_alias_initial`과 `search_medical_terms_batch` RPC를 사용한다.
+검진 용어의 `resolved_terms[].canonical_key`는 `master_checkup_item.item_code`와
+동적으로 연결해 개인 검진 결과 조회에 재사용한다. 하나의 별칭이 여러 검사항목을
+가리키면 `canonical_keys`에 해당 코드들을 담아 함께 조회하며, 애플리케이션 코드에
+검사항목별 별칭·코드 매핑을 따로 두지 않는다.
+`수치`, `검진 결과`, `건강 상태`, `이상 수치`처럼 질문의 의미를 보조하는 일반
+문맥어 또는 그 조합은 약한 부분·오타 일치만으로 의료용어 확인 후보가 되지 않는다.
+`콜레스테롤`처럼 하나의
+표현이 여러 `SCREENING` 표준항목에 공통으로 포함되면 모호성 확인 대신 관련
+`canonical_keys`를 하나의 검사항목 그룹으로 전달한다.
 
 후속 질문 재작성은 첫 질문에서는 실행하지 않는다. 이전 대화가 있으면 문맥 지시어,
 `낮추려면`, `부작용은` 같은 대상 생략 표현을 우선 탐지하고, 명시적 주제가 확인되지
@@ -187,9 +200,19 @@ Intent 분류부터 검색·생성·감사까지 실행한 전체 결과를 JSON
 | Intent | 처리 경로 |
 |---|---|
 | `simple_lookup` | 일반 질병·검사·의약품 정보용 Pinecone RAG |
-| `comprehensive` | 개인 증상·상황·개인 데이터가 필요한 Pinecone RAG. 현재 개인 RDB는 미연결 |
+| `comprehensive` | 로그인 사용자의 질문 관련 건강검진 RDB 결과와 Pinecone 근거를 결합한 RAG |
 | `general_chat` | Pinecone 검색 없이 Gemini 일반 대화 |
 | `ignore` | 주식·날씨·스포츠·코딩 등 건강 서비스 외 고정 답변 |
+
+`comprehensive`의 개인 컨텍스트는 사용자 JWT와 RLS로 `users`,
+`health_checkup_records`, `health_checkup_results`, `master_checkup_item`을 조회해
+구성한다. 기본은 가장 최근 검진 회차의 질문 관련 항목만 사용하고,
+`추이`, `변화`, `이전` 등 이력을 요구하는 질문에서만 해당 항목의 과거
+회차를 함께 사용한다. DB에 저장된 측정값·단위·`status`는 재판정하지
+않고 그대로 최종 프롬프트에 전달하며, 개인 컨텍스트는 캐시하지 않는다.
+분류 모델이 `simple_lookup`으로 판정해도 "내", "나의", "제" 등 본인 표현이
+있고 실제 질문 관련 검진값이 조회되면 `comprehensive`로 승격한다. 이 경우
+`intent_source=personal_health_context_override`를 반환한다.
 
 RAG의 기본 검색 결과 검사는 다음을 구분한다.
 
@@ -198,8 +221,13 @@ RAG의 기본 검색 결과 검사는 다음을 구분한다.
 | `no_evidence` | 최소 유사도 기준을 통과한 청크가 없음 |
 | `entity_mismatch` | 질문의 명시 의약품·질병명과 청크 대상이 일치하지 않음 |
 | `evidence_available` | 생성 가능한 청크와 대상 일치를 확인함 |
+| `personal_evidence_available` | VDB 청크는 부족하지만 인증된 개인 검진 RDB 근거가 있어 해당 사실 범위에서 생성 가능 |
 
-사후 감사의 `evidence_status`는 `sufficient`, `partial`, `insufficient`, `unknown` 중
+`comprehensive`에서 개인 검진 컨텍스트가 확보되면 `no_evidence` 또는
+`entity_mismatch`만으로 생성을 중단하지 않는다. 이 경우 개인 측정값·측정일·단위·DB
+상태는 답할 수 있지만, VDB가 뒷받침하지 않는 일반 기준·원인·진단은 추측하지 않는다.
+
+개발자용 RAG 서비스 사후 감사의 `evidence_status`는 `sufficient`, `partial`, `insufficient`, `unknown` 중
 하나이다. 복합 질문에서 일부 항목만 근거가 있으면 `partial`로 기록하고, 근거가 있는
 항목은 답하면서 `unanswered_items`에 근거 부족 항목을 남긴다.
 
@@ -227,11 +255,11 @@ RAG의 기본 검색 결과 검사는 다음을 구분한다.
   "grounded": true,
   "chunks": [],
   "citations": [],
-  "verification_method": "retrieval_check_post_audit",
+  "verification_method": "retrieval_check",
   "verification_reason": "intent:simple_lookup",
   "grounding_errors": [],
   "unsupported_claims": [],
-  "evidence_status": "partial",
+  "evidence_status": "evidence_available",
   "retrieval_assessment": {
     "status": "evidence_available",
     "eligible": true,
@@ -240,9 +268,9 @@ RAG의 기본 검색 결과 검사는 다음을 구분한다.
     "query_entities": ["판콜에스내복액"],
     "matched_entities": ["판콜에스내복액"]
   },
-  "audit_status": "passed",
-  "audit_summary": "효능은 근거가 있고 부작용은 근거 부족으로 구분했습니다.",
-  "unanswered_items": ["부작용"],
+  "audit_status": "not_run",
+  "audit_summary": "",
+  "unanswered_items": [],
   "safety_violations": [],
   "searched_collections": ["disease_info", "health_checkup_info", "medication_info"],
   "failed_collections": [],
@@ -259,13 +287,21 @@ RAG의 기본 검색 결과 검사는 다음을 구분한다.
 
 | 이벤트 | 데이터 | 설명 |
 |---|---|---|
+| `progress` | `{"stage":"단계 코드","message":"고정 안내 문구"}` | 실제 백엔드 처리 단계 진입 알림. LLM이 문구를 생성하지 않는다. |
 | `token` | `{"text":"생성 문자열"}` | 최종 답변 조각 |
 | `complete` | `ChatResponse` | 답변과 검색·안전·감사 메타데이터 |
 | `error` | `{"message":"안내 문구"}` | 스트리밍 중 오류 |
 
+`progress.stage`는 실제 실행 경로에 따라 `load_conversation`, `prepare_query`,
+`classify_intent`, `load_health_context`, `search_evidence`, `generate_answer`, `answer_stream_complete`,
+`summarize_conversation`, `save_conversation` 중 필요한 단계만 순서대로 전달한다.
+`answer_stream_complete`는 사용자에게 표시할 답변 토큰 생성이 끝났음을 알리며 안내 문구를
+포함하지 않는다. 프런트엔드는 남은 토큰 표시를 마치면 진행 문구를 제거한다.
+사용자용 `POST /chat`, `POST /chat/stream`은 답변 본문을 변경하지 않는 사후 감사 LLM
+호출을 생략한다. 개발자용 RAG 서비스의 감사 옵션은 기본 활성화 상태를 유지한다.
+
 내부 근거 연결용 `[C1]` 라벨은 서버 스트림 필터가 사용자 답변에서 제거한다. 원본
-응답과 감사 기록은 라벨을 이용해 실제 `citations`를 청크에 연결한다. 사후 감사는 이미
-표시한 답변을 교체하지 않는다.
+응답의 인용 기록은 라벨을 이용해 실제 `citations`를 청크에 연결한다.
 
 ## 검색·답변 점검 API
 

@@ -1,5 +1,6 @@
-/** HEAPY 웹 앱 상호작용. 작성자: 김진우 */
+// HEAPY 사용자 UI. 작성자: 김진우
 const elements = {
+  initialLoadingScreen: document.querySelector("#initialLoadingScreen"),
   authScreen: document.querySelector("#authScreen"),
   appShell: document.querySelector("#appShell"),
   loginForm: document.querySelector("#loginForm"),
@@ -19,34 +20,25 @@ const elements = {
   userAvatar: document.querySelector("#userAvatar"),
   userName: document.querySelector("#userName"),
   userEmail: document.querySelector("#userEmail"),
+  conversationList: document.querySelector("#conversationList"),
+  newConversationButton: document.querySelector("#newConversationButton"),
+  conversation: document.querySelector("#conversation"),
+  welcome: document.querySelector("#welcome"),
+  messages: document.querySelector("#messages"),
+  conversationLoading: document.querySelector("#conversationLoading"),
+  deleteConversationDialog: document.querySelector("#deleteConversationDialog"),
+  deleteConversationTitle: document.querySelector("#deleteConversationTitle"),
   form: document.querySelector("#chatForm"),
   input: document.querySelector("#questionInput"),
   sendButton: document.querySelector("#sendButton"),
   resetButton: document.querySelector("#resetButton"),
-  conversation: document.querySelector("#conversation"),
-  welcome: document.querySelector("#welcome"),
-  messages: document.querySelector("#messages"),
-  emptyInsight: document.querySelector("#emptyInsight"),
-  auditCountBadge: document.querySelector("#auditCountBadge"),
-  auditCardList: document.querySelector("#auditCardList"),
-  environmentStatus: document.querySelector("#environmentStatus"),
-  vectorBackendLabel: document.querySelector("#vectorBackendLabel"),
-  embedModelLabel: document.querySelector("#embedModelLabel"),
-  totalChunkCount: document.querySelector("#totalChunkCount"),
-  classifierLabel: document.querySelector("#classifierLabel"),
-  collectionTotalLabel: document.querySelector("#collectionTotalLabel"),
-  environmentCollectionList: document.querySelector("#environmentCollectionList"),
-  conversationList: document.querySelector("#conversationList"),
-  newConversationButton: document.querySelector("#newConversationButton"),
 };
 
-const intentNames = {
-  simple_lookup: "건강정보 조회",
-  comprehensive: "종합 건강 질문",
-  general_chat: "일상 건강 대화",
-  ignore: "상담 범위 외",
-};
-
+const STREAM_CHARACTER_DELAY_MS = 28;
+const STREAM_COMMA_DELAY_MS = 70;
+const STREAM_SENTENCE_DELAY_MS = 130;
+const INITIAL_LOADING_MINIMUM_MS = 450;
+const initialLoadingStartedAt = performance.now();
 const recommendationPool = [
   { title: "혈당 수치 알아보기", question: "공복혈당 정상 수치는 어떻게 되나요?" },
   { title: "혈압 기준 알아보기", question: "수축기 혈압과 이완기 혈압은 무엇이 다른가요?" },
@@ -65,15 +57,18 @@ const recommendationPool = [
   { title: "간 건강 알아보기", question: "간 건강을 관리하는 데 도움이 되는 생활 습관을 알려주세요." },
   { title: "검진 전 준비하기", question: "건강검진 전에 금식이 필요한 이유를 알려주세요." },
 ];
-
-const STREAM_CHARACTER_DELAY_MS = 28;
-const STREAM_COMMA_DELAY_MS = 70;
-const STREAM_SENTENCE_DELAY_MS = 130;
 let isRequesting = false;
 let conversationHistory = [];
 let conversationSummary = "";
 let currentSessionId = "";
+let conversationSessions = [];
 let authMode = "login";
+let conversationLoadSequence = 0;
+
+function setLoginError(message = "") {
+  elements.loginError.textContent = message;
+  elements.loginError.hidden = !message;
+}
 
 function setAuthMode(mode) {
   authMode = mode;
@@ -84,18 +79,12 @@ function setAuthMode(mode) {
   elements.nameInput.required = isSignup;
   elements.birthDateInput.required = isSignup;
   elements.sexInput.required = isSignup;
-  elements.passwordInput.autocomplete = isSignup ? "new-password" : "current-password";
   elements.loginTitle.textContent = isSignup ? "HEAPY와 함께 시작해요" : "다시 만나서 반가워요";
   elements.authDescription.textContent = isSignup
     ? "건강 프로필과 로그인 계정을 함께 만들어요."
-    : "Supabase에 등록된 계정으로 로그인해 주세요.";
+    : "HEAPY 계정으로 로그인해 주세요.";
   elements.loginButton.textContent = isSignup ? "회원가입" : "로그인";
   setLoginError();
-}
-
-function setLoginError(message = "") {
-  elements.loginError.textContent = message;
-  elements.loginError.hidden = !message;
 }
 
 function renderAuthenticatedUser(user) {
@@ -113,10 +102,42 @@ function renderAuthenticatedUser(user) {
 function showLoginScreen(message = "") {
   elements.appShell.hidden = true;
   elements.authScreen.hidden = false;
-  setLoginError(message);
   elements.passwordInput.value = "";
   setAuthMode("login");
+  setLoginError(message);
   elements.emailInput.focus();
+}
+
+function hideInitialLoadingScreen() {
+  const elapsed = performance.now() - initialLoadingStartedAt;
+  const delay = Math.max(0, INITIAL_LOADING_MINIMUM_MS - elapsed);
+  window.setTimeout(() => {
+    elements.initialLoadingScreen.classList.add("leaving");
+    window.setTimeout(() => {
+      elements.initialLoadingScreen.hidden = true;
+    }, 240);
+  }, delay);
+}
+
+function selectRandomRecommendations(count) {
+  const shuffled = [...recommendationPool];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+  return shuffled.slice(0, count);
+}
+
+function renderSuggestionCards() {
+  const cards = [...document.querySelectorAll(".suggestion-card")];
+  const recommendations = selectRandomRecommendations(cards.length);
+  cards.forEach((card, index) => {
+    const recommendation = recommendations[index];
+    if (!recommendation) return;
+    card.dataset.question = recommendation.question;
+    card.querySelector("strong").textContent = recommendation.title;
+    card.querySelector("small").textContent = recommendation.question;
+  });
 }
 
 async function refreshSession() {
@@ -132,43 +153,28 @@ async function fetchChatStream(options) {
 }
 
 async function restoreSession() {
-  let response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
-  if (response.status === 401 && await refreshSession()) {
-    response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+  try {
+    let response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+    if (response.status === 401 && await refreshSession()) {
+      response = await fetch("/auth/me", { headers: { Accept: "application/json" } });
+    }
+    if (!response.ok) {
+      showLoginScreen();
+      return;
+    }
+    renderAuthenticatedUser(await response.json());
+  } catch {
+    showLoginScreen("로그인 상태를 확인하지 못했습니다. 다시 로그인해 주세요.");
+  } finally {
+    hideInitialLoadingScreen();
   }
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    const message = response.status === 503
-      ? String(payload.detail || "Supabase 인증 설정이 필요합니다.")
-      : "";
-    showLoginScreen(message);
-    return;
-  }
-  renderAuthenticatedUser(await response.json());
-}
-
-async function requestLogin(payload) {
-  return fetch("/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-}
-
-async function requestSignup(payload) {
-  return fetch("/auth/signup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
 }
 
 async function login(event) {
   event.preventDefault();
   setLoginError();
-  elements.loginButton.disabled = true;
   const isSignup = authMode === "signup";
-  elements.loginButton.textContent = isSignup ? "가입 중..." : "로그인 중...";
+  elements.loginButton.disabled = true;
   try {
     const payload = {
       email: elements.emailInput.value.trim(),
@@ -179,13 +185,13 @@ async function login(event) {
       payload.birth_date = elements.birthDateInput.value;
       payload.sex = elements.sexInput.value;
     }
-    const response = isSignup
-      ? await requestSignup(payload)
-      : await requestLogin(payload);
+    const response = await fetch(isSignup ? "/auth/signup" : "/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(String(result.detail || (isSignup ? "회원가입에 실패했습니다." : "로그인에 실패했습니다.")));
-    }
+    if (!response.ok) throw new Error(result.detail || "인증 처리에 실패했습니다.");
     if (result.email_confirmation_required) {
       setAuthMode("login");
       setLoginError("가입 확인 메일을 확인한 뒤 로그인해 주세요.");
@@ -220,6 +226,7 @@ async function fetchWithSession(resource, options = {}) {
 }
 
 function renderConversationSessions(sessions) {
+  conversationSessions = sessions;
   elements.conversationList.replaceChildren();
   if (!sessions.length) {
     const empty = document.createElement("p");
@@ -229,21 +236,79 @@ function renderConversationSessions(sessions) {
     return;
   }
   sessions.forEach((session) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "conversation-item";
-    button.classList.toggle("active", session.session_id === currentSessionId);
+    const item = document.createElement("div");
+    item.className = "conversation-item";
+    item.classList.toggle("active", session.session_id === currentSessionId);
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "conversation-item-main";
     const title = document.createElement("strong");
     title.textContent = session.title || "새 대화";
     const time = document.createElement("time");
-    time.textContent = new Intl.DateTimeFormat("ko-KR", {
-      month: "numeric",
-      day: "numeric",
-    }).format(new Date(session.updated_at));
-    button.append(title, time);
-    button.addEventListener("click", () => loadConversation(session.session_id));
-    elements.conversationList.appendChild(button);
+    const updatedAt = new Date(session.updated_at);
+    time.textContent = Number.isNaN(updatedAt.getTime())
+      ? ""
+      : new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(updatedAt);
+    openButton.append(title, time);
+    openButton.addEventListener("click", () => loadConversation(session.session_id));
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "conversation-delete-button";
+    deleteButton.setAttribute("aria-label", `${title.textContent} 대화 삭제`);
+    deleteButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6" /></svg>';
+    deleteButton.addEventListener("click", () => {
+      deleteConversation(session.session_id, title.textContent, deleteButton);
+    });
+
+    item.append(openButton, deleteButton);
+    elements.conversationList.appendChild(item);
   });
+}
+
+function confirmConversationDeletion(title) {
+  elements.deleteConversationTitle.textContent = `“${title || "새 대화"}”`;
+  elements.deleteConversationDialog.returnValue = "cancel";
+  return new Promise((resolve) => {
+    elements.deleteConversationDialog.addEventListener(
+      "close",
+      () => resolve(elements.deleteConversationDialog.returnValue === "confirm"),
+      { once: true },
+    );
+    elements.deleteConversationDialog.showModal();
+  });
+}
+
+async function deleteConversation(sessionId, title, deleteButton) {
+  if (isRequesting) {
+    window.alert("답변 생성이 끝난 후 대화를 삭제해 주세요.");
+    return;
+  }
+  const confirmed = await confirmConversationDeletion(title);
+  if (!confirmed) return;
+
+  deleteButton.disabled = true;
+  try {
+    const response = await fetchWithSession(`/conversations/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail || "대화를 삭제하지 못했습니다.");
+
+    conversationSessions = conversationSessions.filter(
+      (session) => session.session_id !== sessionId,
+    );
+    if (currentSessionId === sessionId) {
+      resetConversation();
+    } else {
+      renderConversationSessions(conversationSessions);
+    }
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "대화를 삭제하지 못했습니다.");
+  } finally {
+    deleteButton.disabled = false;
+  }
 }
 
 async function loadConversationSessions() {
@@ -274,11 +339,19 @@ function appendStoredAssistantMessage(content) {
 
 async function loadConversation(sessionId) {
   if (isRequesting) return;
+  const loadSequence = ++conversationLoadSequence;
+  const previousSessionId = currentSessionId;
+  currentSessionId = sessionId;
+  renderConversationSessions(conversationSessions);
+  elements.welcome.hidden = true;
+  elements.messages.hidden = true;
+  elements.conversationLoading.hidden = false;
   try {
     const response = await fetchWithSession(`/conversations/${encodeURIComponent(sessionId)}`, {
       headers: { Accept: "application/json" },
     });
     const payload = await response.json().catch(() => ({}));
+    if (loadSequence !== conversationLoadSequence) return;
     if (!response.ok) throw new Error(payload.detail || "대화를 불러오지 못했습니다.");
     currentSessionId = payload.session.session_id;
     conversationSummary = payload.session.summary || "";
@@ -292,119 +365,78 @@ async function loadConversation(sessionId) {
       if (message.role === "user") appendUserMessage(message.content);
       if (message.role === "assistant") appendStoredAssistantMessage(message.content);
     });
-    await loadConversationSessions();
     scrollToLatest();
   } catch (error) {
+    if (loadSequence !== conversationLoadSequence) return;
+    currentSessionId = previousSessionId;
+    renderConversationSessions(conversationSessions);
+    elements.messages.replaceChildren();
+    elements.messages.hidden = false;
     appendErrorMessage(error instanceof Error ? error.message : "대화를 불러오지 못했습니다.");
+  } finally {
+    if (loadSequence === conversationLoadSequence) {
+      elements.conversationLoading.hidden = true;
+    }
   }
 }
 
-function selectRandomRecommendations(count) {
-  const shuffled = [...recommendationPool];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
-  }
-  return shuffled.slice(0, count);
-}
-
-function renderSuggestionCards() {
-  const cards = [...document.querySelectorAll(".suggestion-card")];
-  const recommendations = selectRandomRecommendations(cards.length);
-  cards.forEach((card, index) => {
-    const recommendation = recommendations[index];
-    if (!recommendation) return;
-    card.dataset.question = recommendation.question;
-    card.querySelector("strong").textContent = recommendation.title;
-    card.querySelector("small").textContent = recommendation.question;
-  });
-}
-
-function setEnvironmentBadge(status, label) {
-  elements.environmentStatus.className = `environment-badge ${status}`;
-  elements.environmentStatus.replaceChildren();
-  const dot = document.createElement("span");
-  dot.className = "status-dot";
-  elements.environmentStatus.append(dot, document.createTextNode(label));
-}
-
-function renderCollections(indexedChunks) {
-  const collections = Object.entries(indexedChunks || {});
-  elements.collectionTotalLabel.textContent = String(collections.length);
-  elements.environmentCollectionList.replaceChildren();
-
-  if (!collections.length) {
-    const empty = document.createElement("div");
-    empty.className = "environment-placeholder";
-    empty.textContent = "표시할 컬렉션이 없습니다.";
-    elements.environmentCollectionList.appendChild(empty);
-    return;
-  }
-
-  collections.forEach(([name, count]) => {
-    const item = document.createElement("div");
-    item.className = "environment-collection-item";
-    const collectionName = document.createElement("span");
-    collectionName.className = "environment-collection-name";
-    collectionName.textContent = name;
-    const collectionCount = document.createElement("strong");
-    collectionCount.className = "environment-collection-count";
-    collectionCount.textContent = Number(count || 0).toLocaleString("ko-KR");
-    item.append(collectionName, collectionCount);
-    elements.environmentCollectionList.appendChild(item);
-  });
-}
-
-async function loadProjectEnvironment() {
-  try {
-    const response = await fetch("/health", { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error("환경 상태를 조회하지 못했습니다.");
-    const data = await response.json();
-    const indexedChunks = data.indexed_chunks || {};
-    const totalChunks = Object.values(indexedChunks)
-      .reduce((total, count) => total + (Number(count) || 0), 0);
-    const classifier = data.intent_classifier || {};
-
-    setEnvironmentBadge(data.ready ? "ready" : "warning", data.ready ? "준비 완료" : "점검 필요");
-    elements.vectorBackendLabel.textContent = String(data.vector_backend || "unknown").toUpperCase();
-    elements.embedModelLabel.textContent = data.embed_model || "unknown";
-    elements.embedModelLabel.title = data.embed_model || "unknown";
-    elements.totalChunkCount.textContent = totalChunks.toLocaleString("ko-KR");
-    elements.classifierLabel.textContent = classifier.ready
-      ? classifier.model_version || "준비 완료"
-      : "모델 없음";
-    renderCollections(indexedChunks);
-  } catch (error) {
-    setEnvironmentBadge("error", "연결 실패");
-    elements.vectorBackendLabel.textContent = "확인 불가";
-    elements.embedModelLabel.textContent = "확인 불가";
-    elements.totalChunkCount.textContent = "—";
-    elements.classifierLabel.textContent = "확인 불가";
-    renderCollections({});
-  }
+function updateConversationSessionPreview(data) {
+  const sessionId = String(data.session_id || "");
+  if (!sessionId) return;
+  const existing = conversationSessions.find((session) => session.session_id === sessionId);
+  const question = String(data.original_question || data.question || "새 대화").trim();
+  const preview = {
+    session_id: sessionId,
+    title: existing?.title && existing.title !== "새 대화"
+      ? existing.title
+      : question.slice(0, 60) || "새 대화",
+    summary: data.conversation_summary || existing?.summary || "",
+    created_at: existing?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  conversationSessions = [
+    preview,
+    ...conversationSessions.filter((session) => session.session_id !== sessionId),
+  ];
+  renderConversationSessions(conversationSessions);
 }
 
 function resizeInput() {
   elements.input.style.height = "auto";
   elements.input.style.height = `${Math.min(elements.input.scrollHeight, 120)}px`;
-  elements.sendButton.disabled = isRequesting || !elements.input.value.trim();
+  elements.sendButton.disabled = !elements.input.value.trim() || isRequesting;
+}
+
+function scrollToLatest() {
+  requestAnimationFrame(() => {
+    elements.conversation.scrollTop = elements.conversation.scrollHeight;
+  });
+}
+
+function setConversationMode() {
+  elements.welcome.hidden = true;
+  elements.messages.hidden = false;
 }
 
 function createAssistantAvatar() {
   const avatar = document.createElement("div");
   avatar.className = "message-avatar";
-  avatar.innerHTML = '<img src="/assets/images/heapy-doctor.png" alt="" aria-hidden="true" />';
+  const image = document.createElement("img");
+  image.src = "/images/heapy-doctor.png";
+  image.alt = "HEAPY";
+  avatar.appendChild(image);
   return avatar;
 }
 
-function appendUserMessage(question) {
+function appendUserMessage(text) {
   const message = document.createElement("div");
   message.className = "message user";
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = question;
+  bubble.textContent = text;
   message.appendChild(bubble);
   elements.messages.appendChild(message);
+  scrollToLatest();
 }
 
 function appendLoadingMessage() {
@@ -412,12 +444,33 @@ function appendLoadingMessage() {
   message.className = "message assistant";
   message.dataset.loading = "true";
   message.appendChild(createAssistantAvatar());
+  const content = document.createElement("div");
+  content.className = "message-content";
   const bubble = document.createElement("div");
   bubble.className = "bubble loading-bubble";
-  bubble.innerHTML = "<span></span><span></span><span></span>";
-  message.appendChild(bubble);
+  bubble.append(document.createElement("span"), document.createElement("span"), document.createElement("span"));
+  const status = document.createElement("p");
+  status.className = "loading-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  status.textContent = "답변 요청을 전송하는 중입니다";
+  content.append(bubble, status);
+  message.appendChild(content);
   elements.messages.appendChild(message);
   scrollToLatest();
+}
+
+function updateLoadingProgress(payload) {
+  const status = document.querySelector('[data-loading="true"] .loading-status');
+  const message = String(payload?.message || "").trim();
+  if (!status || !message) return;
+  status.textContent = message;
+  status.dataset.stage = String(payload?.stage || "");
+  scrollToLatest();
+}
+
+function hideLoadingProgress() {
+  document.querySelector('[data-loading="true"] .loading-status')?.remove();
 }
 
 function appendAssistantMessage(data) {
@@ -429,6 +482,7 @@ function appendAssistantMessage(data) {
     elements.messages.appendChild(message);
   }
   delete message.dataset.loading;
+  message.querySelector(".loading-status")?.remove();
 
   let bubble = message.querySelector(".bubble");
   if (!bubble) {
@@ -452,26 +506,6 @@ function appendAssistantMessage(data) {
     message.appendChild(content);
   }
 
-  const meta = document.createElement("div");
-  meta.className = "answer-meta";
-  const intentChip = document.createElement("span");
-  intentChip.className = "answer-chip";
-  intentChip.textContent = intentNames[data.intent] || data.intent || "분류 없음";
-  meta.appendChild(intentChip);
-  if (data.grounded === true) {
-    const groundedChip = document.createElement("span");
-    groundedChip.className = "answer-chip";
-    groundedChip.textContent = data.evidence_status === "partial" ? "부분 근거 답변" : "검색 근거 답변";
-    meta.appendChild(groundedChip);
-  }
-  if (data.audit_status === "failed" || data.audit_status === "error") {
-    const auditChip = document.createElement("span");
-    auditChip.className = "answer-chip warning";
-    auditChip.textContent = "감사 확인 필요";
-    meta.appendChild(auditChip);
-  }
-  content.querySelector(".answer-meta")?.remove();
-  content.appendChild(meta);
   content.querySelector(".confirmation-actions")?.remove();
   if (data.query_confirmation && data.confirmation_id) {
     const actions = document.createElement("div");
@@ -693,282 +727,17 @@ function renderMarkdown(markdown) {
   return blocks.join("");
 }
 
-function appendErrorMessage(error) {
+function appendErrorMessage(text) {
   document.querySelector('[data-loading="true"]')?.remove();
   const message = document.createElement("div");
   message.className = "message assistant error";
   message.appendChild(createAssistantAvatar());
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = error;
+  bubble.textContent = text;
   message.appendChild(bubble);
   elements.messages.appendChild(message);
   scrollToLatest();
-}
-
-function scrollToLatest() {
-  requestAnimationFrame(() => {
-    elements.conversation.scrollTop = elements.conversation.scrollHeight;
-  });
-}
-
-function setConversationMode() {
-  elements.welcome.hidden = true;
-  elements.messages.hidden = false;
-}
-
-function setInsightPending() {
-  elements.auditCountBadge.className = "quality-badge info";
-  elements.auditCountBadge.textContent = "처리 중";
-}
-
-function setInsightError() {
-  elements.auditCountBadge.className = "quality-badge warning";
-  elements.auditCountBadge.textContent = "응답 오류";
-}
-
-function createTextElement(tagName, className, text) {
-  const element = document.createElement(tagName);
-  if (className) element.className = className;
-  element.textContent = text;
-  return element;
-}
-
-function auditStatusMeta(status) {
-  const statuses = {
-    passed: { label: "감사 통과", className: "passed" },
-    failed: { label: "추가 검토", className: "failed" },
-    error: { label: "감사 오류", className: "error" },
-    not_run: { label: "감사 미실행", className: "not_run" },
-    not_applicable: { label: "감사 비대상", className: "not_applicable" },
-  };
-  return statuses[status] || statuses.not_applicable;
-}
-
-function addMonitorItem(container, label, value) {
-  const item = document.createElement("div");
-  item.className = "audit-monitor-item";
-  item.append(
-    createTextElement("span", "", label),
-    createTextElement("strong", "", value || "—"),
-  );
-  container.appendChild(item);
-}
-
-function appendAuditSection(body, title) {
-  const section = document.createElement("section");
-  section.className = "audit-section";
-  section.appendChild(createTextElement("h3", "", title));
-  body.appendChild(section);
-  return section;
-}
-
-function appendRetrievalAssessment(body, data) {
-  const assessment = data.retrieval_assessment;
-  const section = appendAuditSection(body, "검색 결과 기본 검사");
-  if (!assessment) {
-    section.appendChild(createTextElement("div", "no-source", "이 응답 경로는 검색을 사용하지 않았습니다."));
-    return;
-  }
-
-  const list = document.createElement("div");
-  list.className = "audit-monitor-list";
-  addMonitorItem(list, "검사 결과", evidenceStatusLabel(assessment.status));
-  addMonitorItem(list, "최고 유사도", assessment.max_score == null ? "—" : `${(Number(assessment.max_score) * 100).toFixed(1)}%`);
-  addMonitorItem(list, "질문 대상", (assessment.query_entities || []).join(", ") || "명시 대상 없음");
-  addMonitorItem(list, "일치 대상", (assessment.matched_entities || []).join(", ") || "—");
-  section.appendChild(list);
-  section.appendChild(createTextElement("p", "environment-placeholder", assessment.reason || "검사 사유 없음"));
-}
-
-function appendUnsupportedClaims(body, data) {
-  const claims = Array.isArray(data.unsupported_claims) ? data.unsupported_claims : [];
-  const unanswered = Array.isArray(data.unanswered_items) ? data.unanswered_items : [];
-  const safetyViolations = Array.isArray(data.safety_violations) ? data.safety_violations : [];
-  if (!claims.length && !unanswered.length && !safetyViolations.length && !(data.grounding_errors || []).length) return;
-  const section = appendAuditSection(body, "감사 경고");
-  const list = document.createElement("ul");
-  list.className = "unsupported-list";
-  [...claims, ...unanswered.map((item) => `근거 부족 항목: ${item}`), ...safetyViolations.map((item) => `안전 정책 위반: ${item}`), ...(data.grounding_errors || [])].forEach((claim) => {
-    list.appendChild(createTextElement("li", "", claim));
-  });
-  section.appendChild(list);
-}
-
-function appendEvidenceChunks(body, data) {
-  const citations = Array.isArray(data.citations) ? data.citations : [];
-  const chunks = citations.length ? citations : (Array.isArray(data.chunks) ? data.chunks : []);
-  const section = appendAuditSection(body, `근거 청크 ${chunks.length}개`);
-  const list = document.createElement("div");
-  list.className = "chunk-list";
-
-  if (!chunks.length) {
-    list.appendChild(createTextElement("div", "no-source", "이 응답은 표시할 검색 근거가 없습니다."));
-  } else {
-    chunks.forEach((chunk, index) => {
-      const item = document.createElement("div");
-      item.className = "chunk-item";
-      const header = document.createElement("div");
-      header.className = "chunk-header";
-      header.append(
-        createTextElement("strong", "", chunk.citation_id || `근거 ${index + 1}`),
-        createTextElement("em", "", `유사도 ${((Number(chunk.score) || 0) * 100).toFixed(1)}%`),
-      );
-      const meta = createTextElement(
-        "span",
-        "chunk-meta",
-        `${chunk.collection || "unknown"} · ${chunk.record_id || "ID 없음"}`,
-      );
-      const chunkText = String(chunk.text || "본문 없음");
-      const chunkContent = createTextElement("div", "chunk-scroll-content", chunkText);
-      const source = createTextElement(
-        "span",
-        "chunk-source",
-        String(chunk.source || "출처 미상").split(" · ")[0],
-      );
-      item.append(header, meta, chunkContent, source);
-      list.appendChild(item);
-    });
-  }
-  section.appendChild(list);
-}
-
-function updateInsight(data) {
-  elements.emptyInsight.hidden = true;
-  elements.auditCardList.querySelectorAll("details[open]").forEach((card) => {
-    card.open = false;
-  });
-
-  const status = auditStatusMeta(data.audit_status);
-  const card = document.createElement("details");
-  card.className = "audit-card";
-  card.open = true;
-
-  const summary = document.createElement("summary");
-  summary.className = "audit-card-summary";
-  const title = document.createElement("div");
-  title.className = "audit-card-title";
-  title.append(
-    createTextElement("strong", "", data.question || "질문 내용 없음"),
-    createTextElement(
-      "span",
-      "",
-      `${intentNames[data.intent] || data.intent || "분류 없음"} · ${Math.round((Number(data.confidence) || 0) * 100)}%`,
-    ),
-  );
-  summary.append(
-    title,
-    createTextElement("span", `audit-card-status ${status.className}`, status.label),
-  );
-  card.appendChild(summary);
-
-  const body = document.createElement("div");
-  body.className = "audit-card-body";
-  const auditSummary = document.createElement("div");
-  auditSummary.className = "audit-summary-box";
-  auditSummary.append(
-    createTextElement("strong", "", "사후 감사"),
-    createTextElement("p", "", data.audit_summary || "이 응답 경로에는 별도 사후 감사 내용이 없습니다."),
-  );
-  body.appendChild(auditSummary);
-
-  const metrics = document.createElement("div");
-  metrics.className = "audit-metrics";
-  [
-    ["Intent", intentNames[data.intent] || data.intent || "—"],
-    ["신뢰도", `${Math.round((Number(data.confidence) || 0) * 100)}%`],
-    ["근거 상태", evidenceStatusLabel(data.evidence_status)],
-    ["감사 상태", status.label],
-  ].forEach(([label, value]) => {
-    const metric = document.createElement("div");
-    metric.className = "audit-metric";
-    metric.append(
-      createTextElement("span", "", label),
-      createTextElement("strong", "", value),
-    );
-    metrics.appendChild(metric);
-  });
-  body.appendChild(metrics);
-
-  const monitorSection = appendAuditSection(body, "모니터링 정보");
-  const monitorList = document.createElement("div");
-  monitorList.className = "audit-monitor-list";
-  addMonitorItem(monitorList, "응답 경로", `${data.model_version || "Intent 모델"} · ${intentNames[data.intent] || data.intent || "—"}`);
-  addMonitorItem(monitorList, "위험 수준", riskLevelLabel(data.risk_level));
-  addMonitorItem(monitorList, "금지 행동", (data.restricted_actions || []).join(", ") || "없음");
-  addMonitorItem(monitorList, "응답 정책", data.response_policy || "—");
-  addMonitorItem(monitorList, "원문 질문", data.original_question || data.question || "—");
-  addMonitorItem(monitorList, "독립형 질문", data.standalone_question || "—");
-  addMonitorItem(monitorList, "최종 검색 질문", data.resolved_query || "—");
-  addMonitorItem(monitorList, "용어 정규화", data.resolution_status || "NO_MATCH");
-  addMonitorItem(monitorList, "정규화 오류", data.resolution_error || "없음");
-  addMonitorItem(monitorList, "검증 방식", formatVerification(data.verification_method));
-  addMonitorItem(monitorList, "검증 사유", data.verification_reason);
-  addMonitorItem(monitorList, "분류 검토", data.uncertain ? "필요" : "불필요");
-  addMonitorItem(monitorList, "검색 컬렉션", (data.searched_collections || []).join(", ") || "검색 안 함");
-  addMonitorItem(monitorList, "실패 컬렉션", (data.failed_collections || []).join(", ") || "없음");
-  monitorSection.appendChild(monitorList);
-
-  appendRetrievalAssessment(body, data);
-  appendUnsupportedClaims(body, data);
-  appendEvidenceChunks(body, data);
-
-  const jsonSection = appendAuditSection(body, "응답 원본");
-  const jsonDetail = document.createElement("details");
-  const jsonSummary = createTextElement("summary", "audit-json-toggle", "응답 결과 JSON 보기");
-  const json = createTextElement("pre", "audit-json", JSON.stringify(data, null, 2));
-  jsonDetail.append(jsonSummary, json);
-  jsonSection.appendChild(jsonDetail);
-
-  card.appendChild(body);
-  elements.auditCardList.prepend(card);
-  elements.auditCountBadge.className = "quality-badge neutral";
-  elements.auditCountBadge.textContent = `${elements.auditCardList.childElementCount}건`;
-}
-
-function formatVerification(method) {
-  const names = {
-    retrieval_check_post_audit: "검색 검사 + 사후 감사",
-    retrieval_check_audit_warning: "검색 검사 + 감사 경고",
-    retrieval_check_audit_error: "검색 검사 + 감사 오류",
-    retrieval_rejected: "검색 결과 검사 거절",
-    fixed_response: "고정 응답",
-    not_applicable: "검증 대상 아님",
-  };
-  return names[method] || method || "—";
-}
-
-function evidenceStatusLabel(status) {
-  const names = {
-    sufficient: "근거 충분",
-    partial: "부분 근거",
-    insufficient: "근거 부족",
-    evidence_available: "근거 청크 있음",
-    no_evidence: "검색 결과 없음",
-    entity_mismatch: "질문 대상 불일치",
-    unknown: "감사 확인 필요",
-    not_applicable: "검색 미사용",
-  };
-  return names[status] || status || "검색 미사용";
-}
-
-function riskLevelLabel(level) {
-  const names = {
-    normal: "일반 정보",
-    caution: "주의 상담",
-    emergency: "긴급 우선",
-  };
-  return names[level] || level || "일반 정보";
-}
-
-function parseError(response, payload) {
-  if (response.status === 503) {
-    return "챗봇 서버가 아직 준비 중이에요. 잠시 후 다시 질문해 주세요.";
-  }
-  if (response.status === 422) {
-    return "질문 내용을 확인해 주세요.";
-  }
-  return payload?.detail || "답변을 불러오는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.";
 }
 
 function parseSseBlock(block) {
@@ -983,7 +752,7 @@ function parseSseBlock(block) {
 }
 
 async function consumeChatStream(response) {
-  if (!response.body) throw new Error("이 브라우저에서는 스트리밍 응답을 사용할 수 없어요.");
+  if (!response.body) throw new Error("이 브라우저에서는 스트리밍 답변을 사용할 수 없어요.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder("utf-8");
   const tokenPacer = createTokenPacer();
@@ -1000,26 +769,24 @@ async function consumeChatStream(response) {
         const block = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
         const event = parseSseBlock(block);
-        if (event?.eventName === "token") {
-          tokenPacer.push(event.payload.text || "");
+        if (event?.eventName === "progress") {
+          if (event.payload?.stage === "answer_stream_complete") {
+            void tokenPacer.drain().then(hideLoadingProgress);
+          } else {
+            updateLoadingProgress(event.payload);
+          }
         }
-        if (event?.eventName === "complete") {
-          completePayload = event.payload;
-        }
-        if (event?.eventName === "error") {
-          throw new Error(event.payload.message || "답변 스트리밍 중 문제가 생겼어요.");
-        }
+        if (event?.eventName === "token") tokenPacer.push(event.payload.text || "");
+        if (event?.eventName === "complete") completePayload = event.payload;
+        if (event?.eventName === "error") throw new Error(event.payload.message || "답변을 불러오지 못했어요.");
         boundary = buffer.indexOf("\n\n");
       }
       if (done) break;
     }
 
-    if (!completePayload) {
-      throw new Error("답변 스트림이 완료되기 전에 연결이 종료됐어요.");
-    }
+    if (!completePayload) throw new Error("답변 연결이 예상보다 일찍 종료됐어요.");
     await tokenPacer.drain();
     appendAssistantMessage(completePayload);
-    updateInsight(completePayload);
     updateConversationMemory(completePayload);
   } catch (error) {
     tokenPacer.cancel();
@@ -1042,6 +809,7 @@ function updateConversationMemory(data) {
   if (userQuestion) conversationHistory.push({ role: "user", content: userQuestion });
   if (assistantAnswer) conversationHistory.push({ role: "assistant", content: assistantAnswer });
   conversationHistory = conversationHistory.slice(-6);
+  updateConversationSessionPreview(data);
   loadConversationSessions();
 }
 
@@ -1051,7 +819,6 @@ async function submitQuestion(question, options = {}) {
 
   isRequesting = true;
   setConversationMode();
-  setInsightPending();
   if (options.displayUser !== false) appendUserMessage(normalized);
   appendLoadingMessage();
   elements.input.value = "";
@@ -1072,12 +839,11 @@ async function submitQuestion(question, options = {}) {
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      throw new Error(parseError(response, payload));
+      throw new Error(payload.detail || "건강정보 서버가 아직 준비되지 않았어요.");
     }
     await consumeChatStream(response);
   } catch (error) {
     appendErrorMessage(error instanceof Error ? error.message : "알 수 없는 오류가 발생했어요.");
-    setInsightError();
   } finally {
     isRequesting = false;
     resizeInput();
@@ -1087,16 +853,15 @@ async function submitQuestion(question, options = {}) {
 
 function resetConversation() {
   if (isRequesting) return;
+  conversationLoadSequence += 1;
+  elements.conversationLoading.hidden = true;
   elements.messages.replaceChildren();
   elements.messages.hidden = true;
   elements.welcome.hidden = false;
-  elements.emptyInsight.hidden = false;
-  elements.auditCardList.replaceChildren();
-  elements.auditCountBadge.className = "quality-badge neutral";
-  elements.auditCountBadge.textContent = "0건";
   conversationHistory = [];
   conversationSummary = "";
   currentSessionId = "";
+  renderConversationSessions(conversationSessions);
   renderSuggestionCards();
   elements.input.value = "";
   resizeInput();
@@ -1115,16 +880,23 @@ elements.form.addEventListener("submit", (event) => {
   submitQuestion(elements.input.value);
 });
 elements.resetButton.addEventListener("click", resetConversation);
-elements.newConversationButton.addEventListener("click", resetConversation);
+elements.newConversationButton.addEventListener("click", () => {
+  resetConversation();
+  loadConversationSessions();
+});
 elements.loginForm.addEventListener("submit", login);
 elements.loginModeButton.addEventListener("click", () => setAuthMode("login"));
 elements.signupModeButton.addEventListener("click", () => setAuthMode("signup"));
 elements.logoutButton.addEventListener("click", logout);
+elements.deleteConversationDialog.addEventListener("click", (event) => {
+  if (event.target === elements.deleteConversationDialog) {
+    elements.deleteConversationDialog.close("cancel");
+  }
+});
 document.querySelectorAll("[data-question]").forEach((button) => {
   button.addEventListener("click", () => submitQuestion(button.dataset.question || ""));
 });
 
-renderSuggestionCards();
 resizeInput();
-loadProjectEnvironment();
+renderSuggestionCards();
 restoreSession();

@@ -1,4 +1,4 @@
-/* HEAPY 사용자 시연 UI. 작성자: 김진우 */
+/* HEAPY 사용자 UI. 작성자: 김진우 */
 :root {
   --purple: #7b68e8;
   --purple-dark: #6652d0;
@@ -148,8 +148,9 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 .message.user { justify-content: flex-end; }
 .message-avatar { width: 36px; height: 36px; overflow: hidden; flex: 0 0 auto; border: 2px solid #fff; border-radius: 50%; background: var(--mint-soft); box-shadow: 0 5px 15px rgba(91,70,170,.12); }
 .message-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.message-content { max-width: 78%; }
+.message-content { max-width: 78%; display: flex; flex-direction: column; align-items: flex-start; }
 .bubble { padding: 14px 17px; border-radius: 5px 19px 19px; color: #31413f; background: rgba(255,255,255,.96); box-shadow: 0 10px 28px rgba(91,70,170,.07); font-size: 13.5px; line-height: 1.75; }
+.message.assistant .bubble { width: fit-content; max-width: 100%; box-sizing: border-box; }
 .message.user .bubble { max-width: 78%; border-radius: 19px 19px 5px 19px; color: #fff; background: linear-gradient(145deg, #8c79ee, var(--purple)); box-shadow: 0 10px 26px rgba(123,104,232,.2); white-space: pre-wrap; }
 .message.assistant .bubble p { margin: 0 0 10px; }
 .message.assistant .bubble p:last-child { margin-bottom: 0; }
@@ -172,10 +173,11 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 .message.assistant .bubble code { padding: 2px 5px; border-radius: 5px; color: #5947ad; background: #f0ecff; font-family: Consolas, "Courier New", monospace; font-size: .92em; }
 .message.assistant .bubble pre { overflow-x: auto; margin: 9px 0; padding: 11px 13px; border-radius: 9px; color: #e9f2ef; background: #26322f; line-height: 1.55; white-space: pre; }
 .message.assistant .bubble pre code { padding: 0; color: inherit; background: transparent; }
-.loading-bubble { min-width: 74px; display: flex; gap: 5px; padding: 17px; }
+.loading-bubble { width: 74px; min-width: 74px; max-width: 74px; display: flex; gap: 5px; padding: 17px; }
 .loading-bubble span { width: 6px; height: 6px; border-radius: 50%; background: #77918a; animation: bounce 1.2s infinite ease-in-out; }
 .loading-bubble span:nth-child(2) { animation-delay: .15s; }
 .loading-bubble span:nth-child(3) { animation-delay: .3s; }
+.loading-status { margin: 6px 0 0 3px; color: #81908d; font-size: 10.5px; line-height: 1.45; letter-spacing: -.01em; }
 @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
 .message.error .bubble { color: #8c4242; background: #fff1f1; }
 .confirmation-actions { display: flex; gap: 8px; margin-top: 12px; }

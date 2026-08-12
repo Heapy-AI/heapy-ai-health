@@ -1,35 +1,41 @@
-"""사용자 시연용 웹 UI 정적 자산과 프록시 계약 테스트.
+"""사용자 웹 UI 정적 자산과 프록시 계약 테스트.
 
 작성자: 김진우
 """
 
 from pathlib import Path
 import unittest
-from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
-from app.demo import app
+from app.main import app
 
 
-DEMO_ROOT = Path(__file__).resolve().parents[1] / "app" / "demo_web"
+USER_FRONTEND_ROOT = (
+    Path(__file__).resolve().parents[1] / "app" / "frontends" / "user"
+)
+SHARED_FRONTEND_ROOT = (
+    Path(__file__).resolve().parents[1] / "app" / "frontends" / "shared"
+)
 
 
-class DemoWebUiTest(unittest.TestCase):
-    """사용자 UI가 검증 정보 없이 별도 화면으로 제공되는지 확인한다."""
+class UserWebUiTest(unittest.TestCase):
+    """메인 FastAPI가 사용자 UI를 기본 화면으로 제공하는지 확인한다."""
 
-    def test_demo_page_is_served(self) -> None:
+    def test_user_page_is_served(self) -> None:
         response = TestClient(app).get("/")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("HEAPY 건강 AI", response.text)
 
     def test_required_assets_exist(self) -> None:
-        self.assertTrue((DEMO_ROOT / "index.html").is_file())
-        self.assertTrue((DEMO_ROOT / "assets" / "styles.css").is_file())
-        self.assertTrue((DEMO_ROOT / "assets" / "app.js").is_file())
+        self.assertTrue((USER_FRONTEND_ROOT / "index.html").is_file())
+        self.assertTrue((USER_FRONTEND_ROOT / "assets" / "styles.css").is_file())
+        self.assertTrue((USER_FRONTEND_ROOT / "assets" / "app.js").is_file())
+        self.assertTrue((SHARED_FRONTEND_ROOT / "images" / "heapy-logo.png").is_file())
+        self.assertTrue((SHARED_FRONTEND_ROOT / "images" / "heapy-doctor.png").is_file())
 
-        markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
+        markup = (USER_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
         self.assertIn('/assets/styles.css?v=', markup)
         self.assertIn('/assets/app.js?v=', markup)
         self.assertIn('id="loginForm"', markup)
@@ -43,9 +49,9 @@ class DemoWebUiTest(unittest.TestCase):
 
     def test_initial_loading_screen_hides_auth_flash_during_session_restore(self) -> None:
         """세션 복원 전에는 전용 시작 화면만 표시한다."""
-        markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
-        script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
-        styles = (DEMO_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+        markup = (USER_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (USER_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (USER_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn("건강한 대화를 준비하고 있어요", markup)
         self.assertIn("hideInitialLoadingScreen()", script)
@@ -54,9 +60,20 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertIn("@keyframes initial-orbit-spin", styles)
         self.assertIn("@keyframes initial-screen-out", styles)
 
+    def test_recommended_questions_use_admin_random_pool(self) -> None:
+        """추천 질문은 관리자 UI와 동일한 16개 풀에서 네 개를 무작위 선택한다."""
+        script = (USER_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("const recommendationPool = [", script)
+        self.assertIn("function selectRandomRecommendations", script)
+        self.assertIn("function renderSuggestionCards", script)
+        self.assertIn("Math.random()", script)
+        self.assertGreaterEqual(script.count("question:"), 16)
+        self.assertIn("renderSuggestionCards();", script)
+
     def test_sidebar_shows_conversations_without_service_tabs(self) -> None:
-        markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
-        styles = (DEMO_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+        markup = (USER_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        styles = (USER_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn('class="sidebar"', markup)
         self.assertIn('id="conversationList"', markup)
@@ -71,8 +88,8 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertNotIn("environment-card", markup)
 
     def test_right_audit_dashboard_is_removed(self) -> None:
-        markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
-        script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        markup = (USER_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (USER_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
 
         self.assertNotIn("insight-panel", markup)
         self.assertNotIn("ANSWER AUDIT", markup)
@@ -80,7 +97,7 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertNotIn("audit_status", script)
 
     def test_streaming_chat_matches_developer_chat_without_sources(self) -> None:
-        script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        script = (USER_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
 
         self.assertIn('fetch("/chat/stream"', script)
         self.assertIn('eventName === "token"', script)
@@ -99,10 +116,30 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertNotIn("답변 출처", script)
         self.assertNotIn("source-details", script)
 
+    def test_streaming_progress_is_shown_below_loading_bubble(self) -> None:
+        """실제 SSE 처리 단계 문구를 작은 상태 텍스트로 표시한다.
+
+        작성자: 김진우
+        """
+        script = (USER_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (USER_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('status.className = "loading-status"', script)
+        self.assertIn("function updateLoadingProgress", script)
+        self.assertIn("function hideLoadingProgress", script)
+        self.assertIn('eventName === "progress"', script)
+        self.assertIn('stage === "answer_stream_complete"', script)
+        self.assertIn("tokenPacer.drain().then(hideLoadingProgress)", script)
+        self.assertIn('status.setAttribute("aria-live", "polite")', script)
+        self.assertIn(".loading-status", styles)
+        self.assertIn("font-size: 10.5px", styles)
+        self.assertIn("width: 74px", styles)
+        self.assertIn("align-items: flex-start", styles)
+
     def test_session_loading_uses_centered_loader_instead_of_chat_bubble(self) -> None:
         """세션 조회 중에는 답변 생성용 말풍선 대신 중앙 로더를 표시한다."""
-        script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
-        styles = (DEMO_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+        script = (USER_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (USER_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
         load_conversation = script.split("async function loadConversation(sessionId)", 1)[1]
         load_conversation = load_conversation.split("function updateConversationSessionPreview", 1)[0]
 
@@ -114,9 +151,9 @@ class DemoWebUiTest(unittest.TestCase):
 
     def test_conversation_session_has_confirmed_delete_action(self) -> None:
         """대화 세션은 확인 후 본인 세션 삭제 API를 호출한다."""
-        markup = (DEMO_ROOT / "index.html").read_text(encoding="utf-8")
-        script = (DEMO_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
-        styles = (DEMO_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+        markup = (USER_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (USER_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (USER_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
 
         self.assertIn("conversation-delete-button", script)
         self.assertIn("confirmConversationDeletion", script)
@@ -127,75 +164,6 @@ class DemoWebUiTest(unittest.TestCase):
         self.assertIn("삭제한 대화와 메시지는 복구할 수 없습니다.", markup)
         self.assertIn(".conversation-delete-button", styles)
         self.assertIn(".delete-dialog::backdrop", styles)
-
-    @patch("app.demo.requests.post")
-    def test_chat_stream_is_proxied_without_buffering(self, post: Mock) -> None:
-        """백엔드 SSE 이벤트가 사용자 UI 응답으로 그대로 전달되는지 확인한다."""
-        backend_response = Mock()
-        backend_response.ok = True
-        backend_response.iter_content.return_value = iter(
-            [b'event: token\ndata: {"text":"hello"}\n\n']
-        )
-        post.return_value = backend_response
-
-        client = TestClient(app)
-        client.cookies.set("heapy_access_token", "access-token")
-        response = client.post(
-            "/chat/stream",
-            json={"question": "공복혈당이 무엇인가요?"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.headers["content-type"], "text/event-stream; charset=utf-8")
-        self.assertIn("event: token", response.text)
-        post.assert_called_once()
-        self.assertIn("heapy_access_token=access-token", post.call_args.kwargs["headers"]["Cookie"])
-        backend_response.close.assert_called_once()
-
-    @patch("app.demo.requests.request")
-    def test_login_proxy_forwards_backend_session_cookie(self, request: Mock) -> None:
-        """백엔드 로그인 쿠키가 시연 UI 브라우저에 전달되는지 확인한다."""
-        raw_headers = Mock()
-        raw_headers.getlist.return_value = [
-            "heapy_access_token=access-token; HttpOnly; Path=/; SameSite=lax"
-        ]
-        backend_response = Mock(
-            status_code=200,
-            content=b'{"id":"user-id","email":"user@example.com"}',
-            headers={"content-type": "application/json"},
-            raw=Mock(headers=raw_headers),
-        )
-        request.return_value = backend_response
-
-        response = TestClient(app).post(
-            "/auth/login",
-            json={"email": "user@example.com", "password": "password123"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("HttpOnly", response.headers["set-cookie"])
-        backend_response.close.assert_called_once()
-
-    @patch("app.demo.requests.request")
-    def test_conversation_list_proxy_forwards_auth_cookie(self, request: Mock) -> None:
-        """대화 세션 목록 조회가 인증 쿠키와 함께 메인 API로 전달되는지 확인한다."""
-        backend_response = Mock(
-            status_code=200,
-            content=b"[]",
-            headers={"content-type": "application/json"},
-            raw=Mock(headers=Mock(getlist=Mock(return_value=[]))),
-        )
-        request.return_value = backend_response
-        client = TestClient(app)
-        client.cookies.set("heapy_access_token", "access-token")
-
-        response = client.get("/conversations")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
-        self.assertEqual(request.call_args.args[:2], ("GET", "http://localhost:8000/conversations"))
-        self.assertIn("heapy_access_token=access-token", request.call_args.kwargs["headers"]["Cookie"])
-
 
 if __name__ == "__main__":
     unittest.main()

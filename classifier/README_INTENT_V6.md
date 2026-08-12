@@ -45,12 +45,6 @@ Invoke-RestMethod `
   -Body '{"question":"오늘 내 저녁 복약 목록 알려줘"}'
 ```
 
-Gradio 실행:
-
-```powershell
-python -m app.ui
-```
-
 기본 경로를 사용하면 `.env`에 `INTENT_MODEL_PATH`를 추가하지 않아도 됩니다. 다른 위치를 사용할 때만 다음 값을 설정합니다.
 
 ```text

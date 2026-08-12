@@ -264,7 +264,15 @@ class CombinedSearchEndpointTest(unittest.TestCase):
                 )
 
         class FakeGroundedRagService:
-            def answer(self, question, documents, *, safety_policy):
+            def answer(
+                self,
+                question,
+                documents,
+                *,
+                safety_policy,
+                audit=True,
+                personal_context="",
+            ):
                 self.question = question
                 self.documents = documents
                 self.safety_policy = safety_policy

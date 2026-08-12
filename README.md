@@ -15,7 +15,7 @@ data/ 원천 데이터
   → 멀티턴 후속 질문 재작성 및 RDB 의료용어 정규화
   → 설정된 전체 namespace 병렬 검색·근거 검사
   → FastAPI /search, /ask
-  → FastAPI 시연용 웹 앱
+  → FastAPI 개발자 모니터링 UI 및 사용자 UI
 ```
 
 | 컬렉션 | Pinecone namespace | 적재 대상 |
@@ -151,10 +151,10 @@ FastAPI:
 uvicorn app.main:app --reload
 ```
 
-- 웹 앱: <http://localhost:8000>
+- 사용자 UI: <http://localhost:8000>
 - Swagger: <http://localhost:8000/docs>
 
-별도의 프론트엔드 개발 서버 없이 FastAPI가 시연용 웹 앱을 함께 제공합니다.
+별도의 프론트엔드 개발 서버 없이 FastAPI가 사용자 UI를 함께 제공합니다.
 웹 앱은 통합 챗봇 `POST /chat/stream`을 사용하며 Intent, 근거 검증, 출처 정보를
 시각적으로 확인할 수 있습니다. 현재 복약 데이터는 검토 중 상태로 표시됩니다.
 
@@ -162,33 +162,22 @@ uvicorn app.main:app --reload
 `ignore`를 건강 서비스 외 질문으로 한정하고, 의료 위험 질문은 Safety Guard가
 Intent를 바꾸지 않은 채 위험 수준과 금지 행동을 최종 프롬프트에 전달합니다.
 
-Gradio:
+개발자 모니터링 UI:
 
 ```powershell
-python run_ui.py
+python run_admin_ui.py
 ```
 
-- UI: <http://localhost:7860>
-
-Gradio 화면은 검색 품질 점검용으로 유지하며, 실제 MVP 시연은 FastAPI 웹 앱을
-사용합니다.
-
-사용자 시연 UI:
-
-```powershell
-python run_demo_ui.py
-```
-
-- 사용자 UI: <http://localhost:3000>
+- 개발자 UI: <http://localhost:3000>
 - API 서버: <http://localhost:8000>
 
-사용자 시연 UI는 기존 FastAPI 검증 화면과 별도로 실행됩니다. 왼쪽 사용자별 대화
-세션 목록과 챗봇 화면을 제공하며 프로젝트 환경, Intent·감사 로그, 응답 원본 JSON은 표시하지
-않습니다. 실행 전에 FastAPI 서버가 `8000` 포트에서 실행 중이어야 합니다.
-회원가입·로그인·로그아웃 요청과 HttpOnly 인증 쿠키는 사용자 UI 서버가 메인 API로
-중계하며, 메인 웹 앱과 동일하게 Supabase의 세션별 대화 저장을 사용합니다.
-개발자용 웹과 동일하게 서버 토큰 수신과 분리된 표시 대기열을 사용하며,
-답변의 Markdown을 렌더링합니다. 사용자용 화면에서는 답변 하단의 출처 펼침기를 표시하지 않습니다.
+개발자 UI는 사용자 서비스와 별도로 실행되며 프로젝트 환경, Intent·감사 로그,
+검색 근거와 응답 원본 JSON을 표시합니다. 실행 전에 FastAPI 서버가 `8000` 포트에서
+실행 중이어야 합니다. 회원가입·로그인·로그아웃 요청과 HttpOnly 인증 쿠키는 개발자
+UI 서버가 메인 API로 중계하며, 사용자 UI와 동일한 Supabase 세션별 대화 저장을 사용합니다.
+
+프런트엔드 정적 파일은 `app/frontends/admin`, `app/frontends/user`로 분리하며,
+두 화면이 함께 사용하는 이미지는 `app/frontends/shared/images`에서 제공합니다.
 
 ## API
 
