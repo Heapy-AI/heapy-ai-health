@@ -5,9 +5,12 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/ui_image/heapy_ui_01.png" width="230"</td>
-    <td align="center"><img src="docs/ui_image/heapy_ui_02.png" width="230"</td>
-    <td align="center"><img src="docs/ui_image/heapy_ui_03.png" width="230"</td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_00.png" width="500"</td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_01.png" width="500"</td>
+  </tr>
+    <tr>
+    <td align="center"><img src="docs/ui_image/heapy_ui_02.png" width="500"</td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_03.png" width="500"</td>
   </tr>
 </table>
 
