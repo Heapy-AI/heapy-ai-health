@@ -24,10 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.services.chat_orchestrator import (  # noqa: E402
-    GENERAL_IGNORE_ANSWER,
-    SAFETY_IGNORE_ANSWER,
-)
+from app.services.chat_orchestrator import GENERAL_IGNORE_ANSWER  # noqa: E402
 from app.services.grounded_rag import NOT_GROUNDED_ANSWER  # noqa: E402
 
 from evaluation.eval import metrics as M  # noqa: E402
@@ -47,7 +44,6 @@ from evaluation.eval.instrumentation import (  # noqa: E402
 ABSTENTION_ANSWERS = {
     NOT_GROUNDED_ANSWER,
     GENERAL_IGNORE_ANSWER,
-    SAFETY_IGNORE_ANSWER,
 }
 
 

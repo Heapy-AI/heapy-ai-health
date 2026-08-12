@@ -5,12 +5,12 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/ui_image/heapy_ui_00.png" width="500"</td>
-    <td align="center"><img src="docs/ui_image/heapy_ui_01.png" width="500"</td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_00.png" width="500"></td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_01.png" width="500"></td>
   </tr>
     <tr>
-    <td align="center"><img src="docs/ui_image/heapy_ui_02.png" width="500"</td>
-    <td align="center"><img src="docs/ui_image/heapy_ui_03.png" width="500"</td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_02.png" width="500"></td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_03.png" width="500"></td>
   </tr>
 </table>
 
@@ -51,17 +51,19 @@ heapy-ai-health/
 │   ├── routers/
 │   ├── services/
 │   ├── schemas/
-│   ├── demo_web/
-│   ├── web/
-│   ├── demo.py
+│   ├── frontends/
+│   │   ├── user/       # 사용자 UI
+│   │   ├── admin/      # 개발자 모니터링 UI
+│   │   └── shared/     # 공용 정적 파일
+│   ├── admin_frontend.py
 │   └── main.py
+├── database/           # Supabase DB 마이그레이션
 ├── model/              # model 관리
 │   └── classifier/     # Intent 분류 모델 아티팩트 및 학습 스크립트
 ├── tests/              # 단위 테스트
 ├── evaluation/         # 성능 평가
 ├── output/             # 출력 (요소별 디버깅, 성능평가 결과 등)
-├── run_ui.py           # FastAPI 우선 UI 실행 스크립트
-├── run_demo_ui.py      # 사용자 시연 UI 실행 스크립트
+├── run_admin_ui.py     # 개발자 모니터링 UI 실행 스크립트
 ├── requirements.txt
 ├── .env                # 환경변수(로컬 환경에서만 사용)
 ├── docs/               # 개발 문서
@@ -76,6 +78,12 @@ heapy-ai-health/
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+개발 및 테스트 환경에서는 다음 의존성을 추가로 설치합니다.
+
+```bash
+pip install -r requirements-dev.txt
 ```
 
 프로젝트 루트의 `.env`:
@@ -106,26 +114,15 @@ SEARCH_COLLECTIONS=health_checkup_info,disease_info,medication_info
 uvicorn app.main:app --reload
 ```
 
-이 저장소는 FastAPI가 시연용 웹 앱을 함께 제공합니다. 
-웹 앱은 통합 챗봇 `POST /chat/stream`을 사용하며 Intent, 근거 검증, 출처 정보를 시각적으로 확인할 수 있습니다.
+FastAPI가 사용자용 웹 앱을 함께 제공합니다.
 - 사용자 UI: <http://localhost:8000>
 - Swagger: <http://localhost:8000/docs>
 
 별도의 프론트엔드 개발 서버 없이 FastAPI가 사용자 UI를 함께 제공합니다.
-웹 앱은 통합 챗봇 `POST /chat/stream`을 사용하며 Intent, 근거 검증, 출처 정보를
-시각적으로 확인할 수 있습니다. 현재 복약 데이터는 검토 중 상태로 표시됩니다.
+웹 앱은 통합 챗봇 `POST /chat/stream`을 사용합니다.
 
-### 2. UI 실행
+### 2. 개발자 모니터링 UI 실행
 
-```bash
-python run_ui.py
-```
-
-- 웹 앱(검증용): <http://localhost:8000>
-- Swagger: <http://localhost:8000/docs>
-
-```bash
-python run_demo_ui.py
 개발자 모니터링 UI:
 
 ```powershell
@@ -135,15 +132,6 @@ python run_admin_ui.py
 - 개발자 UI: <http://localhost:3000>
 - API 서버: <http://localhost:8000>
 
-사용자 시연 UI는 FastAPI 백엔드를 프록시하여 `localhost:3000`에서 별도 화면을 제공합니다.
-실행 전에 FastAPI 서버가 `8000` 포트에서 실행 중이어야 합니다.
-
-
-- 사용자 시연 UI는 기존 FastAPI 검증 화면과 별도로 실행됩니다. 왼쪽 사용자별 대화
-- 세션 목록과 챗봇 화면을 제공하며 프로젝트 환경, Intent·감사 로그, 응답 원본 JSON은 표시하지 않습니다. 
-- 실행 전에 FastAPI 서버가 `8000` 포트에서 실행 중이어야 합니다.
-- 회원가입·로그인·로그아웃 요청과 HttpOnly 인증 쿠키는 사용자 UI 서버가 메인 API로 중계하며, 메인 웹 앱과 동일하게 Supabase의 세션별 대화 저장을 사용합니다.
-- 개발자용 웹과 동일하게 서버 토큰 수신과 분리된 표시 대기열을 사용하며, 답변의 Markdown을 렌더링합니다. 사용자용 화면에서는 답변 하단의 출처 펼침기를 표시하지 않습니다.
 개발자 UI는 사용자 서비스와 별도로 실행되며 프로젝트 환경, Intent·감사 로그,
 검색 근거와 응답 원본 JSON을 표시합니다. 실행 전에 FastAPI 서버가 `8000` 포트에서
 실행 중이어야 합니다. 회원가입·로그인·로그아웃 요청과 HttpOnly 인증 쿠키는 개발자
