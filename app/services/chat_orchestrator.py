@@ -44,6 +44,13 @@ GENERAL_IGNORE_ANSWER = "죄송합니다. 건강 관련 문의만 도와드릴 �
 PERSONAL_HEALTH_QUESTION_PATTERN = re.compile(
     r"(?:^|\s)(?:내|나의|제|저의|내가|제가|나는|저는)(?:\s|$)"
 )
+PERSONAL_CHECKUP_CONTEXT_PATTERN = re.compile(
+    r"(?:건강\s*)?검진(?:\s*(?:결과|수치|기록|항목|상태))"
+)
+PERSONAL_CONTEXT_FOLLOW_UP_PATTERN = re.compile(
+    r"(?:그\s*중(?:에서)?|이\s*중(?:에서)?|그\s*결과|이\s*결과|"
+    r"그것들?\s*중|앞서\s*(?:말한|본)|아까\s*(?:말한|본))"
+)
 
 
 class IntentClassifierUnavailableError(RuntimeError):
@@ -210,6 +217,8 @@ class ChatOrchestrator:
             prepared,
             prediction,
             personal_context_loader,
+            history,
+            summary,
         ):
             personal_context = personal_context_loader(
                 prepared.standalone_question,
@@ -304,6 +313,8 @@ class ChatOrchestrator:
             prepared,
             prediction,
             personal_context_loader,
+            history,
+            summary,
         ):
             yield ChatStreamEvent(event="progress", stage="load_health_context")
             personal_context = personal_context_loader(
@@ -583,22 +594,51 @@ class ChatOrchestrator:
         prepared: PreparedQuery,
         prediction: IntentPrediction,
         loader: Callable[[str, list[dict]], str | None] | None,
+        history=(),
+        summary: str = "",
     ) -> bool:
-        """개인 검진 질문이거나 comprehensive일 때만 RDB 조회를 시도한다.
+        """개인 검진 질문이거나 그 문맥의 후속 질문일 때 RDB 조회를 시도한다.
 
         작성자: 김진우
         """
+        if loader is None:
+            return False
+        if prediction.intent is Intent.COMPREHENSIVE:
+            return True
+        if prediction.intent is not Intent.SIMPLE_LOOKUP:
+            return False
+
+        current_questions = (
+            prepared.original_question,
+            prepared.standalone_question,
+            prepared.resolved_query,
+        )
+        if any(
+            PERSONAL_HEALTH_QUESTION_PATTERN.search(question)
+            for question in current_questions
+        ):
+            return True
+
+        previous_context = " ".join(
+            [
+                *(turn.content for turn in normalize_history(history)),
+                str(summary or "").strip(),
+            ]
+        )
+        previous_personal_checkup = bool(
+            PERSONAL_HEALTH_QUESTION_PATTERN.search(previous_context)
+            and PERSONAL_CHECKUP_CONTEXT_PATTERN.search(previous_context)
+        )
+        current_checkup_reference = any(
+            PERSONAL_CHECKUP_CONTEXT_PATTERN.search(question)
+            for question in current_questions
+        )
+        contextual_follow_up = bool(
+            PERSONAL_CONTEXT_FOLLOW_UP_PATTERN.search(prepared.original_question)
+        )
         return bool(
-            loader is not None
-            and (
-                prediction.intent is Intent.COMPREHENSIVE
-                or (
-                    prediction.intent is Intent.SIMPLE_LOOKUP
-                    and PERSONAL_HEALTH_QUESTION_PATTERN.search(
-                        prepared.standalone_question
-                    )
-                )
-            )
+            previous_personal_checkup
+            and (current_checkup_reference or contextual_follow_up)
         )
 
     @staticmethod
