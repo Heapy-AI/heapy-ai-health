@@ -66,7 +66,7 @@ def _non_negative_float_env(name: str, default: float) -> float:
 
 _intent_model_value = os.environ.get(
     "INTENT_MODEL_PATH",
-    "classifier/artifacts/intent-v7/best_model.json",
+    "model/classifier/artifacts/intent-v7/best_model.json",
 )
 INTENT_MODEL_PATH = Path(_intent_model_value)
 if not INTENT_MODEL_PATH.is_absolute():

@@ -17,7 +17,7 @@ from typing import Any
 import torch
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from classifier.script.intent_v6_utils import (
+from model.classifier.script.intent_v6_utils import (
     CONFIDENCE_THRESHOLD,
     EMBED_DIMENSION,
     EMBED_MODEL,

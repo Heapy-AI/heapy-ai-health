@@ -16,7 +16,7 @@ import torch
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from app.services.safety_guard import check_safety_guard
-from classifier.script.intent_v6_utils import (
+from model.classifier.script.intent_v6_utils import (
     CONFIDENCE_THRESHOLD,
     EMBED_DIMENSION,
     EMBED_MODEL,

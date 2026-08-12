@@ -1,6 +1,7 @@
-# HEAPY 건강정보 RAG
+# HEAPY 건강정보 챗봇
 
-한국어 건강정보 청크를 로컬에서 임베딩하고 Pinecone에서 검색하는 FastAPI RAG 서버입니다.
+나의 데이터와 전문 의료지식을 종합적으로 고려해 질문에 응답해주는 챗봇 서비스입니다.   
+| 한국어 건강 의료정보 청크를 Pinecone에서 검색하고 사용자의 건강 정보를 Supabase에서 가져와, LLM이 응답해주는 FastAPI 서버입니다.
 
 
 ## 동작 흐름
@@ -44,16 +45,17 @@ heapy-ai-health/
 │   ├── web/
 │   ├── demo.py
 │   └── main.py
-├── classifier/         # Intent 분류 모델 아티팩트 및 학습 스크립트
-├── docs/               # API 및 아키텍처 등 개발 문서
-├── evaluation/         # 성능 평가
-├── output/             # 출력(요소별 출력 디버깅, 성능평가 결과 등)
+├── model/              # model 관리
+│   └── classifier/     # Intent 분류 모델 아티팩트 및 학습 스크립트
 ├── tests/              # 단위 테스트
+├── evaluation/         # 성능 평가
+├── output/             # 출력 (요소별 디버깅, 성능평가 결과 등)
 ├── run_ui.py           # FastAPI 우선 UI 실행 스크립트
 ├── run_demo_ui.py      # 사용자 시연 UI 실행 스크립트
 ├── requirements.txt
-├── README.md
-└── .env                # 환경변수(로컬 환경에서만 사용)
+├── .env                # 환경변수(로컬 환경에서만 사용)
+├── docs/               # 개발 문서
+└── README.md
 ```
 (`data/`, `preprocessed/`, `vdb/` 등 VDB 구축 관련 폴더는 이 저장소에 포함되지 않으며,
 별도 레포지토리에서 관리됩니다.)

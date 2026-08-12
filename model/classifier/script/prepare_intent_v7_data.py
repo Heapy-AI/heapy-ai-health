@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from classifier.script.intent_v6_utils import (
+from model.classifier.script.intent_v6_utils import (
     LABELS,
     ROOT,
     audit_data_integrity,
@@ -21,7 +21,7 @@ from classifier.script.intent_v6_utils import (
     print_data_integrity,
     write_jsonl,
 )
-from classifier.script.prepare_intent_v6_data import policy_label as v6_policy_label
+from model.classifier.script.prepare_intent_v6_data import policy_label as v6_policy_label
 
 
 DEFAULT_SOURCE = ROOT / "classifier/data/HEAPY_intent_v6_merged_820.jsonl"

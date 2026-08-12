@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from classifier.script.intent_v6_utils import (
+from model.classifier.script.intent_v6_utils import (
     LABELS,
     ROOT,
     audit_data_integrity,
