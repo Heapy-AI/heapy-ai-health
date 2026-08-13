@@ -1,8 +1,19 @@
-# HEAPY 건강정보 챗봇
+# 💊 HEAPY 건강정보 챗봇
 
-사용자의 건강검진 데이터와 전문 의료정보를 함께 활용해 답변하는 FastAPI 기반 건강정보 챗봇입니다.
+> 사용자의 건강검진 데이터와 전문 의료정보를 함께 활용해 답변하는 FastAPI 기반 건강정보 챗봇입니다.
+---
 
-## 주요 기능
+## 📌 프로젝트 개요
+| 항목 | 내용 |
+|------|------|
+| **기간** | '26.07 ~'26.08 (6주) |
+| **팀** | KT tech-up 생성형AI 1팀 TeamHP (4인) |
+| **목표** | 의료 문서 + 개인데이터 → 맞춤 전문 답변 |
+| **주요 모델** | Gemini 3.5 Flash |
+| **최종 성능** | Test Accuracy **91.27%** |
+---
+
+## ✅ 주요 기능
 
 - Supabase Auth 기반 회원가입, 로그인, 로그아웃 및 세션 복원
 - 사용자별 대화 세션과 메시지·요약 저장
@@ -11,7 +22,19 @@
 - 개인 건강 질문에 Supabase 건강검진 결과와 Pinecone 의료 근거 결합
 - SSE 기반 답변 스트리밍
 
-## 운영 구조
+## 📱 운영 UI
+<table>
+  <tr>
+    <td align="center"><img src="docs/ui_image/heapy_ui_00.png" width="500"></td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_01.png" width="500"></td>
+  </tr>
+    <tr>
+    <td align="center"><img src="docs/ui_image/heapy_ui_02.png" width="500"></td>
+    <td align="center"><img src="docs/ui_image/heapy_ui_03.png" width="500"></td>
+  </tr>
+</table>
+
+## 📁 운영 구조
 
 ```text
 heapy-ai-health/
@@ -30,12 +53,13 @@ heapy-ai-health/
 │   └── classifier/
 │       └── artifacts/
 │           └── intent-v7/  # 운영 Intent 모델
+├── docs/ui_image           # 운영 UI
 ├── requirements.txt
 ├── LICENSE
 └── README.md
 ```
 
-## 환경변수
+## ⚙️ 환경변수
 
 프로젝트 루트에 `.env` 파일을 생성합니다.
 
@@ -53,7 +77,7 @@ SEARCH_COLLECTIONS=health_checkup_info,disease_info,medication_info
 - 로컬 HTTP 환경에서는 `AUTH_COOKIE_SECURE=0`, HTTPS 운영 환경에서는 `1`로 설정합니다.
 - `.env`와 API 키는 Git에 커밋하지 않습니다.
 
-## 설치 및 실행
+## 🚀 설치 및 실행
 
 ```bash
 python -m venv .venv
@@ -80,7 +104,7 @@ uvicorn app.main:app --reload
 
 FastAPI가 사용자 UI와 API를 함께 제공합니다. 별도의 프런트엔드 서버는 필요하지 않습니다.
 
-## 사용자 API
+## 🔗 사용자 API
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
@@ -96,13 +120,13 @@ FastAPI가 사용자 UI와 API를 함께 제공합니다. 별도의 프런트엔
 | `POST` | `/chat` | 통합 챗봇 응답 생성 |
 | `POST` | `/chat/stream` | SSE 기반 통합 챗봇 응답 스트리밍 |
 
-## Supabase 마이그레이션
+## 📦 Supabase 마이그레이션
 
 `database/migrations/`는 서버 요청 처리 중 직접 실행되지는 않지만, 운영 DB 스키마와 RLS 정책을 재현하고 변경 이력을 관리하기 위해 유지합니다.
 
 마이그레이션은 파일 번호 순서대로 Supabase SQL Editor 또는 배포 파이프라인에서 적용합니다. 기존 `public.users` 데이터는 삭제하지 않습니다.
 
-## 운영 주의사항
+## ⚠️ 운영 주의사항
 
 - 개인 건강검진 데이터는 로그인 사용자의 Supabase access token과 RLS 정책을 통해서만 조회합니다.
 - 서비스에서 사용하는 Intent v7 모델 파일을 삭제하거나 경로를 변경하지 않습니다.
