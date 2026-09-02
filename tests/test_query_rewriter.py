@@ -8,6 +8,7 @@ import unittest
 
 from app.services.intent_classifier import Intent
 from app.services.query_rewriter import (
+    QUERY_REWRITE_PROMPT,
     ConversationTurn,
     QueryRewriter,
     RewrittenQuery,
@@ -159,6 +160,31 @@ class QueryRewriterTest(unittest.TestCase):
         self.assertFalse(result.rewritten)
         self.assertEqual(result.question, "오늘 기분은 어때요?")
         self.assertEqual(len(chain.calls), 1)
+
+
+class PersonalContextRuleTest(unittest.TestCase):
+    """personal_context_required 규칙이 개인 기록 두 종류를 모두 포함해야 한다.
+
+    이 규칙이 false면 오케스트레이터가 개인 컨텍스트 로더를 아예 호출하지 않아
+    (chat_orchestrator._should_load_personal_context) 생활습관 조회가 막힌다.
+    """
+
+    def test_prompt_covers_checkup_records(self) -> None:
+        self.assertIn("건강검진 기록", QUERY_REWRITE_PROMPT)
+
+    def test_prompt_covers_lifestyle_records(self) -> None:
+        self.assertIn("생활습관", QUERY_REWRITE_PROMPT)
+        for keyword in ("걸음수", "운동", "식단", "수면", "체중", "혈압", "혈당"):
+            with self.subTest(keyword=keyword):
+                self.assertIn(keyword, QUERY_REWRITE_PROMPT)
+
+    def test_prompt_excludes_general_disease_questions(self) -> None:
+        self.assertIn("질병 자체를 묻는 질문", QUERY_REWRITE_PROMPT)
+
+    def test_prompt_placeholders_are_intact(self) -> None:
+        for placeholder in ("{question}", "{history}", "{summary}"):
+            with self.subTest(placeholder=placeholder):
+                self.assertEqual(QUERY_REWRITE_PROMPT.count(placeholder), 1)
 
 
 class OrchestratorMultiTurnTest(unittest.TestCase):

@@ -9,12 +9,13 @@ from collections.abc import Iterator
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.core.config import CHAT_HISTORY_MAX_TURNS
+from app.core.config import CHAT_HISTORY_MAX_TURNS, LIFESTYLE_CONTEXT_ENABLED
 from app.core.state import state
 from app.routers.auth import (
     AuthenticatedSession,
     conversation_service,
     health_context_service,
+    lifestyle_context_service,
     optional_current_session,
 )
 from app.schemas.health_chatbot import (
@@ -39,7 +40,7 @@ PROGRESS_MESSAGES = {
     "load_conversation": "이전 대화 내용을 불러오는 중입니다",
     "prepare_query": "질문과 의료용어를 정리하는 중입니다",
     "classify_intent": "질문의 유형과 안전 기준을 확인하는 중입니다",
-    "load_health_context": "관련 건강검진 결과를 확인하는 중입니다",
+    "load_health_context": "관련 개인 건강 기록을 확인하는 중입니다",
     "search_evidence": "관련 건강정보 근거를 찾는 중입니다",
     "generate_answer": "답변을 생성하는 중입니다",
     "verify_answer": "최종 결과를 확인하는 중입니다",
@@ -250,7 +251,7 @@ def _conversation_context(
 
 
 def _personal_context_loader(session: AuthenticatedSession | None):
-    """현재 로그인 사용자의 질문 관련 검진 컨텍스트 로더를 만든다.
+    """현재 로그인 사용자의 질문 관련 검진·생활습관 컨텍스트 로더를 만든다.
 
     작성자: 김진우
     """
@@ -259,13 +260,29 @@ def _personal_context_loader(session: AuthenticatedSession | None):
     user_id = str(session.user.get("id", ""))
 
     def load(question: str, resolved_terms: list[dict]) -> str | None:
-        context = health_context_service.get_relevant_context(
+        terms = tuple(resolved_terms)
+        sections: list[str] = []
+
+        checkup = health_context_service.get_relevant_context(
             session.access_token,
             user_id,
             question,
-            tuple(resolved_terms),
+            terms,
         )
-        return context.prompt_text if context is not None else None
+        if checkup is not None:
+            sections.append(checkup.prompt_text)
+
+        if LIFESTYLE_CONTEXT_ENABLED:
+            lifestyle = lifestyle_context_service.get_relevant_context(
+                session.access_token,
+                user_id,
+                question,
+                terms,
+            )
+            if lifestyle is not None:
+                sections.append(lifestyle.prompt_text)
+
+        return "\n".join(sections) if sections else None
 
     return load
 

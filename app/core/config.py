@@ -162,3 +162,15 @@ AUTH_COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "0").strip().lower() i
     "1",
     "true",
 }
+
+# 생활습관 컨텍스트는 날짜 필터 없이 최신순 건수 제한으로만 조회한다.
+# 기기 연동이 끊겨 데이터가 낡아도 최근 기록은 계속 조회되도록 하기 위함이다.
+LIFESTYLE_CONTEXT_ENABLED = os.environ.get(
+    "LIFESTYLE_CONTEXT_ENABLED",
+    "1",
+).strip().lower() not in {"0", "false"}
+LIFESTYLE_CONTEXT_MAX_ROWS = _positive_int_env("LIFESTYLE_CONTEXT_MAX_ROWS", 10)
+LIFESTYLE_CONTEXT_TREND_MAX_ROWS = _positive_int_env(
+    "LIFESTYLE_CONTEXT_TREND_MAX_ROWS",
+    30,
+)

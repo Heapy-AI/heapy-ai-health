@@ -21,6 +21,7 @@
   → 사용자 질의
   → 의료용어 정규화
   → 멀티턴 후속 질문 재작성
+  → 개인 건강검진·생활습관 컨텍스트 조회(RLS)
   → Pinecone namespace 검색
   → 검색·근거 검사
   → FastAPI /search, /ask
@@ -95,7 +96,7 @@ GOOGLE_API_KEY=your_gemini_api_key
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_PUBLISHABLE_KEY=your_publishable_key
 AUTH_COOKIE_SECURE=0
-SEARCH_COLLECTIONS=health_checkup_info,disease_info,medication_info
+SEARCH_COLLECTIONS=health_checkup_info,disease_info,medication_info,nutrient_info
 ```
 
 - `SUPABASE_PUBLISHABLE_KEY` 대신 레거시 `SUPABASE_ANON_KEY`도 사용할 수 있습니다.
@@ -103,6 +104,11 @@ SEARCH_COLLECTIONS=health_checkup_info,disease_info,medication_info
 - 설정이 완료되면 웹 앱은 Supabase 이메일·비밀번호 로그인을 먼저 요구하고, 인증 세션은 JavaScript에서 읽을 수 없는 HttpOnly 쿠키로 유지합니다.
 - 회원가입 시 `auth.users` 계정과 같은 UUID의 `public.users` 프로필이 생성됩니다. 대화는 `chat_sessions`, `chat_messages`에 사용자별로 저장되며 RLS가 다른 사용자의 접근을 막습니다.
 - 기존 `public.users` 데이터는 마이그레이션에서 삭제하거나 변경하지 않습니다.
+- 개인 건강검진(`health_checkup_*`)과 생활습관(`lifestyle_*`) 기록은 사용자 JWT로만
+  조회하며 RLS가 본인 행만 통과시킵니다. 두 컨텍스트 모두 질문에 해당하는 항목만
+  선택적으로 조회해 프롬프트에 넣습니다. 생활습관은 날짜 필터 없이 최신순 건수
+  제한(`LIFESTYLE_CONTEXT_MAX_ROWS`)으로 조회하므로 기기 연동이 끊겨 데이터가
+  낡아도 최근 기록이 계속 조회됩니다.
 
 - 기존 통합 임베딩 인덱스는 768차원 로컬 임베딩과 호환되지 않습니다. 별도의 `heapy-rag` dense 인덱스를 사용합니다.
 

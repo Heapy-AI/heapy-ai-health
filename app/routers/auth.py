@@ -13,6 +13,8 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 
 from app.core.config import (
     AUTH_COOKIE_SECURE,
+    LIFESTYLE_CONTEXT_MAX_ROWS,
+    LIFESTYLE_CONTEXT_TREND_MAX_ROWS,
     SUPABASE_PUBLISHABLE_KEY,
     SUPABASE_URL,
 )
@@ -22,6 +24,7 @@ from app.services.supabase_conversation import (
     SupabaseConversationService,
 )
 from app.services.supabase_health_context import SupabaseHealthContextService
+from app.services.supabase_lifestyle_context import SupabaseLifestyleContextService
 from app.services.supabase_auth import (
     SupabaseAuthConfigurationError,
     SupabaseAuthError,
@@ -41,6 +44,12 @@ conversation_service = SupabaseConversationService(
 health_context_service = SupabaseHealthContextService(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY,
+)
+lifestyle_context_service = SupabaseLifestyleContextService(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY,
+    max_rows=LIFESTYLE_CONTEXT_MAX_ROWS,
+    trend_max_rows=LIFESTYLE_CONTEXT_TREND_MAX_ROWS,
 )
 _verified_user_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _verified_user_cache_lock = RLock()
