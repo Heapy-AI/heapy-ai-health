@@ -18,6 +18,12 @@
   --shadow: 0 18px 50px rgba(91, 70, 170, 0.1);
   --sidebar-width: 288px;
   --panel-width: 360px;
+  /* 내건강 탭 전용 초록 계열. 챗봇 화면의 보라 계열과 구분한다. 작성자: 고수연 */
+  --health-green: #2f8f6b;
+  --health-green-dark: #226b50;
+  --health-green-soft: #e4f5ef;
+  --health-green-paper: #f2faf6;
+  --health-green-line: #cfe8dd;
 }
 
 * { box-sizing: border-box; }
@@ -300,6 +306,75 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 .response-detail { max-height: 220px; overflow: auto; margin: 5px 0 0; padding: 12px; border-radius: 14px; color: #4f5966; background: #ece7fa; font: 9px/1.55 Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+
+/* 내건강 탭. 챗봇은 보라 계열을 유지하고 이 탭만 초록 계열로 구분한다. 작성자: 고수연 */
+.view-tabs { display: flex; gap: 4px; margin-left: auto; padding: 4px; border-radius: 999px; background: var(--lavender-soft); }
+.view-tabs button { padding: 7px 15px; border: 0; border-radius: 999px; color: #6f7885; background: transparent; font-size: 11px; font-weight: 800; cursor: pointer; transition: color .2s, background .2s; }
+.view-tabs button.active { color: var(--purple-dark); background: #fff; box-shadow: 0 4px 12px rgba(91,70,170,.1); }
+.view-tabs #dataViewTab:hover { color: var(--health-green-dark); }
+.view-tabs #dataViewTab.active { color: var(--health-green-dark); box-shadow: 0 4px 12px rgba(47,143,107,.18); }
+
+/* 챗 화면의 conversation·composer 두 행 자리를 그대로 차지한다. */
+.data-view { grid-row: 2 / 4; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; background: linear-gradient(180deg, rgba(228,245,239,.42), transparent 42%); }
+.data-tabs { display: flex; align-items: center; gap: 6px; padding: 15px clamp(22px, 5vw, 62px) 0; }
+.data-tabs button { padding: 8px 14px; border: 1px solid var(--health-green-line); border-radius: 999px; color: #63776f; background: #fff; font-size: 11px; font-weight: 800; cursor: pointer; transition: border-color .2s, color .2s, background .2s; }
+.data-tabs button:hover { border-color: var(--health-green); color: var(--health-green-dark); }
+.data-tabs button.active { border-color: var(--health-green); color: var(--health-green-dark); background: var(--health-green-soft); }
+.data-tabs .data-reload { margin-left: auto; color: #7d8b85; font-weight: 700; }
+.data-tabs .data-reload:hover { background: #fff; }
+.data-tabs .data-reload:disabled { cursor: default; opacity: .55; }
+.data-panel.lifestyle-panel { grid-template-rows: auto auto auto minmax(0, 1fr); }
+.lifestyle-periods { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 10px; }
+.lifestyle-periods button { padding: 6px 11px; border: 1px solid var(--health-green-line); border-radius: 999px; color: #71817b; background: #fff; font-size: 10px; font-weight: 800; cursor: pointer; }
+.lifestyle-periods button:hover, .lifestyle-periods button.active { border-color: var(--health-green); color: var(--health-green-dark); background: var(--health-green-soft); }
+.lifestyle-tabs { display: flex; gap: 6px; margin: 0; padding: 0 0 12px; border-bottom: 1px solid var(--health-green-line); }
+.lifestyle-tabs button { padding: 7px 12px; border: 0; border-radius: 8px; color: #71817b; background: transparent; font-size: 11px; font-weight: 800; cursor: pointer; }
+.lifestyle-tabs button:hover, .lifestyle-tabs button.active { color: var(--health-green-dark); background: var(--health-green-soft); }
+
+.data-panel { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); padding: 15px clamp(22px, 5vw, 62px) 22px; }
+.data-panel-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.data-panel-head h2 { margin: 4px 0 0; color: var(--health-green-dark); font-size: 16px; }
+.data-panel-head .card-eyebrow { color: var(--health-green); }
+.data-meta { color: #6f8079; font-size: 11px; text-align: right; }
+.data-body { min-height: 0; display: grid; gap: 18px; align-content: start; overflow-y: auto; }
+.data-placeholder { margin: 0; padding: 28px; border: 1px dashed var(--health-green-line); border-radius: 16px; color: #8a9994; background: rgba(255,255,255,.6); font-size: 12px; text-align: center; }
+.data-placeholder.data-error { border-color: #eccaca; color: var(--danger); }
+
+.data-section h3 { display: flex; align-items: center; gap: 9px; margin: 0 0 9px; color: var(--health-green-dark); font-size: 12px; }
+.data-section-range { color: #7d8b85; font-size: 10px; font-weight: 600; }
+.data-table-scroll { overflow-x: auto; border: 1px solid var(--health-green-line); border-radius: 16px; background: rgba(255,255,255,.86); }
+.data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.data-table th, .data-table td { padding: 9px 12px; border-bottom: 1px solid var(--health-green-line); text-align: left; white-space: nowrap; }
+.data-table thead th { color: var(--health-green-dark); background: var(--health-green-paper); font-size: 10px; font-weight: 800; }
+.data-table tbody tr:hover td { background: rgba(228,245,239,.35); }
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table th.numeric, .data-table td.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.data-chart { margin: 0 0 16px; padding: 14px 16px 10px; border: 1px solid var(--health-green-line); border-radius: 16px; background: rgba(255,255,255,.8); }
+.data-chart-title { color: var(--health-green-dark); font-size: 11px; font-weight: 800; }
+.data-chart-plot { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 8px; height: 150px; margin-top: 12px; }
+.data-chart-axis { position: relative; height: 128px; color: #61766d; font-size: 9px; font-variant-numeric: tabular-nums; border-right: 1px solid #b9d9cd; }
+.data-chart-axis span { position: absolute; right: 0; transform: translateY(50%); white-space: nowrap; }
+.data-chart-bars { position: relative; display: flex; align-items: end; gap: 8px; height: 150px; box-sizing: border-box; overflow-x: auto; padding: 0 3px 22px; }
+.data-chart-guide { position: absolute; right: 0; left: 0; z-index: 0; display: block; border-top: 1px dashed #a8cfc0; pointer-events: none; }
+.data-chart-guide.zero { border-top: 1px solid #7fb8a3; }
+.data-chart-item { position: relative; flex: 0 0 28px; height: 128px; }
+.data-chart-bar { position: absolute; right: 0; bottom: 0; left: 0; z-index: 1; display: block; min-height: 8px; border-radius: 5px 5px 2px 2px; background: linear-gradient(180deg, var(--health-green), #9bd7c4); transition: height .35s ease; }
+.data-chart-item small { position: absolute; bottom: -22px; left: 50%; color: #84918d; font-size: 9px; white-space: nowrap; transform: translateX(-50%); }
+.line-chart { min-height: 190px; padding: 14px 16px 10px; border: 1px solid var(--health-green-line); border-radius: 16px; background: rgba(255,255,255,.8); }
+.line-chart-title { color: var(--health-green-dark); font-size: 11px; font-weight: 800; }
+.line-chart svg { display: block; width: 100%; height: 150px; margin-top: 8px; overflow: visible; }
+.line-chart-grid { stroke: #a8cfc0; stroke-width: 1.2; stroke-dasharray: 4 3; }
+.line-chart-axis { stroke: #7fb8a3; stroke-width: 1.4; }
+.line-chart-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.line-chart-point { stroke: #fff; stroke-width: 1.5; }
+.line-chart-label, .line-chart-axis-label { fill: #61766d; font-size: 9px; }
+.line-chart-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; color: #71817b; font-size: 10px; font-weight: 700; }
+.line-chart-legend span::before { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; background: var(--legend-color); content: ""; }
+.status-chip { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 9.5px; font-weight: 800; }
+.status-chip.normal { color: #2f7a63; background: #e4f5ef; }
+.status-chip.caution { color: #9a6a1f; background: var(--sand-soft); }
+.status-chip.danger { color: var(--danger); background: #fbeaea; }
+.status-chip.neutral { color: #6f7885; background: #eef1f0; }
 
 @media (max-width: 1180px) {
   .app-shell { grid-template-columns: minmax(500px, 1fr) 340px; }

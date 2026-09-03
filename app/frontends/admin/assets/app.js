@@ -38,6 +38,21 @@ const elements = {
   environmentCollectionList: document.querySelector("#environmentCollectionList"),
   conversationList: document.querySelector("#conversationList"),
   newConversationButton: document.querySelector("#newConversationButton"),
+  composerWrap: document.querySelector("#composerWrap"),
+  chatViewTab: document.querySelector("#chatViewTab"),
+  dataViewTab: document.querySelector("#dataViewTab"),
+  dataView: document.querySelector("#dataView"),
+  checkupTab: document.querySelector("#checkupTab"),
+  lifestyleTab: document.querySelector("#lifestyleTab"),
+  dataReloadButton: document.querySelector("#dataReloadButton"),
+  checkupPanel: document.querySelector("#checkupPanel"),
+  lifestylePanel: document.querySelector("#lifestylePanel"),
+  checkupMeta: document.querySelector("#checkupMeta"),
+  lifestyleMeta: document.querySelector("#lifestyleMeta"),
+  checkupBody: document.querySelector("#checkupBody"),
+  lifestyleBody: document.querySelector("#lifestyleBody"),
+  lifestyleTabs: [...document.querySelectorAll("[data-lifestyle-tab]")],
+  lifestylePeriods: [...document.querySelectorAll("[data-lifestyle-days]")],
 };
 
 const intentNames = {
@@ -74,6 +89,13 @@ let conversationHistory = [];
 let conversationSummary = "";
 let currentSessionId = "";
 let authMode = "login";
+let activeView = "chat";
+let activeDataTab = "checkup";
+let activeLifestyleTab = "bio";
+let lifestyleDays = 365;
+let lifestylePayload = null;
+// 탭을 다시 열 때마다 재조회하지 않도록 조회 여부를 기억한다.
+const loadedDataTabs = new Set();
 
 function setAuthMode(mode) {
   authMode = mode;
@@ -106,6 +128,10 @@ function renderAuthenticatedUser(user) {
   elements.userAvatar.textContent = displayName.charAt(0).toUpperCase() || "사";
   elements.authScreen.hidden = true;
   elements.appShell.hidden = false;
+  // 계정이 바뀌면 이전 사용자의 개인 데이터를 다시 조회하도록 캐시를 버린다.
+  loadedDataTabs.clear();
+  // 세션이 끊겨 로그인 화면으로 돌아갔던 경우 열려 있던 탭을 다시 채운다.
+  setActiveView(activeView);
   loadConversationSessions();
   elements.input.focus();
 }
@@ -206,6 +232,7 @@ async function logout() {
     await fetch("/auth/logout", { method: "POST" });
   } finally {
     resetConversation();
+    resetPersonalData();
     elements.conversationList.replaceChildren();
     showLoginScreen();
     elements.logoutButton.disabled = false;
@@ -274,6 +301,8 @@ function appendStoredAssistantMessage(content) {
 
 async function loadConversation(sessionId) {
   if (isRequesting) return;
+  // 사이드바 대화는 '내건강' 탭에서도 눌릴 수 있으므로 챗 화면으로 돌린다.
+  if (activeView !== "chat") setActiveView("chat");
   try {
     const response = await fetchWithSession(`/conversations/${encodeURIComponent(sessionId)}`, {
       headers: { Accept: "application/json" },
@@ -1089,6 +1118,658 @@ async function submitQuestion(question, options = {}) {
   }
 }
 
+/* 내건강 탭. 라벨과 단위 환산은 프롬프트 포맷(supabase_lifestyle_context)과 맞춘다. 작성자: 고수연 */
+const bioTypeLabels = {
+  weight: "체중",
+  bmi: "BMI",
+  blood_pressure: "혈압",
+  blood_glucose: "혈당",
+  heart_rate: "심박수",
+  sleep: "수면시간",
+};
+const exerciseTypeLabels = { walking: "걷기", running: "달리기", indoor_cycling: "실내 자전거" };
+const mealTypeLabels = { breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식" };
+const bioUnitLabels = { hour: "시간" };
+
+function formatDataNumber(value, digits = 0) {
+  if (value === null || value === undefined || value === "") return "—";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  return number.toLocaleString("ko-KR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatDataDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return "—";
+  // record_date는 날짜, measured_at·consumed_at은 timestamp로 내려온다.
+  return text.length <= 10 ? text.slice(0, 10) : `${text.slice(0, 10)} ${text.slice(11, 16)}`;
+}
+
+function formatGraphDate(value) {
+  const text = String(value || "").slice(0, 10);
+  if (!text) return "";
+  const parts = text.split("-");
+  if (parts.length === 2) return `${Number(parts[1])}월`;
+  return `${Number(parts[1])}/${Number(parts[2])}`;
+}
+
+function statusChipClass(status) {
+  const text = String(status || "");
+  if (!text) return "neutral";
+  if (text.startsWith("정상")) return "normal";
+  if (text.includes("경계") || text.includes("주의")) return "caution";
+  if (text.includes("의심") || text.includes("이상") || text.includes("위험")) return "danger";
+  return "neutral";
+}
+
+function createStatusChip(status) {
+  const chip = document.createElement("span");
+  chip.className = `status-chip ${statusChipClass(status)}`;
+  chip.textContent = String(status || "미분류");
+  return chip;
+}
+
+function bioValueText(row) {
+  const detail = row.detail_data && typeof row.detail_data === "object" ? row.detail_data : {};
+  const rawUnit = String(row.unit || "");
+  const unit = bioUnitLabels[rawUnit] || rawUnit;
+  // 혈압은 value에 수축기만 담기므로 이완기까지 함께 표기한다.
+  if (
+    row.bio_type === "blood_pressure"
+    && detail.systolic !== null && detail.systolic !== undefined
+    && detail.diastolic !== null && detail.diastolic !== undefined
+  ) {
+    return `${detail.systolic}/${detail.diastolic}${unit ? ` ${unit}` : ""}`;
+  }
+  const value = formatDataNumber(row.value, 1);
+  return unit && value !== "—" ? `${value} ${unit}` : value;
+}
+
+function bioDetailText(row) {
+  const detail = row.detail_data && typeof row.detail_data === "object" ? row.detail_data : {};
+  const parts = [];
+  if (row.bio_type === "blood_pressure" && detail.pulse !== null && detail.pulse !== undefined) {
+    parts.push(`맥박 ${detail.pulse}bpm`);
+  }
+  if (row.bio_type === "blood_glucose" && "fasting" in detail) {
+    parts.push(detail.fasting ? "공복" : "식후");
+  }
+  if (row.bio_type === "sleep") {
+    if (detail.sleep_score !== null && detail.sleep_score !== undefined) parts.push(`수면점수 ${detail.sleep_score}`);
+    if (detail.deep_sleep_min !== null && detail.deep_sleep_min !== undefined) parts.push(`깊은수면 ${detail.deep_sleep_min}분`);
+    if (detail.awake_min !== null && detail.awake_min !== undefined) parts.push(`깬시간 ${detail.awake_min}분`);
+  }
+  return parts.join(" · ") || "—";
+}
+
+const checkupColumns = [
+  { label: "검사 항목", value: (row) => String(row.item_name || row.item_code || "—") },
+  { label: "코드", value: (row) => String(row.item_code || "—") },
+  {
+    label: "수치",
+    numeric: true,
+    value: (row) => (row.value ? `${row.value}${row.unit ? ` ${row.unit}` : ""}` : "—"),
+  },
+  { label: "판정", value: (row) => createStatusChip(row.status) },
+];
+
+const lifestyleSections = [
+  {
+    key: "activity",
+    title: "일별 활동량",
+    columns: [
+      { label: "날짜", value: (row) => formatDataDate(row.record_date) },
+      { label: "걸음", numeric: true, value: (row) => formatDataNumber(row.steps) },
+      { label: "계단", numeric: true, value: (row) => formatDataNumber(row.floors_climbed) },
+      { label: "활동시간(분)", numeric: true, value: (row) => formatDataNumber(row.active_time) },
+      // lifestyle_activity.active_distance는 km 단위로 적재된다.
+      { label: "이동(km)", numeric: true, value: (row) => formatDataNumber(row.active_distance, 1) },
+      { label: "활동칼로리", numeric: true, value: (row) => formatDataNumber(row.active_calories) },
+    ],
+  },
+  {
+    key: "exercise",
+    title: "운동 기록",
+    columns: [
+      { label: "날짜", value: (row) => formatDataDate(row.record_date) },
+      {
+        label: "종목",
+        value: (row) => {
+          const raw = String(row.exercise_type || "");
+          return exerciseTypeLabels[raw] || raw || "종목 미상";
+        },
+      },
+      {
+        label: "시간(분)",
+        numeric: true,
+        value: (row) => formatDataNumber(row.duration_sec === null || row.duration_sec === undefined ? null : Number(row.duration_sec) / 60),
+      },
+      // lifestyle_exercise.distance_m은 미터 단위이므로 km로 환산한다.
+      {
+        label: "거리(km)",
+        numeric: true,
+        value: (row) => formatDataNumber(row.distance_m === null || row.distance_m === undefined ? null : Number(row.distance_m) / 1000, 1),
+      },
+      { label: "칼로리", numeric: true, value: (row) => formatDataNumber(row.calories) },
+    ],
+  },
+  {
+    key: "bio",
+    title: "신체·수면 지표",
+    columns: [
+      { label: "측정", value: (row) => formatDataDate(row.measured_at) },
+      { label: "값", numeric: true, value: bioValueText },
+      { label: "참고", value: bioDetailText },
+    ],
+  },
+  {
+    key: "food",
+    title: "식사 기록",
+    columns: [
+      { label: "일시", value: (row) => formatDataDate(row.consumed_at) },
+      {
+        label: "구분",
+        value: (row) => {
+          const raw = String(row.meal_type || "");
+          return mealTypeLabels[raw] || raw || "—";
+        },
+      },
+      { label: "메뉴", value: (row) => String(row.title || "—") },
+      { label: "칼로리", numeric: true, value: (row) => formatDataNumber(row.calories) },
+      { label: "탄수(g)", numeric: true, value: (row) => formatDataNumber(row.carbohydrate, 1) },
+      { label: "단백(g)", numeric: true, value: (row) => formatDataNumber(row.protein, 1) },
+      { label: "지방(g)", numeric: true, value: (row) => formatDataNumber(row.total_fat, 1) },
+      { label: "나트륨(mg)", numeric: true, value: (row) => formatDataNumber(row.sodium) },
+      { label: "당(g)", numeric: true, value: (row) => formatDataNumber(row.sugar, 1) },
+    ],
+  },
+  {
+    key: "water",
+    title: "수분 섭취",
+    columns: [
+      { label: "일시", value: (row) => formatDataDate(row.consumed_at) },
+      { label: "섭취량(mL)", numeric: true, value: (row) => formatDataNumber(row.water_amount) },
+    ],
+  },
+];
+
+function buildDataTable(columns, rows) {
+  const scroll = document.createElement("div");
+  scroll.className = "data-table-scroll";
+  const table = document.createElement("table");
+  table.className = "data-table";
+
+  const headRow = document.createElement("tr");
+  columns.forEach((column) => {
+    const th = document.createElement("th");
+    th.scope = "col";
+    if (column.numeric) th.className = "numeric";
+    th.textContent = column.label;
+    headRow.appendChild(th);
+  });
+  const thead = document.createElement("thead");
+  thead.appendChild(headRow);
+
+  const tbody = document.createElement("tbody");
+  rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    columns.forEach((column) => {
+      const cell = document.createElement("td");
+      if (column.numeric) cell.className = "numeric";
+      const value = column.value(row);
+      // 개인 데이터는 항상 textContent로 넣어 마크업으로 해석되지 않게 한다.
+      if (value instanceof Node) cell.appendChild(value);
+      else cell.textContent = String(value);
+      tr.appendChild(cell);
+    });
+    tbody.appendChild(tr);
+  });
+
+  table.append(thead, tbody);
+  scroll.appendChild(table);
+  return scroll;
+}
+
+function buildLifestyleSection(spec, domain) {
+  const rows = (domain && domain.rows) || [];
+  if (!rows.length) return null;
+  const section = document.createElement("section");
+  section.className = "data-section";
+
+  const heading = document.createElement("h3");
+  heading.textContent = spec.title;
+  const range = document.createElement("span");
+  range.className = "data-section-range";
+  range.textContent = domain.since && domain.until
+    ? `${domain.since} ~ ${domain.until} · ${rows.length}건`
+    : `${rows.length}건`;
+  heading.appendChild(range);
+
+  section.append(heading, buildDataTable(spec.columns, rows));
+  return section;
+}
+
+function buildLifestyleChart(spec, domain) {
+  const rows = (domain && domain.rows) || [];
+  const metric = spec.chartMetric;
+  const dateKey = spec.dateKey || (spec.key === "bio" ? "measured_at" : "record_date");
+  const points = rows
+    .map((row) => ({
+      label: formatGraphDate(row[dateKey]),
+      value: Number(row[metric.key]),
+    }))
+    .filter((point) => Number.isFinite(point.value))
+    .reverse();
+  if (!points.length) return null;
+
+  const maxValue = Math.max(...points.map((point) => point.value), 1);
+  const isSteps = metric.key === "steps";
+  const max = isSteps ? Math.max(9000, Math.ceil(maxValue / 1000) * 1000) : maxValue;
+  const ticks = isSteps
+    ? [0, 3000, 6000, 9000].filter((tick) => tick <= max)
+    : [0, max / 2, max];
+  const chart = document.createElement("div");
+  chart.className = "data-chart";
+  const title = document.createElement("div");
+  title.className = "data-chart-title";
+  title.textContent = `${spec.title} · ${metric.label}`;
+  const plot = document.createElement("div");
+  plot.className = "data-chart-plot";
+  const axis = document.createElement("div");
+  axis.className = "data-chart-axis";
+  ticks.slice().reverse().forEach((tick) => {
+    const label = document.createElement("span");
+    label.textContent = formatDataNumber(tick);
+    label.style.bottom = `${(tick / max) * 100}%`;
+    axis.appendChild(label);
+  });
+  const bars = document.createElement("div");
+  bars.className = "data-chart-bars";
+  ticks.forEach((tick) => {
+    const guide = document.createElement("i");
+    guide.className = "data-chart-guide";
+    if (tick === 0) guide.classList.add("zero");
+    guide.style.bottom = `${22 + (tick / max) * 128}px`;
+    bars.appendChild(guide);
+  });
+  points.forEach((point) => {
+    const item = document.createElement("div");
+    item.className = "data-chart-item";
+    const bar = document.createElement("span");
+    bar.className = "data-chart-bar";
+    bar.style.height = `${Math.max((point.value / max) * 100, 8)}%`;
+    bar.title = `${point.label}: ${formatDataNumber(point.value, metric.digits || 0)}${metric.unit ? ` ${metric.unit}` : ""}`;
+    const label = document.createElement("small");
+    label.textContent = point.label;
+    item.append(bar, label);
+    bars.appendChild(item);
+  });
+  plot.append(axis, bars);
+  chart.append(title, plot);
+  return chart;
+}
+
+function lifestyleBucket(value, days) {
+  const text = String(value || "").slice(0, 10);
+  if (!text) return "";
+  if (days >= 180) return text.slice(0, 7);
+  if (days >= 90) {
+    const current = new Date(`${text}T00:00:00`);
+    const day = current.getDay() || 7;
+    current.setDate(current.getDate() - day + 1);
+    return current.toISOString().slice(0, 10);
+  }
+  return text;
+}
+
+function averageValues(rows, fields) {
+  const result = {};
+  fields.forEach((field) => {
+    const values = rows.map((row) => Number(row[field])).filter(Number.isFinite);
+    if (values.length) result[field] = values.reduce((sum, value) => sum + value, 0) / values.length;
+  });
+  return result;
+}
+
+function averageBioRows(rows, days) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const fasting = row.detail_data?.fasting;
+    const category = row.bio_type === "blood_glucose" ? String(fasting) : "";
+    const key = `${lifestyleBucket(row.measured_at, days)}|${row.bio_type}|${category}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  });
+  return [...groups.values()].map((group) => {
+    const first = group[0];
+    const detailKeys = new Set(group.flatMap((row) => Object.keys(row.detail_data || {})));
+    const details = {};
+    detailKeys.forEach((key) => {
+      const values = group.map((row) => Number(row.detail_data?.[key])).filter(Number.isFinite);
+      if (values.length) details[key] = values.reduce((sum, value) => sum + value, 0) / values.length;
+      else details[key] = rowValue(group, key);
+    });
+    return {
+      ...first,
+      measured_at: lifestyleBucket(first.measured_at, days),
+      value: averageValues(group, ["value"]).value ?? first.value,
+      detail_data: details,
+    };
+  });
+}
+
+function rowValue(rows, key) {
+  return rows.find((row) => row.detail_data?.[key] !== undefined)?.detail_data?.[key];
+}
+
+function averageLifestyleRows(rows, dateKey, days, fields) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const bucket = lifestyleBucket(row[dateKey], days);
+    if (!groups.has(bucket)) groups.set(bucket, []);
+    groups.get(bucket).push(row);
+  });
+  return [...groups.entries()].map(([bucket, group]) => ({
+    ...group[0],
+    [dateKey]: bucket,
+    ...averageValues(group, fields),
+    ...(dateKey === "record_date" && group.length > 1 ? { exercise_type: "기간 평균" } : {}),
+  }));
+}
+
+function aggregateLifestylePayload(payload, days) {
+  const result = { ...payload, window_days: days };
+  result.activity = {
+    ...payload.activity,
+    rows: averageLifestyleRows(payload.activity?.rows || [], "record_date", days, ["steps", "floors_climbed", "active_time", "active_distance", "active_calories"]),
+  };
+  result.exercise = {
+    ...payload.exercise,
+    rows: averageLifestyleRows(payload.exercise?.rows || [], "record_date", days, ["duration_sec", "distance_m", "calories"]),
+  };
+  result.bio = { ...payload.bio, rows: averageBioRows(payload.bio?.rows || [], days) };
+  result.sleep = {
+    ...payload.sleep,
+    rows: averageBioRows(payload.sleep?.rows || [], days),
+  };
+  result.food = {
+    ...payload.food,
+    rows: averageLifestyleRows(payload.food?.rows || [], "consumed_at", days, ["calories", "carbohydrate", "protein", "total_fat", "sodium", "sugar"]),
+  };
+  result.water = {
+    ...payload.water,
+    rows: averageLifestyleRows(payload.water?.rows || [], "consumed_at", days, ["water_amount"]),
+  };
+  return result;
+}
+
+function buildBioChart(title, rows, series) {
+  const colors = ["#2f8f6b", "#e3924d", "#5e83c5", "#bd6c9b"];
+  const points = series.flatMap((item, index) => item.rows.map((row) => ({
+    x: row.measured_at,
+    value: Number(item.value(row)),
+    series: index,
+    color: colors[index % colors.length],
+  }))).filter((point) => Number.isFinite(point.value));
+  if (!points.length) return null;
+  const min = Math.min(...points.map((point) => point.value));
+  const max = Math.max(...points.map((point) => point.value), min + 1);
+  const width = 720;
+  const height = 138;
+  const x = (index) => points.length === 1 ? width / 2 : (index / (points.length - 1)) * width;
+  const y = (value) => height - ((value - min) / (max - min)) * (height - 18) - 8;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height + 22}`);
+  const yAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  yAxis.setAttribute("x1", "0"); yAxis.setAttribute("x2", "0");
+  yAxis.setAttribute("y1", String(y(max))); yAxis.setAttribute("y2", String(y(min)));
+  yAxis.setAttribute("class", "line-chart-axis"); svg.appendChild(yAxis);
+  [0, .5, 1].forEach((ratio) => {
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", "0"); line.setAttribute("x2", String(width));
+    line.setAttribute("y1", String(y(min + (max - min) * ratio)));
+    line.setAttribute("y2", String(y(min + (max - min) * ratio)));
+    line.setAttribute("class", "line-chart-grid"); svg.appendChild(line);
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("x", "4");
+    label.setAttribute("y", String(y(min + (max - min) * ratio) - 3));
+    label.setAttribute("class", "line-chart-axis-label");
+    label.textContent = formatDataNumber(min + (max - min) * ratio, 1);
+    svg.appendChild(label);
+  });
+  series.forEach((item, seriesIndex) => {
+    const itemPoints = points.filter((point) => point.series === seriesIndex);
+    if (!itemPoints.length) return;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const start = points.indexOf(itemPoints[0]);
+    path.setAttribute("d", itemPoints.map((point, index) => `${index ? "L" : "M"}${x(start + index)} ${y(point.value)}`).join(" "));
+    path.setAttribute("stroke", colors[seriesIndex % colors.length]); path.setAttribute("class", "line-chart-line");
+    svg.appendChild(path);
+    itemPoints.forEach((point, index) => {
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", String(x(start + index))); circle.setAttribute("cy", String(y(point.value)));
+      circle.setAttribute("r", "3.5"); circle.setAttribute("fill", point.color); circle.setAttribute("class", "line-chart-point");
+      circle.setAttribute("aria-label", `${formatDataDate(point.x)} ${item.label} ${formatDataNumber(point.value, 1)}`);
+      svg.appendChild(circle);
+    });
+  });
+  points.forEach((point, index) => {
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("x", String(x(index)));
+    label.setAttribute("y", String(height + 16));
+    label.setAttribute("text-anchor", index === 0 ? "start" : index === points.length - 1 ? "end" : "middle");
+    label.setAttribute("class", "line-chart-label");
+    label.textContent = formatGraphDate(point.x);
+    svg.appendChild(label);
+  });
+  const chart = document.createElement("div"); chart.className = "line-chart";
+  const heading = document.createElement("div"); heading.className = "line-chart-title"; heading.textContent = title;
+  const legend = document.createElement("div"); legend.className = "line-chart-legend";
+  series.forEach((item, index) => { const label = document.createElement("span"); label.textContent = item.label; label.style.setProperty("--legend-color", colors[index % colors.length]); legend.appendChild(label); });
+  chart.append(heading, svg, legend); return chart;
+}
+
+function buildBioCharts(rows) {
+  const byType = (type) => rows.filter((row) => row.bio_type === type);
+  const charts = [];
+  const heart = byType("heart_rate");
+  if (heart.length) charts.push(buildBioChart("심박수 · 측정값", rows, [{ label: "심박수(bpm)", rows: heart, value: (row) => row.value }]));
+  const bodyRows = [...byType("weight"), ...byType("bmi")];
+  if (bodyRows.length) charts.push(buildBioChart("체중과 BMI", rows, [
+    { label: "체중(kg)", rows: byType("weight"), value: (row) => row.value },
+    { label: "BMI", rows: byType("bmi"), value: (row) => row.value },
+  ]));
+  const pressure = byType("blood_pressure");
+  if (pressure.length) charts.push(buildBioChart("혈압", rows, [
+    { label: "수축기", rows: pressure, value: (row) => row.detail_data?.systolic },
+    { label: "이완기", rows: pressure, value: (row) => row.detail_data?.diastolic },
+  ]));
+  const glucose = byType("blood_glucose");
+  if (glucose.length) charts.push(buildBioChart("혈당 · 공복/식후 구분 포함", rows, [
+    { label: "공복", rows: glucose.filter((row) => row.detail_data?.fasting === true), value: (row) => row.value },
+    { label: "식후", rows: glucose.filter((row) => row.detail_data?.fasting === false), value: (row) => row.value },
+    { label: "구분 없음", rows: glucose.filter((row) => row.detail_data?.fasting !== true && row.detail_data?.fasting !== false), value: (row) => row.value },
+  ]));
+  return charts.filter(Boolean);
+}
+
+function setDataPlaceholder(container, message, isError = false) {
+  const placeholder = document.createElement("p");
+  placeholder.className = isError ? "data-placeholder data-error" : "data-placeholder";
+  placeholder.textContent = message;
+  container.replaceChildren(placeholder);
+}
+
+function renderCheckup(payload) {
+  const items = payload.items || [];
+  elements.checkupMeta.textContent = payload.measured_at
+    ? `검진일 ${payload.measured_at} · ${items.length}개 항목`
+    : "검진 기록 없음";
+  if (!items.length) {
+    setDataPlaceholder(elements.checkupBody, "등록된 검진 결과가 없습니다.");
+    return;
+  }
+  elements.checkupBody.replaceChildren(buildDataTable(checkupColumns, items));
+}
+
+function renderLifestyle(payload) {
+  const days = Number(payload.window_days) || lifestyleDays;
+  lifestylePayload = aggregateLifestylePayload(payload, days);
+  const displayPayload = lifestylePayload;
+  const tabSections = getLifestyleTabSections(displayPayload, activeLifestyleTab);
+  const total = tabSections.reduce((sum, spec) => sum + (((spec.domain || {}).rows) || []).length, 0);
+  const aggregationLabel = days >= 180 ? "월평균" : days >= 90 ? "주평균" : "일별 평균";
+  elements.lifestyleMeta.textContent = total
+    ? `최신 기록일 기준 ${days}일 · ${aggregationLabel} · ${total}건`
+    : "최근 기록 없음";
+
+  const sections = tabSections.flatMap((spec) => {
+    const section = buildLifestyleSection(spec, spec.domain);
+    const chart = spec.key === "bio" ? null : buildLifestyleChart(spec, spec.domain);
+    return [chart, section].filter(Boolean);
+  });
+  if (activeLifestyleTab === "bio") sections.unshift(...buildBioCharts((payload.bio || {}).rows || []));
+  if (!sections.length) {
+    setDataPlaceholder(elements.lifestyleBody, "최근 등록된 생활 데이터가 없습니다.");
+    return;
+  }
+  elements.lifestyleBody.replaceChildren(...sections);
+}
+
+function getLifestyleTabSections(payload, tab) {
+  const bio = payload.bio || { rows: [] };
+  const bioRows = bio.rows || [];
+  const bioSpec = lifestyleSections.find((spec) => spec.key === "bio");
+  const groupedBioSections = (rows, titlePrefix = "") => {
+    const groups = new Map();
+    rows.forEach((row) => {
+      const type = String(row.bio_type || "unknown");
+      if (!groups.has(type)) groups.set(type, []);
+      groups.get(type).push(row);
+    });
+    return [...groups].map(([type, groupedRows]) => ({
+      ...bioSpec,
+      title: `${titlePrefix}${bioTypeLabels[type] || type}`,
+      domain: { ...bio, rows: groupedRows },
+      chartMetric: { key: "value", label: "측정값", digits: 1 },
+    }));
+  };
+  if (tab === "bio") {
+    return groupedBioSections(bioRows.filter((row) => row.bio_type !== "sleep"));
+  }
+  if (tab === "sleep") {
+    const sleep = payload.sleep || { rows: [] };
+    return [{
+      ...bioSpec,
+      title: "수면시간",
+      domain: sleep,
+      chartMetric: { key: "value", label: "수면시간", digits: 1, unit: "시간" },
+    }];
+  }
+  if (tab === "activity") {
+    return lifestyleSections
+      .filter((spec) => spec.key === "activity" || spec.key === "exercise")
+      .map((spec) => ({ ...spec, domain: payload[spec.key], chartMetric: spec.key === "activity" ? { key: "steps", label: "걸음 수" } : { key: "duration_sec", label: "운동시간(초)" } }));
+  }
+  return lifestyleSections
+    .filter((spec) => spec.key === "food" || spec.key === "water")
+    .map((spec) => ({
+      ...spec,
+      domain: payload[spec.key],
+      chartMetric: spec.key === "water"
+        ? { key: "water_amount", label: "수분 섭취량(mL)" }
+        : { key: "calories", label: "칼로리" },
+    }));
+}
+
+function setLifestyleTab(tab) {
+  activeLifestyleTab = tab;
+  elements.lifestyleTabs.forEach((button) => {
+    const selected = button.dataset.lifestyleTab === tab;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-selected", String(selected));
+  });
+  if (lifestylePayload) renderLifestyle(lifestylePayload);
+}
+
+async function loadPersonalData(tab, { force = false } = {}) {
+  if (!force && loadedDataTabs.has(tab)) return;
+  const isCheckup = tab === "checkup";
+  const body = isCheckup ? elements.checkupBody : elements.lifestyleBody;
+  const meta = isCheckup ? elements.checkupMeta : elements.lifestyleMeta;
+
+  meta.textContent = "불러오는 중...";
+  setDataPlaceholder(body, isCheckup ? "검진 결과를 불러오고 있어요." : "생활 데이터를 불러오고 있어요.");
+  elements.dataReloadButton.disabled = true;
+  try {
+    const resource = isCheckup ? "/me/checkup" : `/me/lifestyle?window_days=${lifestyleDays}`;
+    const response = await fetchWithSession(resource, {
+      headers: { Accept: "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      showLoginScreen("다시 로그인해 주세요.");
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(String(payload.detail || "개인 데이터를 불러오지 못했습니다."));
+    }
+    if (isCheckup) renderCheckup(payload);
+    else renderLifestyle(payload);
+    loadedDataTabs.add(tab);
+  } catch (error) {
+    meta.textContent = "불러오기 실패";
+    setDataPlaceholder(
+      body,
+      error instanceof Error ? error.message : "개인 데이터를 불러오지 못했습니다.",
+      true,
+    );
+  } finally {
+    elements.dataReloadButton.disabled = false;
+  }
+}
+
+function setDataTab(tab) {
+  activeDataTab = tab;
+  const isCheckup = tab === "checkup";
+  elements.checkupTab.classList.toggle("active", isCheckup);
+  elements.lifestyleTab.classList.toggle("active", !isCheckup);
+  elements.checkupTab.setAttribute("aria-selected", String(isCheckup));
+  elements.lifestyleTab.setAttribute("aria-selected", String(!isCheckup));
+  elements.checkupPanel.hidden = !isCheckup;
+  elements.lifestylePanel.hidden = isCheckup;
+  loadPersonalData(tab);
+}
+
+function setActiveView(view) {
+  activeView = view;
+  const isChat = view === "chat";
+  elements.chatViewTab.classList.toggle("active", isChat);
+  elements.dataViewTab.classList.toggle("active", !isChat);
+  elements.chatViewTab.setAttribute("aria-selected", String(isChat));
+  elements.dataViewTab.setAttribute("aria-selected", String(!isChat));
+  elements.conversation.hidden = !isChat;
+  elements.composerWrap.hidden = !isChat;
+  elements.dataView.hidden = isChat;
+  // '새 대화'는 챗 화면 전용 동작이다.
+  elements.resetButton.hidden = !isChat;
+  if (isChat) elements.input.focus();
+  else setDataTab(activeDataTab);
+}
+
+function resetPersonalData() {
+  loadedDataTabs.clear();
+  activeDataTab = "checkup";
+  elements.checkupMeta.textContent = "—";
+  elements.lifestyleMeta.textContent = "—";
+  setDataPlaceholder(elements.checkupBody, "검진 결과를 불러오고 있어요.");
+  setDataPlaceholder(elements.lifestyleBody, "생활 데이터를 불러오고 있어요.");
+  setActiveView("chat");
+}
+
 function resetConversation() {
   if (isRequesting) return;
   elements.messages.replaceChildren();
@@ -1119,7 +1800,28 @@ elements.form.addEventListener("submit", (event) => {
   submitQuestion(elements.input.value);
 });
 elements.resetButton.addEventListener("click", resetConversation);
-elements.newConversationButton.addEventListener("click", resetConversation);
+elements.newConversationButton.addEventListener("click", () => {
+  setActiveView("chat");
+  resetConversation();
+});
+elements.chatViewTab.addEventListener("click", () => setActiveView("chat"));
+elements.dataViewTab.addEventListener("click", () => setActiveView("data"));
+elements.checkupTab.addEventListener("click", () => setDataTab("checkup"));
+elements.lifestyleTab.addEventListener("click", () => setDataTab("lifestyle"));
+elements.lifestyleTabs.forEach((button) => {
+  button.addEventListener("click", () => setLifestyleTab(button.dataset.lifestyleTab));
+});
+elements.lifestylePeriods.forEach((button) => {
+  button.addEventListener("click", () => {
+    lifestyleDays = Number(button.dataset.lifestyleDays);
+    elements.lifestylePeriods.forEach((periodButton) => periodButton.classList.toggle("active", periodButton === button));
+    loadedDataTabs.delete("lifestyle");
+    loadPersonalData("lifestyle", { force: true });
+  });
+});
+elements.dataReloadButton.addEventListener("click", () => {
+  loadPersonalData(activeDataTab, { force: true });
+});
 elements.loginForm.addEventListener("submit", login);
 elements.loginModeButton.addEventListener("click", () => setAuthMode("login"));
 elements.signupModeButton.addEventListener("click", () => setAuthMode("signup"));

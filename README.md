@@ -157,6 +157,8 @@ UI 서버가 메인 API로 중계하며, 사용자 UI와 동일한 Supabase 세�
 | `POST` | `/conversations` | 새 대화 세션 생성 |
 | `GET` | `/conversations/{session_id}` | 세션과 저장 메시지 조회 |
 | `DELETE` | `/conversations/{session_id}` | 대화 세션 삭제 |
+| `GET` | `/me/checkup` | 현재 사용자의 최신 검진 1회 수치 |
+| `GET` | `/me/lifestyle` | 현재 사용자의 최신 1주일치 생활 데이터 |
 | `GET` | `/health` | Pinecone namespace별 적재 수 확인 |
 | `POST` | `/chat/stream` | SSE 기반 통합 챗봇 토큰 스트리밍 |
 | `POST` | `/search` | 로컬 질문 임베딩 후 Pinecone 검색 |
