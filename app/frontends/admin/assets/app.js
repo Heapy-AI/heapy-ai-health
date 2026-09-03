@@ -70,6 +70,7 @@ const elements = {
   lifestyleMeta: document.querySelector("#lifestyleMeta"),
   checkupBody: document.querySelector("#checkupBody"),
   checkupReportButton: document.querySelector("#checkupReportButton"),
+  checkupRecordSelect: document.querySelector("#checkupRecordSelect"),
   checkupReport: document.querySelector("#checkupReport"),
   lifestyleBody: document.querySelector("#lifestyleBody"),
   lifestyleTabs: [...document.querySelectorAll("[data-lifestyle-tab]")],
@@ -115,6 +116,8 @@ let activeDataTab = "checkup";
 let activeLifestyleTab = "bio";
 let lifestyleDays = 365;
 let lifestylePayload = null;
+let checkupRecords = [];
+let selectedCheckupRecordId = "";
 // 탭을 다시 열 때마다 재조회하지 않도록 조회 여부를 기억한다.
 const loadedDataTabs = new Set();
 
@@ -151,6 +154,7 @@ function renderAuthenticatedUser(user) {
   elements.appShell.hidden = false;
   // 계정이 바뀌면 이전 사용자의 개인 데이터를 다시 조회하도록 캐시를 버린다.
   loadedDataTabs.clear();
+  resetCheckupRecords();
   // 세션이 끊겨 로그인 화면으로 돌아갔던 경우 열려 있던 탭을 다시 채운다.
   setActiveView(activeView);
   loadConversationSessions();
@@ -1636,7 +1640,38 @@ function renderCheckup(payload) {
     return;
   }
   elements.checkupBody.replaceChildren(buildDataTable(checkupColumns, items));
-  setDashboardStep("latest", `최신 검진 ${payload.measured_at || "없음"}`);
+  setDashboardStep("latest", `선택 검진 ${payload.measured_at || "없음"}`);
+}
+
+function resetCheckupRecords() {
+  checkupRecords = [];
+  selectedCheckupRecordId = "";
+  elements.checkupRecordSelect.replaceChildren();
+  elements.checkupRecordSelect.disabled = true;
+}
+
+async function loadCheckupRecords() {
+  const response = await fetchWithSession("/me/checkup/records", { headers: { Accept: "application/json" } });
+  if (response.status === 401) {
+    showLoginScreen("다시 로그인해 주세요.");
+    return false;
+  }
+  const payload = await response.json().catch(() => []);
+  if (!response.ok) throw new Error(String(payload.detail || "검진 회차를 불러오지 못했습니다."));
+  checkupRecords = Array.isArray(payload) ? payload : [];
+  elements.checkupRecordSelect.replaceChildren();
+  checkupRecords.forEach((record, index) => {
+    const option = document.createElement("option");
+    option.value = record.record_id;
+    option.textContent = index === 0 ? `가장 최신 검진 · ${record.measured_at}` : `검진 · ${record.measured_at}`;
+    elements.checkupRecordSelect.appendChild(option);
+  });
+  // 다시 불러오기로 목록을 갱신해도 사용자가 고른 회차를 유지하고, 없어진 회차만 최신으로 되돌린다.
+  const stillExists = checkupRecords.some((record) => record.record_id === selectedCheckupRecordId);
+  selectedCheckupRecordId = stillExists ? selectedCheckupRecordId : checkupRecords[0]?.record_id || "";
+  elements.checkupRecordSelect.value = selectedCheckupRecordId;
+  elements.checkupRecordSelect.disabled = !checkupRecords.length;
+  return true;
 }
 
 function setDashboardStep(step, message, state = "done") {
@@ -1838,7 +1873,12 @@ async function loadPersonalData(tab, { force = false } = {}) {
   setDataPlaceholder(body, isCheckup ? "검진 결과를 불러오고 있어요." : "생활 데이터를 불러오고 있어요.");
   elements.dataReloadButton.disabled = true;
   try {
-    const resource = isCheckup ? "/me/checkup" : `/me/lifestyle?window_days=${lifestyleDays}`;
+    if (isCheckup && (!checkupRecords.length || force)) {
+      if (!(await loadCheckupRecords())) return;
+    }
+    const resource = isCheckup
+      ? `/me/checkup${selectedCheckupRecordId ? `?record_id=${encodeURIComponent(selectedCheckupRecordId)}` : ""}`
+      : `/me/lifestyle?window_days=${lifestyleDays}`;
     const response = await fetchWithSession(resource, {
       headers: { Accept: "application/json" },
     });
@@ -1911,6 +1951,7 @@ function setActiveView(view) {
 
 function resetPersonalData() {
   loadedDataTabs.clear();
+  resetCheckupRecords();
   activeDataTab = "checkup";
   elements.checkupMeta.textContent = "—";
   elements.lifestyleMeta.textContent = "—";
@@ -1973,6 +2014,10 @@ elements.dataReloadButton.addEventListener("click", () => {
   loadPersonalData(activeDataTab, { force: true });
 });
 elements.checkupReportButton.addEventListener("click", loadCheckupReport);
+elements.checkupRecordSelect.addEventListener("change", () => {
+  selectedCheckupRecordId = elements.checkupRecordSelect.value;
+  loadPersonalData("checkup", { force: true });
+});
 elements.loginForm.addEventListener("submit", login);
 elements.loginModeButton.addEventListener("click", () => setAuthMode("login"));
 elements.signupModeButton.addEventListener("click", () => setAuthMode("signup"));

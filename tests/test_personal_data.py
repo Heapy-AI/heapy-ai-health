@@ -64,7 +64,35 @@ class PersonalDataApiTest(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["measured_at"], "2026-03-14")
         self.assertEqual(payload["items"][0]["item_name"], "공복혈당")
-        get_latest_checkup.assert_called_once_with("access-token", "user-id")
+        get_latest_checkup.assert_called_once_with("access-token", "user-id", None)
+
+    @patch.object(personal_data.personal_data_service, "get_latest_checkup")
+    def test_checkup_passes_selected_record_id(self, get_latest_checkup) -> None:
+        """드롭다운에서 고른 회차는 세션 토큰과 함께 그대로 전달한다."""
+        get_latest_checkup.return_value = CHECKUP_SNAPSHOT
+
+        response = self.client.get("/me/checkup", params={"record_id": "record-9"})
+
+        self.assertEqual(response.status_code, 200)
+        get_latest_checkup.assert_called_once_with(
+            "access-token",
+            "user-id",
+            "record-9",
+        )
+
+    @patch.object(personal_data.personal_data_service, "get_checkup_records")
+    def test_checkup_records_uses_session_user(self, get_checkup_records) -> None:
+        """회차 목록도 세션 사용자 기준으로만 조회한다."""
+        get_checkup_records.return_value = [
+            {"record_id": "record-2", "measured_at": "2026-03-14"},
+            {"record_id": "record-1", "measured_at": "2024-02-02"},
+        ]
+
+        response = self.client.get("/me/checkup/records")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["measured_at"], "2026-03-14")
+        get_checkup_records.assert_called_once_with("access-token", "user-id")
 
     @patch.object(personal_data.personal_data_service, "get_latest_checkup")
     def test_checkup_without_record_returns_empty_payload(
@@ -179,6 +207,79 @@ class PersonalDataServiceTest(unittest.TestCase):
         self.assertIn("limit=1", record_url)
         self.assertIn("user_id=eq.user-id", record_url)
 
+    def test_selected_record_query_keeps_session_user_filter(self) -> None:
+        """선택 회차 조회도 본인 user_id 조건을 함께 걸어 남의 회차를 막는다."""
+
+        def fake_get(url: str, **_: object) -> Mock:
+            if "health_checkup_records" in url:
+                return _rows_response(
+                    [{"record_id": "record-9", "measured_at": "2024-02-02T00:00:00+00:00"}]
+                )
+            if "health_checkup_results" in url:
+                return _rows_response([{"item_code": "FBS", "value": "98", "status": "정상"}])
+            return _rows_response([])
+
+        with patch(
+            "app.services.supabase_personal_data.requests.get",
+            side_effect=fake_get,
+        ) as requests_get:
+            snapshot = self.service.get_latest_checkup(
+                "access-token",
+                "user-id",
+                "record-9",
+            )
+
+        assert snapshot is not None
+        self.assertEqual(snapshot["measured_at"], "2024-02-02")
+        record_url = requests_get.call_args_list[0].args[0]
+        self.assertIn("user_id=eq.user-id", record_url)
+        self.assertIn("record_id=eq.record-9", record_url)
+        self.assertNotIn("limit=1", record_url)
+
+    def test_other_user_record_id_returns_none(self) -> None:
+        """RLS와 user_id 조건에 걸려 빈 결과면 조회 결과도 비운다."""
+        with patch(
+            "app.services.supabase_personal_data.requests.get",
+            side_effect=lambda url, **_: _rows_response([]),
+        ) as requests_get:
+            snapshot = self.service.get_latest_checkup(
+                "access-token",
+                "user-id",
+                "other-user-record",
+            )
+
+        self.assertIsNone(snapshot)
+        self.assertEqual(len(requests_get.call_args_list), 1)
+
+    def test_checkup_records_returns_latest_first(self) -> None:
+        """회차 목록은 최신순으로 record_id와 검진일만 반환한다."""
+
+        def fake_get(url: str, **_: object) -> Mock:
+            return _rows_response(
+                [
+                    {"record_id": "record-2", "measured_at": "2026-03-14T00:00:00+00:00"},
+                    {"record_id": "record-1", "measured_at": "2024-02-02T00:00:00+00:00"},
+                    {"record_id": None, "measured_at": "2023-01-01T00:00:00+00:00"},
+                ]
+            )
+
+        with patch(
+            "app.services.supabase_personal_data.requests.get",
+            side_effect=fake_get,
+        ) as requests_get:
+            records = self.service.get_checkup_records("access-token", "user-id")
+
+        self.assertEqual(
+            records,
+            [
+                {"record_id": "record-2", "measured_at": "2026-03-14"},
+                {"record_id": "record-1", "measured_at": "2024-02-02"},
+            ],
+        )
+        record_url = requests_get.call_args_list[0].args[0]
+        self.assertIn("user_id=eq.user-id", record_url)
+        self.assertIn("order=measured_at.desc", record_url)
+
     def test_lifestyle_window_anchors_on_latest_record_date(self) -> None:
         """오늘이 아니라 보유한 최신 기록일을 기준으로 7일을 자른다."""
 
@@ -229,6 +330,7 @@ class PersonalDataServiceTest(unittest.TestCase):
         service = SupabasePersonalDataService("", "")
 
         self.assertIsNone(service.get_latest_checkup("access-token", "user-id"))
+        self.assertEqual(service.get_checkup_records("access-token", "user-id"), [])
         window = service.get_lifestyle_window("access-token", "user-id")
         self.assertEqual(window["window_days"], 7)
         self.assertEqual(window["bio"]["rows"], [])

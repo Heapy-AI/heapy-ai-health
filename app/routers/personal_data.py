@@ -40,13 +40,15 @@ def _raise_personal_data_error(error: SupabaseConversationError) -> None:
 
 @router.get("/checkup", response_model=LatestCheckupResponse)
 def get_latest_checkup(
+    record_id: str | None = Query(None),
     session: AuthenticatedSession = Depends(require_current_session),
 ) -> LatestCheckupResponse:
-    """현재 사용자의 가장 최근 검진 1회 수치를 반환한다."""
+    """현재 사용자의 선택 검진 1회 수치를 반환한다. record_id가 없으면 최신 회차를 쓴다."""
     try:
         snapshot = personal_data_service.get_latest_checkup(
             session.access_token,
             str(session.user.get("id", "")),
+            record_id or None,
         )
     except SupabaseConversationError as error:
         _raise_personal_data_error(error)
@@ -54,6 +56,21 @@ def get_latest_checkup(
 
     # 검진 기록이 없는 계정도 정상 응답으로 다뤄 화면이 빈 상태를 그리게 한다.
     return LatestCheckupResponse(**(snapshot or {}))
+
+
+@router.get("/checkup/records", response_model=list[dict[str, str]])
+def get_checkup_records(
+    session: AuthenticatedSession = Depends(require_current_session),
+) -> list[dict[str, str]]:
+    """현재 사용자가 선택할 수 있는 검진 회차 목록을 반환한다."""
+    try:
+        return personal_data_service.get_checkup_records(
+            session.access_token,
+            str(session.user.get("id", "")),
+        )
+    except SupabaseConversationError as error:
+        _raise_personal_data_error(error)
+        raise
 
 
 @router.get("/lifestyle", response_model=LifestyleWindowResponse)

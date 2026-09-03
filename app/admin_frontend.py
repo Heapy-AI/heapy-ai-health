@@ -96,10 +96,12 @@ def _proxy_json_request(
     timeout: tuple[float, float] = (5, 20),
 ) -> Response:
     """개발자 UI의 JSON API 요청을 메인 API로 중계한다."""
+    # 검진 회차·생활 데이터 조회 기간처럼 화면이 붙인 조회 조건을 그대로 넘긴다.
+    query = f"?{request.url.query}" if request.url.query else ""
     try:
         backend_response = requests.request(
             method,
-            f"{API_BASE_URL}{path}",
+            f"{API_BASE_URL}{path}{query}",
             json=payload,
             headers=_request_headers(request),
             timeout=timeout,
@@ -191,6 +193,12 @@ def proxy_checkup_report(request: Request) -> Response:
         request,
         timeout=(5, 180),
     )
+
+
+@app.get("/me/checkup/records", include_in_schema=False)
+def proxy_checkup_records(request: Request) -> Response:
+    """건강검진 회차 목록을 메인 API로 중계한다."""
+    return _proxy_json_request("GET", "/me/checkup/records", request)
 
 
 @app.get("/me/lifestyle", include_in_schema=False)

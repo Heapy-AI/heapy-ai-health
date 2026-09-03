@@ -99,15 +99,18 @@ class SupabasePersonalDataService:
         self,
         access_token: str,
         user_id: str,
+        record_id: str | None = None,
     ) -> dict[str, Any] | None:
-        """가장 최근 검진 1회의 전체 항목 수치를 반환한다."""
+        """선택한 검진 1회(record_id가 없으면 최신 회차)의 전체 항목 수치를 반환한다."""
         if not self.configured or not access_token or not user_id:
             return None
 
+        record_filter = f"&record_id=eq.{quote(record_id, safe='')}" if record_id else ""
+        limit = "" if record_id else "&order=measured_at.desc&limit=1"
         records = self._request(
             "/rest/v1/health_checkup_records"
-            f"?user_id=eq.{quote(user_id, safe='')}"
-            "&select=record_id,measured_at&order=measured_at.desc&limit=1",
+            f"?user_id=eq.{quote(user_id, safe='')}{record_filter}"
+            f"&select=record_id,measured_at{limit}",
             access_token,
         )
         if not records:
@@ -146,6 +149,29 @@ class SupabasePersonalDataService:
             "measured_at": self._date(records[0].get("measured_at")),
             "items": items,
         }
+
+    def get_checkup_records(
+        self,
+        access_token: str,
+        user_id: str,
+    ) -> list[dict[str, str]]:
+        """드롭다운에 사용할 현재 사용자의 검진 회차 목록을 반환한다."""
+        if not self.configured or not access_token or not user_id:
+            return []
+        records = self._request(
+            "/rest/v1/health_checkup_records"
+            f"?user_id=eq.{quote(user_id, safe='')}"
+            "&select=record_id,measured_at&order=measured_at.desc",
+            access_token,
+        )
+        return [
+            {
+                "record_id": str(record.get("record_id") or ""),
+                "measured_at": self._date(record.get("measured_at")),
+            }
+            for record in records
+            if record.get("record_id")
+        ]
 
     def get_checkup_history(
         self,

@@ -1,6 +1,7 @@
 """개발자 모니터링 웹 UI 정적 자산 테스트.
 
 작성자: 김진우
+수정: 고수연
 """
 
 from pathlib import Path
@@ -114,6 +115,20 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertIn("data.vector_backend", script)
         self.assertIn("overflow-wrap: anywhere", styles)
 
+    def test_checkup_record_dropdown_is_wired(self) -> None:
+        """건강검진 회차 드롭다운이 기본 최신 회차 선택으로 연결됐는지 확인한다."""
+        markup = (ADMIN_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="checkupRecordSelect"', markup)
+        self.assertIn('fetchWithSession("/me/checkup/records"', script)
+        self.assertIn("가장 최신 검진", script)
+        self.assertIn("checkupRecords[0]?.record_id", script)
+        self.assertIn("record_id=${encodeURIComponent(selectedCheckupRecordId)}", script)
+        self.assertIn('elements.checkupRecordSelect.addEventListener("change"', script)
+        self.assertIn(".checkup-record-select", styles)
+
     def test_question_audit_cards_are_wired(self) -> None:
         """질문별 접이식 감사 카드와 검색·안전 메타데이터 연결을 확인한다."""
         markup = (ADMIN_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
@@ -222,6 +237,45 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertEqual(
             request.call_args.args[:2],
             ("GET", "http://localhost:8000/health"),
+        )
+
+    @patch("app.admin_frontend.requests.request")
+    def test_checkup_records_proxy_uses_main_api(self, request: Mock) -> None:
+        """건강검진 회차 드롭다운 조회를 메인 API로 중계한다."""
+        backend_response = Mock(
+            status_code=200,
+            content=b'[{"record_id":"record-1","measured_at":"2026-03-14"}]',
+            headers={"content-type": "application/json"},
+            raw=Mock(headers=Mock(getlist=Mock(return_value=[]))),
+        )
+        request.return_value = backend_response
+
+        response = TestClient(app).get("/me/checkup/records")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["record_id"], "record-1")
+        self.assertEqual(
+            request.call_args.args[:2],
+            ("GET", "http://localhost:8000/me/checkup/records"),
+        )
+
+    @patch("app.admin_frontend.requests.request")
+    def test_checkup_proxy_forwards_selected_record_query(self, request: Mock) -> None:
+        """드롭다운이 붙인 record_id 조회 조건을 메인 API까지 전달한다."""
+        backend_response = Mock(
+            status_code=200,
+            content=b'{"measured_at":"2024-02-02","items":[]}',
+            headers={"content-type": "application/json"},
+            raw=Mock(headers=Mock(getlist=Mock(return_value=[]))),
+        )
+        request.return_value = backend_response
+
+        response = TestClient(app).get("/me/checkup", params={"record_id": "record-9"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            request.call_args.args[:2],
+            ("GET", "http://localhost:8000/me/checkup?record_id=record-9"),
         )
 
 

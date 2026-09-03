@@ -234,11 +234,12 @@
           <div id="checkupPanel" class="data-panel" role="tabpanel" aria-labelledby="checkupTab">
             <div class="data-panel-head">
               <div>
-                <span class="card-eyebrow">LATEST CHECKUP</span>
-                <h2>최신 검진 결과</h2>
+                <span class="card-eyebrow">SELECTED CHECKUP</span>
+                <h2>검진 결과</h2>
               </div>
               <div class="data-panel-actions">
                 <span id="checkupMeta" class="data-meta">—</span>
+                <select id="checkupRecordSelect" class="checkup-record-select" aria-label="검진 회차 선택"></select>
                 <button id="checkupReportButton" class="report-button" type="button">AI 요약분석</button>
               </div>
             </div>
@@ -295,7 +296,7 @@
             <span id="dashboardStatusBadge" class="quality-badge neutral">대기</span>
           </div>
           <div class="dashboard-flow" aria-live="polite">
-            <div class="dashboard-flow-item" data-dashboard-step="latest"><span></span><div><strong>최신 검진 조회</strong><small id="dashboardLatestStatus">대기 중</small></div></div>
+            <div class="dashboard-flow-item" data-dashboard-step="latest"><span></span><div><strong>선택 검진 조회</strong><small id="dashboardLatestStatus">대기 중</small></div></div>
             <div class="dashboard-flow-item" data-dashboard-step="history"><span></span><div><strong>전체 이력 수집</strong><small id="dashboardHistoryStatus">대기 중</small></div></div>
             <div class="dashboard-flow-item" data-dashboard-step="analysis"><span></span><div><strong>AI 요약분석</strong><small id="dashboardAnalysisStatus">대기 중</small></div></div>
             <div class="dashboard-flow-item" data-dashboard-step="result"><span></span><div><strong>리포트 응답</strong><small id="dashboardResultStatus">대기 중</small></div></div>

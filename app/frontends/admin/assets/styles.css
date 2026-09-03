@@ -367,6 +367,8 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 .data-panel-head h2 { margin: 4px 0 0; color: var(--health-green-dark); font-size: 16px; }
 .data-panel-head .card-eyebrow { color: var(--health-green); }
 .data-panel-actions { display: flex; align-items: center; gap: 10px; }
+.checkup-record-select { max-width: 180px; padding: 7px 25px 7px 9px; border: 1px solid var(--health-green-line); border-radius: 8px; color: var(--health-green-dark); background: #fff; font-size: 10px; font-weight: 700; }
+.checkup-record-select:disabled { color: #9aa7a1; background: #f5f8f6; }
 .report-button { padding: 7px 11px; border: 1px solid var(--health-green); border-radius: 8px; color: var(--health-green-dark); background: var(--health-green-soft); font-size: 10px; font-weight: 800; cursor: pointer; }
 .report-button:disabled { cursor: wait; opacity: .6; }
 .data-meta { color: #6f8079; font-size: 11px; text-align: right; }
