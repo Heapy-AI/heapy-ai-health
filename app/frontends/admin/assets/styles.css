@@ -405,10 +405,10 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 .line-chart svg { display: block; width: 100%; height: 150px; margin-top: 8px; overflow: visible; }
 .line-chart-grid { stroke: #a8cfc0; stroke-width: 1.2; stroke-dasharray: 4 3; }
 .line-chart-axis { stroke: #7fb8a3; stroke-width: 1.4; }
-.line-chart-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
-.line-chart-point { stroke: #fff; stroke-width: 1.5; }
-.line-chart-label, .line-chart-axis-label { fill: #61766d; font-size: 9px; }
-.line-chart-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; color: #71817b; font-size: 10px; font-weight: 700; }
+.line-chart-line { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.line-chart-point { stroke: #fff; stroke-width: 1.2; }
+.line-chart-label, .line-chart-axis-label { fill: #7b8b84; font-size: 8.5px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.line-chart-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; color: #71817b; font-size: 10px; font-weight: 600; }
 .line-chart-legend span::before { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; background: var(--legend-color); content: ""; }
 .status-chip { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 9.5px; font-weight: 800; }
 .status-chip.normal { color: #2f7a63; background: #e4f5ef; }

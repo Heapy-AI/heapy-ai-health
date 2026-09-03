@@ -129,6 +129,25 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertIn('elements.checkupRecordSelect.addEventListener("change"', script)
         self.assertIn(".checkup-record-select", styles)
 
+    def test_bio_line_chart_shares_one_time_axis(self) -> None:
+        """생체 꺾은선이 시리즈를 나열하지 않고 공통 시간축에 겹쳐 그리는지 확인한다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("const axis = [...new Set(plots.flat().map((point) => point.x))].sort()", script)
+        self.assertIn("position.get(key)", script)
+        self.assertNotIn("points.indexOf(itemPoints[0])", script)
+        # 단위가 다른 체중·BMI는 좌우 축을 나눠 각 선의 변화를 살린다.
+        self.assertIn('axis: "right"', script)
+        self.assertIn("const dualAxis = Boolean(leftScale && rightScale)", script)
+        self.assertIn('"우축"', script)
+        self.assertIn("stroke-width: 1.6", styles)
+        # 전역 svg 규칙이 글자에 외곽선을 덧그리고 계열 색을 덮어쓰지 않도록 막는다.
+        self.assertIn("svg text { stroke: none; }", styles)
+        self.assertIn("stroke: none; font-size: 9.5px; font-weight: 400", styles)
+        self.assertIn("style: `stroke: ${color}`", script)
+        self.assertIn("style: `fill: ${color}`", script)
+
     def test_question_audit_cards_are_wired(self) -> None:
         """질문별 접이식 감사 카드와 검색·안전 메타데이터 연결을 확인한다."""
         markup = (ADMIN_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")

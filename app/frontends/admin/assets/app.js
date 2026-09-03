@@ -1533,69 +1533,106 @@ function aggregateLifestylePayload(payload, days) {
   return result;
 }
 
-function buildBioChart(title, rows, series) {
+function svgNode(name, attributes, text = "") {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", name);
+  Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
+  if (text) node.textContent = text;
+  return node;
+}
+
+function buildBioChart(title, series) {
   const colors = ["#2f8f6b", "#e3924d", "#5e83c5", "#bd6c9b"];
-  const points = series.flatMap((item, index) => item.rows.map((row) => ({
-    x: row.measured_at,
-    value: Number(item.value(row)),
-    series: index,
-    color: colors[index % colors.length],
-  }))).filter((point) => Number.isFinite(point.value));
-  if (!points.length) return null;
-  const min = Math.min(...points.map((point) => point.value));
-  const max = Math.max(...points.map((point) => point.value), min + 1);
+  const plots = series.map((item) => item.rows
+    .map((row) => ({ x: String(row.measured_at || ""), value: Number(item.value(row)) }))
+    .filter((point) => point.x && Number.isFinite(point.value))
+    .sort((left, right) => left.x.localeCompare(right.x)));
+  // 시리즈마다 x를 새로 매기면 선이 옆으로 나열되므로 측정 시점을 공통 축으로 삼아 겹쳐 그린다.
+  const axis = [...new Set(plots.flat().map((point) => point.x))].sort();
+  if (!axis.length) return null;
+  const scaleOf = (group) => {
+    const values = group.flat().map((point) => point.value);
+    if (!values.length) return null;
+    const min = Math.min(...values);
+    return { min, max: Math.max(...values, min + 1) };
+  };
+  // 체중과 BMI처럼 단위가 다른 짝은 축을 좌우로 나눠야 각 선의 변화가 눌리지 않는다.
+  const rightScale = scaleOf(plots.filter((_, index) => series[index].axis === "right"));
+  const leftScale = scaleOf(plots.filter((_, index) => series[index].axis !== "right"));
+  const baseScale = leftScale || rightScale;
+  const dualAxis = Boolean(leftScale && rightScale);
+  const scaleOfSeries = (index) => (dualAxis && series[index].axis === "right" ? rightScale : baseScale);
+  const colorOfAxis = (side) => colors[series.findIndex((item) => (item.axis === "right") === (side === "right"))];
   const width = 720;
   const height = 138;
-  const x = (index) => points.length === 1 ? width / 2 : (index / (points.length - 1)) * width;
-  const y = (value) => height - ((value - min) / (max - min)) * (height - 18) - 8;
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", `0 0 ${width} ${height + 22}`);
-  const yAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
-  yAxis.setAttribute("x1", "0"); yAxis.setAttribute("x2", "0");
-  yAxis.setAttribute("y1", String(y(max))); yAxis.setAttribute("y2", String(y(min)));
-  yAxis.setAttribute("class", "line-chart-axis"); svg.appendChild(yAxis);
+  const padLeft = 44;
+  const padRight = dualAxis ? 44 : 12;
+  const span = width - padLeft - padRight;
+  const position = new Map(axis.map((key, index) => [key, index]));
+  const x = (key) => axis.length === 1
+    ? padLeft + span / 2
+    : padLeft + (position.get(key) / (axis.length - 1)) * span;
+  const yRatio = (ratio) => height - ratio * (height - 18) - 8;
+  const y = (scale, value) => yRatio((value - scale.min) / (scale.max - scale.min));
+  const svg = svgNode("svg", { viewBox: `0 0 ${width} ${height + 22}` });
+  svg.appendChild(svgNode("line", { x1: padLeft, x2: padLeft, y1: yRatio(1), y2: yRatio(0), class: "line-chart-axis" }));
+  if (dualAxis) {
+    svg.appendChild(svgNode("line", {
+      x1: width - padRight, x2: width - padRight, y1: yRatio(1), y2: yRatio(0), class: "line-chart-axis",
+    }));
+  }
   [0, .5, 1].forEach((ratio) => {
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", "0"); line.setAttribute("x2", String(width));
-    line.setAttribute("y1", String(y(min + (max - min) * ratio)));
-    line.setAttribute("y2", String(y(min + (max - min) * ratio)));
-    line.setAttribute("class", "line-chart-grid"); svg.appendChild(line);
-    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.setAttribute("x", "4");
-    label.setAttribute("y", String(y(min + (max - min) * ratio) - 3));
-    label.setAttribute("class", "line-chart-axis-label");
-    label.textContent = formatDataNumber(min + (max - min) * ratio, 1);
-    svg.appendChild(label);
+    svg.appendChild(svgNode("line", {
+      x1: padLeft, x2: width - padRight, y1: yRatio(ratio), y2: yRatio(ratio), class: "line-chart-grid",
+    }));
+    svg.appendChild(svgNode("text", {
+      x: padLeft - 6, y: yRatio(ratio), "text-anchor": "end", "dominant-baseline": "middle",
+      class: "line-chart-axis-label", ...(dualAxis ? { style: `fill: ${colorOfAxis("left")}` } : {}),
+    }, formatDataNumber(baseScale.min + (baseScale.max - baseScale.min) * ratio, 1)));
+    if (!dualAxis) return;
+    svg.appendChild(svgNode("text", {
+      x: width - padRight + 6, y: yRatio(ratio), "text-anchor": "start", "dominant-baseline": "middle",
+      class: "line-chart-axis-label", style: `fill: ${colorOfAxis("right")}`,
+    }, formatDataNumber(rightScale.min + (rightScale.max - rightScale.min) * ratio, 1)));
   });
-  series.forEach((item, seriesIndex) => {
-    const itemPoints = points.filter((point) => point.series === seriesIndex);
+  plots.forEach((itemPoints, seriesIndex) => {
     if (!itemPoints.length) return;
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const start = points.indexOf(itemPoints[0]);
-    path.setAttribute("d", itemPoints.map((point, index) => `${index ? "L" : "M"}${x(start + index)} ${y(point.value)}`).join(" "));
-    path.setAttribute("stroke", colors[seriesIndex % colors.length]); path.setAttribute("class", "line-chart-line");
-    svg.appendChild(path);
-    itemPoints.forEach((point, index) => {
-      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      circle.setAttribute("cx", String(x(start + index))); circle.setAttribute("cy", String(y(point.value)));
-      circle.setAttribute("r", "3.5"); circle.setAttribute("fill", point.color); circle.setAttribute("class", "line-chart-point");
-      circle.setAttribute("aria-label", `${formatDataDate(point.x)} ${item.label} ${formatDataNumber(point.value, 1)}`);
-      svg.appendChild(circle);
+    const color = colors[seriesIndex % colors.length];
+    const scale = scaleOfSeries(seriesIndex);
+    // 전역 svg 규칙이 stroke·fill 속성을 덮으므로 계열 색은 인라인 스타일로 지정한다.
+    svg.appendChild(svgNode("path", {
+      d: itemPoints.map((point, index) => `${index ? "L" : "M"}${x(point.x)} ${y(scale, point.value)}`).join(" "),
+      style: `stroke: ${color}`,
+      class: "line-chart-line",
+    }));
+    itemPoints.forEach((point) => {
+      svg.appendChild(svgNode("circle", {
+        cx: x(point.x), cy: y(scale, point.value), r: 2.8, style: `fill: ${color}`, class: "line-chart-point",
+        "aria-label": `${formatDataDate(point.x)} ${series[seriesIndex].label} ${formatDataNumber(point.value, 1)}`,
+      }));
     });
   });
-  points.forEach((point, index) => {
-    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.setAttribute("x", String(x(index)));
-    label.setAttribute("y", String(height + 16));
-    label.setAttribute("text-anchor", index === 0 ? "start" : index === points.length - 1 ? "end" : "middle");
-    label.setAttribute("class", "line-chart-label");
-    label.textContent = formatGraphDate(point.x);
-    svg.appendChild(label);
+  // 눈금이 겹쳐 뭉개지지 않도록 처음과 끝을 포함해 최대 6개만 균등하게 찍는다.
+  const tickCount = Math.min(axis.length, 6);
+  const tickIndexes = [...new Set(Array.from({ length: tickCount }, (_, index) =>
+    Math.round((index * (axis.length - 1)) / Math.max(tickCount - 1, 1))))];
+  tickIndexes.forEach((index) => {
+    svg.appendChild(svgNode("text", {
+      x: x(axis[index]),
+      y: height + 16,
+      "text-anchor": index === 0 ? "start" : index === axis.length - 1 ? "end" : "middle",
+      class: "line-chart-label",
+    }, formatGraphDate(axis[index])));
   });
   const chart = document.createElement("div"); chart.className = "line-chart";
   const heading = document.createElement("div"); heading.className = "line-chart-title"; heading.textContent = title;
   const legend = document.createElement("div"); legend.className = "line-chart-legend";
-  series.forEach((item, index) => { const label = document.createElement("span"); label.textContent = item.label; label.style.setProperty("--legend-color", colors[index % colors.length]); legend.appendChild(label); });
+  series.forEach((item, index) => {
+    const label = document.createElement("span");
+    // 축이 둘이면 어느 눈금을 읽어야 하는지 범례에서 알려준다.
+    label.textContent = dualAxis ? `${item.label} · ${item.axis === "right" ? "우축" : "좌축"}` : item.label;
+    label.style.setProperty("--legend-color", colors[index % colors.length]);
+    legend.appendChild(label);
+  });
   chart.append(heading, svg, legend); return chart;
 }
 
@@ -1603,19 +1640,19 @@ function buildBioCharts(rows) {
   const byType = (type) => rows.filter((row) => row.bio_type === type);
   const charts = [];
   const heart = byType("heart_rate");
-  if (heart.length) charts.push(buildBioChart("심박수 · 측정값", rows, [{ label: "심박수(bpm)", rows: heart, value: (row) => row.value }]));
+  if (heart.length) charts.push(buildBioChart("심박수 · 측정값", [{ label: "심박수(bpm)", rows: heart, value: (row) => row.value }]));
   const bodyRows = [...byType("weight"), ...byType("bmi")];
-  if (bodyRows.length) charts.push(buildBioChart("체중과 BMI", rows, [
+  if (bodyRows.length) charts.push(buildBioChart("체중과 BMI", [
     { label: "체중(kg)", rows: byType("weight"), value: (row) => row.value },
-    { label: "BMI", rows: byType("bmi"), value: (row) => row.value },
+    { label: "BMI", rows: byType("bmi"), value: (row) => row.value, axis: "right" },
   ]));
   const pressure = byType("blood_pressure");
-  if (pressure.length) charts.push(buildBioChart("혈압", rows, [
+  if (pressure.length) charts.push(buildBioChart("혈압", [
     { label: "수축기", rows: pressure, value: (row) => row.detail_data?.systolic },
     { label: "이완기", rows: pressure, value: (row) => row.detail_data?.diastolic },
   ]));
   const glucose = byType("blood_glucose");
-  if (glucose.length) charts.push(buildBioChart("혈당 · 공복/식후 구분 포함", rows, [
+  if (glucose.length) charts.push(buildBioChart("혈당 · 공복/식후 구분 포함", [
     { label: "공복", rows: glucose.filter((row) => row.detail_data?.fasting === true), value: (row) => row.value },
     { label: "식후", rows: glucose.filter((row) => row.detail_data?.fasting === false), value: (row) => row.value },
     { label: "구분 없음", rows: glucose.filter((row) => row.detail_data?.fasting !== true && row.detail_data?.fasting !== false), value: (row) => row.value },
