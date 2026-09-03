@@ -34,8 +34,8 @@ class ActivityRowResponse(BaseModel):
     steps: float | None = None
     floors_climbed: float | None = None
     active_time: float | None = None
-    # lifestyle_activity.active_distance는 km 단위로 적재된다.
-    active_distance: float | None = None
+    # lifestyle_activity.distance_m은 미터 단위이므로 화면에서 km로 환산한다.
+    active_distance_m: float | None = None
     active_calories: float | None = None
 
 

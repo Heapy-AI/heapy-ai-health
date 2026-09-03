@@ -125,6 +125,23 @@ _MEAL_TYPE_LABELS = {
 }
 _UNIT_LABELS = {"hour": "시간"}
 
+# lifestyle_bio는 지표별 컬럼으로 적재되므로 값 컬럼과 단위를 지표에 맞춰 고른다.
+_BIO_VALUE_COLUMNS = {
+    "heart_rate": ("heart_rate_bpm", "bpm"),
+    "blood_glucose": ("blood_glucose_mg_dl", "mg/dL"),
+    "blood_pressure": ("systolic_mmhg", "mmHg"),
+    "weight": ("weight_kg", "kg"),
+    "bmi": ("bmi_value", ""),
+}
+_BIO_SELECT = (
+    "measured_at,bio_type,heart_rate_bpm,blood_glucose_mg_dl,is_fasting,"
+    "systolic_mmhg,diastolic_mmhg,pulse_bpm,weight_kg,bmi_value"
+)
+_SLEEP_SELECT = (
+    "measured_at:start_at,total_sleep_minutes,awake_minutes,"
+    "deep_sleep_minutes,sleep_score"
+)
+
 _WATER_ROW_LIMIT = 7
 # "생활습관 전반" 질문은 영역·지표별로 조회가 나뉘어 요청 수가 늘어난다.
 # 챗 응답 경로이므로 vector_search와 같은 방식으로 병렬 조회한다.
@@ -305,8 +322,9 @@ class SupabaseLifestyleContextService:
         return self._request(
             "/rest/v1/lifestyle_activity"
             f"?user_id=eq.{quote(user_id, safe='')}"
-            "&select=record_date,steps,floors_climbed,active_time,"
-            "active_distance,active_calories"
+            "&select=record_date,steps,floors_climbed:floors,"
+            "active_time:active_time_minutes,active_distance_m:distance_m,"
+            "active_calories:active_calories_kcal"
             f"&order=record_date.desc&limit={limit}",
             access_token,
         )
@@ -320,8 +338,9 @@ class SupabaseLifestyleContextService:
         return self._request(
             "/rest/v1/lifestyle_exercise"
             f"?user_id=eq.{quote(user_id, safe='')}"
-            "&select=record_date,exercise_type,duration_sec,distance_m,calories"
-            f"&order=record_date.desc&limit={limit}",
+            "&select=record_date:start_at,exercise_type,"
+            "duration_sec:duration_seconds,distance_m,calories:calories_kcal"
+            f"&order=start_at.desc&limit={limit}",
             access_token,
         )
 
@@ -335,21 +354,76 @@ class SupabaseLifestyleContextService:
         """지표별로 나눠 조회해 한 지표가 결과를 독점하지 않게 한다."""
         selected = sorted(bio_types) if bio_types else sorted(_BIO_TYPE_KEYWORDS)
         per_type = limit if bio_types else max(2, limit // 3)
+        owner = quote(user_id, safe="")
 
         def fetch(bio_type: str) -> list[dict[str, Any]]:
-            return self._request(
+            # 수면은 lifestyle_bio가 아니라 전용 테이블에 적재된다.
+            if bio_type == "sleep":
+                rows = self._request(
+                    "/rest/v1/lifestyle_sleep"
+                    f"?user_id=eq.{owner}&select={_SLEEP_SELECT}"
+                    f"&order=start_at.desc&limit={per_type}",
+                    access_token,
+                )
+                return [self._normalize_sleep_row(row) for row in rows]
+            rows = self._request(
                 "/rest/v1/lifestyle_bio"
-                f"?user_id=eq.{quote(user_id, safe='')}"
+                f"?user_id=eq.{owner}"
                 f"&bio_type=eq.{quote(bio_type, safe='')}"
-                "&select=measured_at,bio_type,value,unit,detail_data"
+                f"&select={_BIO_SELECT}"
                 f"&order=measured_at.desc&limit={per_type}",
                 access_token,
             )
+            return [self._normalize_bio_row(row) for row in rows]
 
         results = self._fetch_in_parallel(
             [lambda bio_type=bio_type: fetch(bio_type) for bio_type in selected]
         )
         return [row for rows in results for row in rows]
+
+    @staticmethod
+    def _normalize_bio_row(row: dict[str, Any]) -> dict[str, Any]:
+        """지표별 컬럼을 포맷 함수가 쓰는 값·단위·부가정보 형태로 바꾼다."""
+        bio_type = str(row.get("bio_type") or "")
+        column, unit = _BIO_VALUE_COLUMNS.get(bio_type, ("", ""))
+        detail: dict[str, Any] = {}
+        if bio_type == "blood_glucose":
+            detail["fasting"] = row.get("is_fasting")
+        elif bio_type == "blood_pressure":
+            detail.update(
+                systolic=row.get("systolic_mmhg"),
+                diastolic=row.get("diastolic_mmhg"),
+                pulse=row.get("pulse_bpm"),
+            )
+        return {
+            "measured_at": row.get("measured_at"),
+            "bio_type": bio_type,
+            "value": row.get(column) if column else None,
+            "unit": unit,
+            "detail_data": detail,
+        }
+
+    @staticmethod
+    def _normalize_sleep_row(row: dict[str, Any]) -> dict[str, Any]:
+        """lifestyle_sleep의 분 단위 기록을 신체 지표와 같은 형태로 맞춘다."""
+        total_minutes = row.get("total_sleep_minutes")
+        hours: float | None = None
+        if total_minutes not in (None, ""):
+            try:
+                hours = float(total_minutes) / 60
+            except (TypeError, ValueError):
+                hours = None
+        return {
+            "measured_at": row.get("measured_at"),
+            "bio_type": "sleep",
+            "value": hours,
+            "unit": "hour",
+            "detail_data": {
+                "sleep_score": row.get("sleep_score"),
+                "deep_sleep_minutes": row.get("deep_sleep_minutes"),
+                "awake_minutes": row.get("awake_minutes"),
+            },
+        }
 
     def _get_nutrition_food(
         self,
@@ -373,11 +447,11 @@ class SupabaseLifestyleContextService:
         user_id: str,
         limit: int,
     ) -> list[dict[str, Any]]:
+        # 수분 섭취는 lifestyle_nutrition에서 전용 테이블로 분리됐다.
         return self._request(
-            "/rest/v1/lifestyle_nutrition"
+            "/rest/v1/lifestyle_water_intake"
             f"?user_id=eq.{quote(user_id, safe='')}"
-            "&nutrition_type=eq.water"
-            "&select=consumed_at,water_amount"
+            "&select=consumed_at,water_amount:amount_ml"
             f"&order=consumed_at.desc&limit={min(limit, _WATER_ROW_LIMIT)}",
             access_token,
         )
@@ -398,6 +472,16 @@ class SupabaseLifestyleContextService:
             return f"{value}{unit}"
         return f"{number:,.{digits}f}{unit}"
 
+    @staticmethod
+    def _km(value: Any) -> str:
+        """미터 단위로 적재된 이동 거리를 km 표기로 바꾼다."""
+        if value in (None, ""):
+            return ""
+        try:
+            return f"{float(value) / 1000:,.1f}km"
+        except (TypeError, ValueError):
+            return ""
+
     @classmethod
     def _join(cls, date: str, parts: list[str]) -> str:
         return " | ".join([date, *[part for part in parts if part]])
@@ -409,9 +493,7 @@ class SupabaseLifestyleContextService:
             steps = cls._number(row.get("steps"), "보")
             floors = cls._number(row.get("floors_climbed"), "층")
             active = cls._number(row.get("active_time"), "분")
-            # lifestyle_activity.active_distance는 km 단위로 적재된다.
-            # (lifestyle_exercise.distance_m과 달리 컬럼명에 단위가 없다.)
-            distance = cls._number(row.get("active_distance"), "km", digits=1)
+            distance = cls._km(row.get("active_distance_m"))
             calories = cls._number(row.get("active_calories"), "kcal")
             parts = [
                 f"걸음 {steps}" if steps else "",
@@ -436,14 +518,7 @@ class SupabaseLifestyleContextService:
                     minutes = f"{float(duration) / 60:,.0f}분"
                 except (TypeError, ValueError):
                     minutes = ""
-            # lifestyle_exercise.distance_m은 미터 단위이므로 km로 환산해 표기한다.
-            distance = row.get("distance_m")
-            distance_text = ""
-            if distance not in (None, ""):
-                try:
-                    distance_text = f"{float(distance) / 1000:,.1f}km"
-                except (TypeError, ValueError):
-                    distance_text = ""
+            distance_text = cls._km(row.get("distance_m"))
             calories = cls._number(row.get("calories"), "kcal")
             parts = [label, minutes, distance_text, calories]
             lines.append(cls._join(cls._date(row.get("record_date")), parts))
@@ -466,10 +541,10 @@ class SupabaseLifestyleContextService:
             parts = []
             if detail.get("sleep_score") is not None:
                 parts.append(f"수면점수 {detail['sleep_score']}")
-            if detail.get("deep_sleep_min") is not None:
-                parts.append(f"깊은수면 {detail['deep_sleep_min']}분")
-            if detail.get("awake_min") is not None:
-                parts.append(f"깬시간 {detail['awake_min']}분")
+            if detail.get("deep_sleep_minutes") is not None:
+                parts.append(f"깊은수면 {detail['deep_sleep_minutes']}분")
+            if detail.get("awake_minutes") is not None:
+                parts.append(f"깬시간 {detail['awake_minutes']}분")
             return parts
         return []
 

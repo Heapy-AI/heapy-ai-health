@@ -30,7 +30,7 @@ _LIFESTYLE_PLAN: tuple[tuple[str, str, str, str, str], ...] = (
         "",
         "record_date",
         "record_date,steps,floors_climbed:floors,active_time:active_time_minutes,"
-        "active_distance:distance_m,active_calories:active_calories_kcal",
+        "active_distance_m:distance_m,active_calories:active_calories_kcal",
     ),
     (
         "exercise",
