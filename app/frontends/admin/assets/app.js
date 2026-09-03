@@ -29,6 +29,19 @@ const elements = {
   emptyInsight: document.querySelector("#emptyInsight"),
   auditCountBadge: document.querySelector("#auditCountBadge"),
   auditCardList: document.querySelector("#auditCardList"),
+  chatInsightPanel: document.querySelector("#chatInsightPanel"),
+  dashboardInsightPanel: document.querySelector("#dashboardInsightPanel"),
+  dashboardStatusBadge: document.querySelector("#dashboardStatusBadge"),
+  dashboardLatestStatus: document.querySelector("#dashboardLatestStatus"),
+  dashboardHistoryStatus: document.querySelector("#dashboardHistoryStatus"),
+  dashboardAnalysisStatus: document.querySelector("#dashboardAnalysisStatus"),
+  dashboardResultStatus: document.querySelector("#dashboardResultStatus"),
+  dashboardCheckupCount: document.querySelector("#dashboardCheckupCount"),
+  dashboardMetricCount: document.querySelector("#dashboardMetricCount"),
+  dashboardImprovedCount: document.querySelector("#dashboardImprovedCount"),
+  dashboardManagementCount: document.querySelector("#dashboardManagementCount"),
+  dashboardReportLog: document.querySelector("#dashboardReportLog"),
+  dashboardVerificationDetails: document.querySelector("#dashboardVerificationDetails"),
   environmentStatus: document.querySelector("#environmentStatus"),
   vectorBackendLabel: document.querySelector("#vectorBackendLabel"),
   embedModelLabel: document.querySelector("#embedModelLabel"),
@@ -36,7 +49,13 @@ const elements = {
   classifierLabel: document.querySelector("#classifierLabel"),
   collectionTotalLabel: document.querySelector("#collectionTotalLabel"),
   environmentCollectionList: document.querySelector("#environmentCollectionList"),
+  projectEnvironmentContent: document.querySelector("#projectEnvironmentContent"),
+  projectEnvironmentHeader: document.querySelector("#projectEnvironmentHeader"),
+  personalEnvironment: document.querySelector("#personalEnvironment"),
+  lifestyleEnvironment: document.querySelector("#lifestyleEnvironment"),
+  reportModelLabel: document.querySelector("#reportModelLabel"),
   conversationList: document.querySelector("#conversationList"),
+  conversationHistory: document.querySelector("#conversationHistory"),
   newConversationButton: document.querySelector("#newConversationButton"),
   composerWrap: document.querySelector("#composerWrap"),
   chatViewTab: document.querySelector("#chatViewTab"),
@@ -50,6 +69,8 @@ const elements = {
   checkupMeta: document.querySelector("#checkupMeta"),
   lifestyleMeta: document.querySelector("#lifestyleMeta"),
   checkupBody: document.querySelector("#checkupBody"),
+  checkupReportButton: document.querySelector("#checkupReportButton"),
+  checkupReport: document.querySelector("#checkupReport"),
   lifestyleBody: document.querySelector("#lifestyleBody"),
   lifestyleTabs: [...document.querySelectorAll("[data-lifestyle-tab]")],
   lifestylePeriods: [...document.querySelectorAll("[data-lifestyle-days]")],
@@ -393,6 +414,7 @@ async function loadProjectEnvironment() {
     const totalChunks = Object.values(indexedChunks)
       .reduce((total, count) => total + (Number(count) || 0), 0);
     const classifier = data.intent_classifier || {};
+    const reportModel = data.checkup_report_model;
 
     setEnvironmentBadge(data.ready ? "ready" : "warning", data.ready ? "준비 완료" : "점검 필요");
     elements.vectorBackendLabel.textContent = String(data.vector_backend || "unknown").toUpperCase();
@@ -402,6 +424,7 @@ async function loadProjectEnvironment() {
     elements.classifierLabel.textContent = classifier.ready
       ? classifier.model_version || "준비 완료"
       : "모델 없음";
+    if (reportModel) elements.reportModelLabel.textContent = `Gemini · ${reportModel}`;
     renderCollections(indexedChunks);
   } catch (error) {
     setEnvironmentBadge("error", "연결 실패");
@@ -1613,6 +1636,116 @@ function renderCheckup(payload) {
     return;
   }
   elements.checkupBody.replaceChildren(buildDataTable(checkupColumns, items));
+  setDashboardStep("latest", `최신 검진 ${payload.measured_at || "없음"}`);
+}
+
+function setDashboardStep(step, message, state = "done") {
+  const item = document.querySelector(`[data-dashboard-step="${step}"]`);
+  if (!item) return;
+  item.dataset.state = state;
+  const label = item.querySelector("small");
+  if (label) label.textContent = message;
+}
+
+function formatElapsed(value) {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) ? `${seconds.toFixed(3)}초` : "측정 불가";
+}
+
+function resetDashboardFlow() {
+  ["latest", "history", "analysis", "result"].forEach((step) => setDashboardStep(step, "대기 중", "pending"));
+  elements.dashboardStatusBadge.textContent = "대기";
+  elements.dashboardStatusBadge.className = "quality-badge neutral";
+  elements.dashboardCheckupCount.textContent = "—";
+  elements.dashboardMetricCount.textContent = "—";
+  elements.dashboardImprovedCount.textContent = "—";
+  elements.dashboardManagementCount.textContent = "—";
+  elements.dashboardReportLog.textContent = "AI 요약분석을 실행하면 처리 단계와 결과가 이곳에 기록됩니다.";
+  elements.dashboardVerificationDetails.replaceChildren();
+  elements.dashboardVerificationDetails.hidden = true;
+}
+
+function appendDashboardDetails(title, value) {
+  const details = document.createElement("details");
+  details.className = "dashboard-detail";
+  const summary = document.createElement("summary");
+  summary.textContent = title;
+  const content = document.createElement("pre");
+  content.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  details.append(summary, content);
+  elements.dashboardVerificationDetails.appendChild(details);
+}
+
+function renderDashboardVerification(verification) {
+  elements.dashboardVerificationDetails.replaceChildren();
+  const timings = verification.timings || {};
+  appendDashboardDetails("단계별 소요 시간", Object.fromEntries(
+    Object.entries(timings).map(([key, value]) => [key, `${Number(value).toFixed(3)}초`]),
+  ));
+  appendDashboardDetails("분석에 전달된 지표와 DB 판정", verification.analysis_input || {});
+  appendDashboardDetails("전체 검진 원본 이력", verification.history || []);
+  appendDashboardDetails("데이터 출처 및 판정 기준", {
+    source: verification.source,
+    db_status_used: verification.db_status_used,
+  });
+  elements.dashboardVerificationDetails.hidden = false;
+}
+
+function renderCheckupReport(report) {
+  elements.checkupReport.replaceChildren();
+  const heading = document.createElement("h3");
+  heading.textContent = report.headline;
+  const summary = document.createElement("p");
+  summary.textContent = report.summary;
+  const analysis = document.createElement("p");
+  analysis.textContent = report.overall_analysis;
+  const recommendations = document.createElement("ul");
+  (report.recommendations || []).forEach((recommendation) => {
+    const item = document.createElement("li");
+    item.textContent = recommendation;
+    recommendations.appendChild(item);
+  });
+  elements.checkupReport.append(heading, summary, analysis);
+  if (recommendations.children.length) elements.checkupReport.append(recommendations);
+  elements.checkupReport.hidden = false;
+}
+
+async function loadCheckupReport() {
+  setDashboardStep("history", "DB 전체 이력 수집 중...", "active");
+  setDashboardStep("analysis", "Gemini 응답 대기 중...", "active");
+  setDashboardStep("result", "응답 대기 중", "pending");
+  elements.dashboardStatusBadge.textContent = "실행 중";
+  elements.dashboardStatusBadge.className = "quality-badge info";
+  elements.checkupReportButton.disabled = true;
+  elements.checkupReportButton.textContent = "분석 중...";
+  try {
+    const response = await fetchWithSession("/me/checkup/report", { method: "POST", headers: { Accept: "application/json" } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(String(payload.detail || "AI 요약분석을 생성하지 못했습니다."));
+    const timings = payload.verification?.timings || {};
+    setDashboardStep("history", `${payload.checkup_count}회 전체 이력 수집 완료 · ${formatElapsed(timings.history_seconds)}`);
+    setDashboardStep("analysis", `Gemini AI 응답 완료 · ${formatElapsed(timings.ai_seconds)}`);
+    setDashboardStep("result", `구조화 리포트 수신 완료 · ${formatElapsed(timings.total_seconds)}`);
+    elements.dashboardCheckupCount.textContent = payload.checkup_count;
+    elements.dashboardMetricCount.textContent = (payload.report.improved || []).length + (payload.report.maintained || []).length + (payload.report.management_needed || []).length;
+    elements.dashboardImprovedCount.textContent = (payload.report.improved || []).length;
+    elements.dashboardManagementCount.textContent = (payload.report.management_needed || []).length;
+    elements.dashboardStatusBadge.textContent = "완료";
+    elements.dashboardStatusBadge.className = "quality-badge success";
+    elements.dashboardReportLog.textContent = `전체 ${payload.checkup_count}회 검진 이력을 기반으로 AI 요약분석을 완료했습니다.`;
+    renderDashboardVerification(payload.verification || {});
+    renderCheckupReport(payload.report);
+  } catch (error) {
+    setDashboardStep("result", "분석 실패", "error");
+    elements.dashboardStatusBadge.textContent = "오류";
+    elements.dashboardStatusBadge.className = "quality-badge warning";
+    elements.dashboardReportLog.textContent = error instanceof Error ? error.message : "AI 요약분석을 생성하지 못했습니다.";
+    elements.checkupReport.hidden = false;
+    elements.checkupReport.textContent = error instanceof Error ? error.message : "AI 요약분석을 생성하지 못했습니다.";
+  } finally {
+    elements.checkupReportButton.disabled = false;
+    elements.checkupReportButton.textContent = "AI 요약분석";
+  }
 }
 
 function renderLifestyle(payload) {
@@ -1741,7 +1874,14 @@ function setDataTab(tab) {
   elements.lifestyleTab.setAttribute("aria-selected", String(!isCheckup));
   elements.checkupPanel.hidden = !isCheckup;
   elements.lifestylePanel.hidden = isCheckup;
+  updatePersonalEnvironment();
   loadPersonalData(tab);
+}
+
+function updatePersonalEnvironment() {
+  const showPersonal = activeView === "data";
+  elements.personalEnvironment.hidden = !showPersonal || activeDataTab !== "checkup";
+  elements.lifestyleEnvironment.hidden = !showPersonal || activeDataTab !== "lifestyle";
 }
 
 function setActiveView(view) {
@@ -1756,8 +1896,17 @@ function setActiveView(view) {
   elements.dataView.hidden = isChat;
   // '새 대화'는 챗 화면 전용 동작이다.
   elements.resetButton.hidden = !isChat;
+  elements.chatInsightPanel.hidden = !isChat;
+  elements.dashboardInsightPanel.hidden = isChat;
+  elements.projectEnvironmentContent.hidden = !isChat;
+  elements.projectEnvironmentHeader.hidden = !isChat;
+  updatePersonalEnvironment();
+  elements.conversationHistory.hidden = !isChat;
   if (isChat) elements.input.focus();
-  else setDataTab(activeDataTab);
+  else {
+    resetDashboardFlow();
+    setDataTab(activeDataTab);
+  }
 }
 
 function resetPersonalData() {
@@ -1765,6 +1914,7 @@ function resetPersonalData() {
   activeDataTab = "checkup";
   elements.checkupMeta.textContent = "—";
   elements.lifestyleMeta.textContent = "—";
+  resetDashboardFlow();
   setDataPlaceholder(elements.checkupBody, "검진 결과를 불러오고 있어요.");
   setDataPlaceholder(elements.lifestyleBody, "생활 데이터를 불러오고 있어요.");
   setActiveView("chat");
@@ -1822,6 +1972,7 @@ elements.lifestylePeriods.forEach((button) => {
 elements.dataReloadButton.addEventListener("click", () => {
   loadPersonalData(activeDataTab, { force: true });
 });
+elements.checkupReportButton.addEventListener("click", loadCheckupReport);
 elements.loginForm.addEventListener("submit", login);
 elements.loginModeButton.addEventListener("click", () => setAuthMode("login"));
 elements.signupModeButton.addEventListener("click", () => setAuthMode("signup"));

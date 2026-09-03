@@ -147,6 +147,48 @@ class SupabasePersonalDataService:
             "items": items,
         }
 
+    def get_checkup_history(
+        self,
+        access_token: str,
+        user_id: str,
+    ) -> list[dict[str, Any]]:
+        """AI 분석 전용으로 사용자의 전체 검진 이력을 반환한다."""
+        if not self.configured or not access_token or not user_id:
+            return []
+
+        owner = quote(user_id, safe="")
+        records = self._request(
+            "/rest/v1/health_checkup_records"
+            f"?user_id=eq.{owner}&select=record_id,measured_at"
+            "&order=measured_at.asc",
+            access_token,
+        )
+        if not records:
+            return []
+        catalog = {
+            str(item.get("item_code") or ""): item
+            for item in self._get_catalog(access_token)
+        }
+
+        def fetch_record(record: dict[str, Any]) -> dict[str, Any]:
+            record_id = quote(str(record.get("record_id") or ""), safe="")
+            results = self._request(
+                "/rest/v1/health_checkup_results"
+                f"?record_id=eq.{record_id}&select=item_code,value,status"
+                f"&order=item_code.asc&limit={self.max_rows}",
+                access_token,
+            )
+            for result in results:
+                item = catalog.get(str(result.get("item_code") or ""), {})
+                result["item_name"] = str(item.get("item_name") or result.get("item_code") or "")
+                result["unit"] = str(item.get("standard_unit") or "")
+            return {
+                "date": self._date(record.get("measured_at")),
+                "results": results,
+            }
+
+        return [fetch_record(record) for record in records]
+
     def get_lifestyle_window(
         self,
         access_token: str,
@@ -348,6 +390,7 @@ class SupabasePersonalDataService:
                 timeout=(5, 15),
             )
         except requests.RequestException as exc:
+            print(f"[personal-data] Supabase 요청 실패 path={path} error={type(exc).__name__}: {exc}")
             raise SupabaseConversationError(
                 "개인 데이터 저장소에 연결할 수 없습니다.",
                 503,
@@ -362,6 +405,7 @@ class SupabasePersonalDataService:
                 or payload.get("details")
                 or "개인 데이터 조회에 실패했습니다."
             )
+            print(f"[personal-data] Supabase 응답 오류 path={path} status={response.status_code} message={message}")
             raise SupabaseConversationError(message, response.status_code)
         payload = response.json()
         return payload if isinstance(payload, list) else []

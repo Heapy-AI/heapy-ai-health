@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.core.config import (
     COLLECTIONS,
+    MODEL,
     SEARCH_COLLECTIONS,
     SEARCH_FINAL_TOP_K,
     SEARCH_MAX_PER_COLLECTION,
@@ -128,6 +129,7 @@ def health():
         "vector_backend": state.get("backend", "unknown"),
         "indexed_chunks": counts,
         "embed_model": state.get("embed_model", "unknown"),
+        "checkup_report_model": MODEL,
         "intent_classifier": {
             "ready": classifier is not None,
             "model_version": (

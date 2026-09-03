@@ -93,6 +93,7 @@ def _proxy_json_request(
     path: str,
     request: Request,
     payload: dict[str, Any] | None = None,
+    timeout: tuple[float, float] = (5, 20),
 ) -> Response:
     """개발자 UI의 JSON API 요청을 메인 API로 중계한다."""
     try:
@@ -101,7 +102,7 @@ def _proxy_json_request(
             f"{API_BASE_URL}{path}",
             json=payload,
             headers=_request_headers(request),
-            timeout=(5, 20),
+            timeout=timeout,
         )
     except requests.RequestException:
         return Response(
@@ -179,6 +180,17 @@ def proxy_latest_checkup(request: Request) -> Response:
     작성자: 고수연
     """
     return _proxy_json_request("GET", "/me/checkup", request)
+
+
+@app.post("/me/checkup/report", include_in_schema=False)
+def proxy_checkup_report(request: Request) -> Response:
+    """건강검진 전체 이력 AI 요약분석 요청을 중계한다."""
+    return _proxy_json_request(
+        "POST",
+        "/me/checkup/report",
+        request,
+        timeout=(5, 180),
+    )
 
 
 @app.get("/me/lifestyle", include_in_schema=False)

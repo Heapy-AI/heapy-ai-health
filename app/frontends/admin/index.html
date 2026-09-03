@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#7b68e8" />
     <meta name="description" content="HEAPY 건강정보 AI 챗봇 MVP" />
     <title>HEAPY | 건강정보 AI</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260903-5" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260904-9" />
   </head>
   <body>
     <!-- 작성자: 김진우 -->
@@ -58,7 +58,7 @@
         </a>
 
         <section class="environment-card" aria-label="프로젝트 환경 상세">
-          <div class="environment-header">
+          <div id="projectEnvironmentHeader" class="environment-header">
             <span class="card-eyebrow">PROJECT ENVIRONMENT</span>
             <span id="environmentStatus" class="environment-badge loading">
               <span class="status-dot"></span>
@@ -66,6 +66,7 @@
             </span>
           </div>
 
+          <div id="projectEnvironmentContent">
           <dl class="environment-facts">
             <div>
               <dt>Vector DB</dt>
@@ -95,9 +96,46 @@
             </div>
           </div>
           <p class="environment-source">실시간 <code>GET /health</code> 기준</p>
+          </div>
+          <div id="personalEnvironment" class="personal-environment" hidden>
+            <div class="personal-environment-heading"><span class="card-eyebrow">PERSONAL HEALTH ENV</span><span class="quality-badge info">검증 모드</span></div>
+            <dl class="environment-facts personal-environment-facts">
+              <div><dt>Supabase 권한</dt><dd>authenticated · 본인 행만 (RLS)</dd></div>
+              <div><dt>대시보드 표시</dt><dd>최근 건강검진 1회</dd></div>
+              <div><dt>AI 분석 입력</dt><dd>전체 건강검진 이력</dd></div>
+              <div><dt>AI 모델</dt><dd id="reportModelLabel">Gemini · gemini-2.5-flash</dd></div>
+              <div><dt>분석 API</dt><dd>POST /me/checkup/report</dd></div>
+            </dl>
+            <div class="personal-table-list">
+              <span>참조 테이블</span>
+              <code>health_checkup_records</code>
+              <code>health_checkup_results</code>
+              <code>master_checkup_item</code>
+            </div>
+            <p class="environment-source">로그인 Access Token + Supabase RLS 기준</p>
+          </div>
+          <div id="lifestyleEnvironment" class="personal-environment" hidden>
+            <div class="personal-environment-heading"><span class="card-eyebrow">LIFESTYLE HEALTH ENV</span><span class="quality-badge info">검증 모드</span></div>
+            <dl class="environment-facts personal-environment-facts">
+              <div><dt>Supabase 권한</dt><dd>authenticated · 본인 행만 (RLS)</dd></div>
+              <div><dt>조회 범위</dt><dd>선택 기간의 최신 기록 기준</dd></div>
+              <div><dt>집계 방식</dt><dd>1년 월평균 · 3/6개월 주평균 · 1개월/1주일 일평균</dd></div>
+              <div><dt>그래프</dt><dd>기간 평균값 기반 지표별 시각화</dd></div>
+            </dl>
+            <div class="personal-table-list">
+              <span>참조 테이블</span>
+              <code>lifestyle_activity</code>
+              <code>lifestyle_exercise</code>
+              <code>lifestyle_bio</code>
+              <code>lifestyle_nutrition</code>
+              <code>lifestyle_sleep</code>
+              <code>lifestyle_water_intake</code>
+            </div>
+            <p class="environment-source">로그인 Access Token + Supabase RLS 기준</p>
+          </div>
         </section>
 
-        <section class="conversation-history" aria-label="대화 기록">
+        <section id="conversationHistory" class="conversation-history" aria-label="대화 기록">
           <div class="conversation-history-header">
             <span class="card-eyebrow">CONVERSATIONS</span>
             <button id="newConversationButton" type="button">새 대화</button>
@@ -199,11 +237,15 @@
                 <span class="card-eyebrow">LATEST CHECKUP</span>
                 <h2>최신 검진 결과</h2>
               </div>
-              <span id="checkupMeta" class="data-meta">—</span>
+              <div class="data-panel-actions">
+                <span id="checkupMeta" class="data-meta">—</span>
+                <button id="checkupReportButton" class="report-button" type="button">AI 요약분석</button>
+              </div>
             </div>
             <div id="checkupBody" class="data-body">
               <p class="data-placeholder">검진 결과를 불러오고 있어요.</p>
             </div>
+            <div id="checkupReport" class="checkup-report" hidden></div>
           </div>
 
           <div id="lifestylePanel" class="data-panel lifestyle-panel" role="tabpanel" aria-labelledby="lifestyleTab" hidden>
@@ -234,19 +276,41 @@
         </section>
       </main>
 
-      <aside id="insightPanel" class="insight-panel" aria-label="답변 근거 정보">
-        <div class="panel-header">
-          <div><span class="panel-eyebrow">ANSWER AUDIT</span><h2>질문별 감사 기록</h2></div>
-          <span id="auditCountBadge" class="quality-badge neutral">0건</span>
+      <aside id="insightPanel" class="insight-panel" aria-label="검증 정보 패널">
+        <div id="chatInsightPanel">
+          <div class="panel-header">
+            <div><span class="panel-eyebrow">ANSWER AUDIT</span><h2>질문별 감사 기록</h2></div>
+            <span id="auditCountBadge" class="quality-badge neutral">0건</span>
+          </div>
+          <div id="emptyInsight" class="empty-insight">
+            <div class="empty-orbit"><span></span></div>
+            <strong>질문을 보내면</strong>
+            <p>검색 근거와 안전 정책·사후 감사 결과를<br />질문별 카드로 확인할 수 있어요.</p>
+          </div>
+          <div id="auditCardList" class="audit-card-list" aria-live="polite"></div>
         </div>
-        <div id="emptyInsight" class="empty-insight">
-          <div class="empty-orbit"><span></span></div>
-          <strong>질문을 보내면</strong>
-          <p>검색 근거와 안전 정책·사후 감사 결과를<br />질문별 카드로 확인할 수 있어요.</p>
+        <div id="dashboardInsightPanel" class="dashboard-insight-panel" hidden>
+          <div class="panel-header">
+            <div><span class="panel-eyebrow">AI DASHBOARD</span><h2>검진 분석 검증</h2></div>
+            <span id="dashboardStatusBadge" class="quality-badge neutral">대기</span>
+          </div>
+          <div class="dashboard-flow" aria-live="polite">
+            <div class="dashboard-flow-item" data-dashboard-step="latest"><span></span><div><strong>최신 검진 조회</strong><small id="dashboardLatestStatus">대기 중</small></div></div>
+            <div class="dashboard-flow-item" data-dashboard-step="history"><span></span><div><strong>전체 이력 수집</strong><small id="dashboardHistoryStatus">대기 중</small></div></div>
+            <div class="dashboard-flow-item" data-dashboard-step="analysis"><span></span><div><strong>AI 요약분석</strong><small id="dashboardAnalysisStatus">대기 중</small></div></div>
+            <div class="dashboard-flow-item" data-dashboard-step="result"><span></span><div><strong>리포트 응답</strong><small id="dashboardResultStatus">대기 중</small></div></div>
+          </div>
+          <div class="dashboard-metrics" aria-label="분석 검증 지표">
+            <div><span>검진 회차</span><strong id="dashboardCheckupCount">—</strong></div>
+            <div><span>분석 지표</span><strong id="dashboardMetricCount">—</strong></div>
+            <div><span>개선</span><strong id="dashboardImprovedCount">—</strong></div>
+            <div><span>관리 필요</span><strong id="dashboardManagementCount">—</strong></div>
+          </div>
+          <div id="dashboardReportLog" class="dashboard-report-log">AI 요약분석을 실행하면 처리 단계와 결과가 이곳에 기록됩니다.</div>
+          <div id="dashboardVerificationDetails" class="dashboard-verification-details" hidden></div>
         </div>
-        <div id="auditCardList" class="audit-card-list" aria-live="polite"></div>
       </aside>
     </div>
-    <script src="/assets/app.js?v=20260903-5" defer></script>
+    <script src="/assets/app.js?v=20260904-9" defer></script>
   </body>
 </html>
