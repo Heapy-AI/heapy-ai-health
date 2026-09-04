@@ -1,4 +1,4 @@
-# 설정을 한 곳에 모은다(바꾸면 전체 반영) - 03·04강 '설정 주도'
+# 설정을 한 곳에 모은다(바꾸면 전체 반영)
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -174,3 +174,5 @@ LIFESTYLE_CONTEXT_TREND_MAX_ROWS = _positive_int_env(
     "LIFESTYLE_CONTEXT_TREND_MAX_ROWS",
     30,
 )
+PERSONAL_DATA_WINDOW_DAYS = _positive_int_env("PERSONAL_DATA_WINDOW_DAYS", 7)
+PERSONAL_DATA_MAX_ROWS = _positive_int_env("PERSONAL_DATA_MAX_ROWS", 500)
