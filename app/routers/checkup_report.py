@@ -8,30 +8,29 @@ from app.services.checkup_report import CheckupReportService
 from app.services.supabase_conversation import SupabaseConversationError
 from app.routers.personal_data import personal_data_service
 
+
 router = APIRouter(prefix="/me/checkup", tags=["checkup-report"])
 report_service = CheckupReportService()
 
-@router.post("/report", response_model=CheckupReportResponse)
 
+@router.post("/report", response_model=CheckupReportResponse)
 async def create_checkup_report(
     request: CheckupReportRequest,
     session: AuthenticatedSession = Depends(require_current_session),
 ) -> CheckupReportResponse:
-    
     started = perf_counter()
     try:
         history_started = perf_counter()
         history = personal_data_service.get_checkup_history(
             session.access_token,
             str(session.user.get("id", "")),
-
+        )
         history_seconds = perf_counter() - history_started
 
         if len(history) < 2:
-
             raise HTTPException(
                 status_code=400,
-                detail=("AI 요약분석에는 최소 2회의 건강검진 이력이 필요합니다."
+                detail="AI 요약분석에는 최소 2회의 건강검진 이력이 필요합니다.",
             )
 
         report, trace = await report_service.generate_with_trace(history,persona=request.persona)
@@ -46,7 +45,8 @@ async def create_checkup_report(
                 "history": history,
                 "db_status_used": True,
                 "persona": request.persona, # 어떤 페르소나를 사용했는지 확인
-                "timings": {"history_seconds": round(history_seconds,3),
+                "timings": {
+                    "history_seconds": round(history_seconds,3),
                     **trace["timings"],
                     "total_seconds": round(total_seconds, 3),
                 },
