@@ -1839,13 +1839,6 @@ function lifestyleReportKey(tab = activeLifestyleTab, days = lifestyleDays) {
   return `${tab}|${days}`;
 }
 
-function formatReportNumber(value) {
-  if (value === null || value === undefined) return "—";
-  const number = Number(value);
-  if (!Number.isFinite(number)) return String(value);
-  return formatDataNumber(number, Number.isInteger(number) ? 0 : 1);
-}
-
 function setLifestyleStatus(message, isError = false) {
   // 안내 문구가 있을 때만 본문을 감춰 당일 수치·AI 분석·추이 순서를 항상 유지한다.
   elements.lifestyleStatus.textContent = message;
@@ -1971,59 +1964,9 @@ function buildReportList(className, items, build) {
   return list;
 }
 
-function buildReportMetricItem(metric) {
-  const item = document.createElement("li");
-  const head = document.createElement("div");
-  head.className = "lifestyle-report-metric-head";
-  head.appendChild(createTextElement("strong", "",
-    metric.unit ? `${metric.metric} (${metric.unit})` : String(metric.metric || "")));
-  // 판정은 서비스가 참고범위와 비교해 계산한 값을 그대로 보여준다.
-  if (metric.status) head.appendChild(createStatusChip(metric.status));
-  if (metric.trend) {
-    const change = metric.change === null || metric.change === undefined
-      ? ""
-      : ` ${metric.change > 0 ? "+" : ""}${formatReportNumber(metric.change)}`;
-    head.appendChild(createTextElement("span", "lifestyle-trend-chip", `${metric.trend}${change}`));
-  }
-  if (metric.reference) {
-    head.appendChild(createTextElement("span", "lifestyle-report-reference", `참고 ${metric.reference}`));
-  }
-  item.appendChild(head);
-
-  // 과거 구간과 현재 구간을 나란히 놓아 '그때는 어땠고 지금은 어떤지'가 한눈에 보이게 한다.
-  if (metric.previous !== null && metric.previous !== undefined
-    && metric.current !== null && metric.current !== undefined) {
-    const shift = document.createElement("div");
-    shift.className = "lifestyle-report-shift";
-    shift.append(
-      createTextElement("span", "", `전반 ${formatReportNumber(metric.previous)}`),
-      ...(metric.previous_status ? [createStatusChip(metric.previous_status)] : []),
-      createTextElement("span", "lifestyle-report-arrow", "→"),
-      createTextElement("span", "", `후반 ${formatReportNumber(metric.current)}`),
-      ...(metric.status ? [createStatusChip(metric.status)] : []),
-    );
-    item.appendChild(shift);
-  }
-
-  item.appendChild(createTextElement("span", "lifestyle-report-description", String(metric.description || "")));
-  return item;
-}
-
-function buildReportAnomalyItem(anomaly) {
-  const item = document.createElement("li");
-  const head = document.createElement("div");
-  head.className = "lifestyle-report-metric-head";
-  head.appendChild(createTextElement("span", "lifestyle-anomaly-date", formatGraphDate(anomaly.date)));
-  head.appendChild(createTextElement("strong", "",
-    `${anomaly.metric} ${formatReportNumber(anomaly.value)}${anomaly.unit ? ` ${anomaly.unit}` : ""}`));
-  if (anomaly.status) head.appendChild(createStatusChip(anomaly.status));
-  item.append(head, createTextElement("span", "lifestyle-report-description", String(anomaly.description || "")));
-  return item;
-}
-
 function appendReportSection(nodes, title, className, items, build) {
   if (!items.length) return;
-  nodes.push(createTextElement("h5", "lifestyle-report-subtitle", title));
+  if (title) nodes.push(createTextElement("h5", "lifestyle-report-subtitle", title));
   nodes.push(buildReportList(className, items, build));
 }
 
@@ -2040,27 +1983,26 @@ function renderLifestyleReport(hasData = true) {
   }
   elements.lifestyleReport.hidden = false;
   if (isLoading) {
-    setDataPlaceholder(elements.lifestyleReport, "AI가 항목별 특성에 맞춰 분석하고 있어요.");
+    setDataPlaceholder(elements.lifestyleReport, "AI가 이 탭의 기록을 살펴보고 있어요.");
     return;
   }
   if (state.status === "error") {
     setDataPlaceholder(elements.lifestyleReport, state.message, true);
     return;
   }
+  // 사용자에게는 지금 상태와 할 일만 보여 준다.
+  // 항목별 수치·판정·이상 지점은 오른쪽 검증 패널에만 남긴다.
   const report = state.report || {};
   const nodes = [
     createTextElement("h4", "", String(report.headline || "")),
-    createTextElement("p", "", String(report.summary || "")),
+    createTextElement("p", "lifestyle-report-state", String(report.current_state || "")),
   ];
-  appendReportSection(nodes, "항목별 변화", "lifestyle-report-metrics", report.metrics || [], buildReportMetricItem);
-  appendReportSection(nodes, "발견된 패턴", "lifestyle-report-patterns", report.patterns || [],
-    (pattern) => createTextElement("li", "", String(pattern)));
-  appendReportSection(nodes, "눈에 띈 날", "lifestyle-report-anomalies", report.anomalies || [], buildReportAnomalyItem);
-  nodes.push(createTextElement("p", "", String(report.overall_analysis || "")));
-  appendReportSection(nodes, "관리 제안", "lifestyle-report-recommendations", report.recommendations || [],
-    (recommendation) => createTextElement("li", "", String(recommendation)));
+  appendReportSection(nodes, "", "lifestyle-report-points", report.key_points || [],
+    (point) => createTextElement("li", "", String(point)));
+  appendReportSection(nodes, "지금 신경 쓰면 좋은 것", "lifestyle-report-actions", report.actions || [],
+    (action) => createTextElement("li", "", String(action)));
   nodes.push(createTextElement("small", "lifestyle-report-footnote",
-    `${state.latestDate ? `${state.latestDate} 당일 수치와 ` : ""}최근 ${state.windowDays}일 기록을 근거로 생성했습니다.`
+    `${state.latestDate ? `${state.latestDate}까지의 ` : ""}최근 ${state.windowDays}일 기록을 근거로 생성했습니다.`
     + " 참고범위는 일반 성인 기준이며 성별·나이·활동량을 반영하지 않습니다."));
   elements.lifestyleReport.replaceChildren(...nodes);
 }
@@ -2087,15 +2029,18 @@ function renderLifestyleDashboard(tabLabel, days, payload) {
   finishDashboardRun("lifestyle", {
     badge: { text: "완료", tone: "success" },
     metrics: [analyzed.length, outOfRange, anomalies, managed],
-    log: `${tabLabel} 탭의 최근 ${payload.window_days || days}일 기록에서 ${analyzed.length}개 항목을 계산하고 AI 요약분석을 완료했습니다.`
+    log: `${tabLabel} 탭의 최근 ${payload.window_days || days}일 기록에서 ${analyzed.length}개 항목을 계산하고`
+      + ` 프롬프트 v${payload.prompt_version || "?"}로 AI 요약분석을 완료했습니다.`
       + ` 기준일은 ${payload.latest_date || "기록 없음"}입니다.`,
     verification,
     sections: [
       ["항목별 계산 근거와 코드 판정", verification.analysis_input || {}],
       ["이상 지점으로 잡힌 날", analyzed.flatMap((metric) =>
         (metric.anomalies || []).map((item) => ({ metric: metric.metric, ...item })))],
+      ["함께 움직인 항목", (verification.analysis_input || {}).co_movements || []],
       ["데이터 출처 및 판정 기준", {
         source: verification.source,
+        prompt_version: verification.prompt_version,
         reference_basis: (verification.analysis_input || {}).reference_basis,
         judged_by: "서비스 코드가 참고범위와 비교해 계산 (AI 재판정 금지)",
       }],

@@ -13,7 +13,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.routers.auth import AuthenticatedSession, require_current_session
 from app.routers.personal_data import personal_data_service
 from app.schemas.lifestyle_report import LifestyleReportResponse
-from app.services.lifestyle_report import DOMAIN_LABELS, LifestyleReportService
+from app.services.lifestyle_report import (
+    DOMAIN_LABELS,
+    PROMPT_VERSION,
+    LifestyleReportService,
+)
 from app.services.supabase_conversation import SupabaseConversationError
 
 
@@ -51,9 +55,11 @@ async def create_lifestyle_report(
             domain=domain,
             window_days=window_days,
             latest_date=analysis["latest_date"],
+            prompt_version=PROMPT_VERSION,
             report=report,
             verification={
                 "source": "Supabase lifestyle_* tables",
+                "prompt_version": PROMPT_VERSION,
                 "timings": {
                     "window_seconds": round(window_seconds, 3),
                     **trace["timings"],

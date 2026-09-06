@@ -9,6 +9,11 @@
 기준을 하나로 정하기 어려운 항목(체중, 탄수화물, 지방, 깊은수면)은 일부러 비워
 추세만 설명하게 한다. 틀린 판정보다 판단 보류가 낫다.
 
+계산은 정밀하게 하되 프롬프트에는 압축해서 넘긴다. 통계값을 그대로 주면 모델이 그 숫자를
+옮겨 적으므로, 서비스가 먼저 자연어 표현(level·frequency·direction·stability)으로 바꾸고
+일별 계열은 아예 넘기지 않는다. 전체 계산 결과는 API 응답의 verification.analysis_input에
+그대로 남아 개발자 검증 화면에서 확인할 수 있다.
+
 작성자: 고수연
 """
 
@@ -16,7 +21,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from statistics import fmean, pstdev
+from statistics import StatisticsError, correlation, fmean, pstdev
 from time import perf_counter
 from typing import Any
 
@@ -24,6 +29,13 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.core.config import MODEL
 from app.schemas.lifestyle_report import LifestyleReportContent
+from app.services.prompts import lifestyle_report_v2 as prompt_v2
+
+
+# 쓰고 있는 프롬프트 판. v1.0으로 되돌리려면 이 모듈만 바꾸면 된다.
+# (v1.0은 출력 계약이 달라 LifestyleReportContentV1을 함께 써야 한다.)
+ACTIVE_PROMPT = prompt_v2
+PROMPT_VERSION = prompt_v2.VERSION
 
 
 DOMAIN_LABELS = {
@@ -46,79 +58,13 @@ _ANOMALY_SIGMA = 2.0
 _MAX_ANOMALIES_PER_METRIC = 5
 # 구간의 이 비율을 넘게 범위 밖이면 '특정 날의 이상'이 아니라 수준 자체의 문제로 본다.
 _CHRONIC_OUT_OF_RANGE_RATIO = 0.5
-# 프롬프트에 넣는 계열 길이 상한. 1년 구간이면 일별 점이 너무 많아진다.
+# 검증 패널에 남기는 계열 길이 상한. 1년 구간이면 일별 점이 너무 많아진다.
 _MAX_SERIES_POINTS = 30
-
-
-_COMMON_RULES = """너는 사용자가 자신의 생활 데이터를 이해하도록 돕는 친절한 건강관리 AI 코치다.
-
-[반드시 지킬 규칙]
-- 질병을 진단하거나 원인을 단정하지 마라. 입력 데이터에 있는 수치만 사용하고 없는 항목을 지어내지 마라.
-- status·earlier_status·current_status는 시스템이 참고범위와 비교해 이미 계산한 값이다.
-  절대 재판정하거나 바꾸지 마라. 그대로 인용해 설명만 하라.
-- reference가 없는 항목은 좋고 나쁨을 말하지 말고 변화 추세만 설명하라.
-- coverage_ratio가 낮으면 기록이 빠진 날이 많다는 뜻이다. 그 항목의 총량·평균을 단정하지 마라.
-- 참고범위는 일반 성인 기준이며 개인의 성별·나이·활동량을 반영하지 않는다는 점을 recommendations 중 한 곳에서 알려라.
-- 의료 행위를 권하지 말고 생활 관리 조언만 하라. 한국어 존댓말과 JSON schema를 지켜라.
-
-[입력 데이터 읽는 법]
-- latest는 가장 최근 기록일({latest_date})의 값이다.
-- earlier_average는 구간 전반, recent_average는 구간 후반의 평균이다. 과거와 현재를 이 둘로 비교하라.
-- cv는 변동계수(%)다. 값이 클수록 날마다 들쭉날쭉했다는 뜻이다.
-- anomalies는 참고범위를 벗어났거나 평소와 크게 달랐던 날이다.
-
-[작성 규칙]
-- headline은 이 탭에서 가장 눈에 띄는 변화를 한 문장으로 요약하라.
-- summary는 과거 구간과 현재 구간을 견줘 3~4문장으로 설명하라.
-- metrics에는 입력에 있는 항목만 담고, description에 당일 값·구간 평균·전후반 변화·판정을 함께 넣어라.
-- patterns에는 항목 사이의 관계나 규칙성처럼 수치 하나만 봐서는 안 보이는 흐름을 2~4개 적어라.
-- anomalies에는 입력의 anomalies에 있는 날만 담고, 왜 눈에 띄는지 설명하라. 없으면 빈 배열로 두라.
-- overall_analysis는 지금 상태와 앞으로 볼 점을 3~5문장으로 정리하라.
-- recommendations는 최대 3개만 작성하라."""
-
-# 탭마다 항목의 성격이 달라 읽는 법도 다르다. 공통 규칙 뒤에 이 지침을 덧붙인다.
-_DOMAIN_GUIDES = {
-    "bio": """[생체기록 탭을 볼 때]
-- 이 탭의 값은 '측정 시점의 값'이다. 기록이 없는 날은 측정을 안 한 날이지 수치가 0인 날이 아니다.
-- 혈압·혈당·심박수는 참고범위 대비 위치가 가장 중요하다. 당일 값 하나로 단정하지 말고
-  구간 안에서 범위를 벗어난 날이 몇 번이었는지(out_of_range_days)를 함께 보라.
-- 체중은 참고범위가 없다. 절대값으로 좋고 나쁨을 말하지 말고 변화 방향과 폭만 설명하라.
-  BMI는 참고범위가 있으니 체중 변화와 BMI 판정을 연결해 설명하라.
-- 혈압은 수축기와 이완기를 함께 읽어라. 혈당은 공복과 식후를 섞지 마라.
-- 측정 횟수가 적으면(days가 작으면) 추세 판단이 약하다는 점을 분명히 말하라.""",
-    "activity": """[활동기록 탭을 볼 때]
-- 이 탭의 값은 '하루 누적량'이다. 기록이 없는 날을 '활동을 안 한 날'로 단정하지 마라.
-  기기를 안 찼을 수도 있다. coverage_ratio로 기록이 얼마나 촘촘한지 먼저 확인하라.
-- 총량보다 규칙성이 중요하다. 며칠이나 꾸준히 움직였는지, 특정 날에만 몰렸는지(cv)를 중심으로 보라.
-- 걸음 수·활동시간·운동시간은 권고 수준에 얼마나 닿았는지가 핵심이다.
-- 계단·이동거리·칼로리는 참고범위가 없다. 걸음 수와 같은 방향으로 움직였는지 확인하는 보조 지표로만 쓰라.
-- 운동 기록은 매일 있는 것이 정상이 아니다. 며칠에 한 번 했는지를 빈도로 설명하라.""",
-    "nutrition": """[영양기록 탭을 볼 때]
-- 이 탭의 값은 '하루 총섭취량'이다. 식사를 기록하지 않으면 총량이 실제보다 적게 잡힌다.
-  coverage_ratio가 낮거나 섭취칼로리가 지나치게 낮으면 '기록 누락 가능성'을 반드시 먼저 언급하고,
-  그 상태에서 부족하다고 단정하지 마라.
-- 나트륨과 당은 낮을수록, 단백질과 수분은 채울수록 좋다. 섭취칼로리는 적정 범위 안에 있는지를 보라.
-- 탄수화물과 지방은 참고범위가 없다. 총열량 대비 비율이 중요한 영양소라 절대량만으로 판단할 수 없다.
-  섭취칼로리와 함께 움직였는지만 설명하라.
-- 특정 날에 나트륨이나 당이 크게 치솟았다면 그날을 짚어 주라.""",
-    "sleep": """[수면기록 탭을 볼 때]
-- 수면은 길이보다 규칙성이 중요하다. cv가 크면 잠든 시간의 편차가 컸다는 뜻이니 이를 중심으로 설명하라.
-- 수면시간은 길어도 짧아도 좋지 않은 적정 범위형 항목이다. 짧은 날이 며칠 연속됐는지 확인하라.
-- 수면점수는 기기 제조사가 자체 기준으로 매긴 값이다. 의학적 기준이 아니라는 점을 짚어라.
-- 깊은수면은 참고범위가 없다. 총 수면시간 대비 비율이 중요한 값이라 절대 분수로 판단하지 말고,
-  수면시간·수면점수와 같이 움직였는지만 설명하라.
-- 깬 시간이 길어진 날이 있으면 그날의 수면시간·수면점수와 함께 묶어 설명하라.""",
-}
-
-_REPORT_PROMPT = """{common_rules}
-
-{domain_guide}
-
-지금 설명할 화면은 '{domain_label}' 탭이고, 사용자가 고른 조회 구간은 최근 {window_days}일이다.
-
-분석 데이터:
-{analysis_data}
-"""
+# 같은 탭 안에서 함께 움직인 항목으로 볼 상관계수 문턱과 보고 상한.
+_CO_MOVEMENT_THRESHOLD = 0.6
+_MAX_CO_MOVEMENTS = 4
+# 프롬프트에 예시로 넘기는 이상 지점 수. 날짜 나열을 부르지 않도록 최소로 준다.
+_MAX_PROMPT_ANOMALIES = 1
 
 
 def _number(value: Any) -> float | None:
@@ -363,6 +309,120 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
 }
 
 
+def _level_text(status: str) -> str:
+    """판정을 사용자에게 그대로 읽어 줄 수 있는 말로 바꾼다."""
+    return {
+        STATUS_GOOD: "기준 범위 안",
+        STATUS_CAUTION: "기준을 조금 벗어남",
+        STATUS_MANAGE: "기준을 크게 벗어남",
+        STATUS_UNKNOWN: "기준 없음",
+    }.get(status, "기준 없음")
+
+
+def _frequency_text(out_of_range: int, days: int) -> str:
+    """기준을 벗어난 일이 얼마나 잦았는지. 한 번과 반복은 뜻이 다르다."""
+    if not days or not out_of_range:
+        return "없음"
+    ratio = out_of_range / days
+    if ratio >= 0.8:
+        return "거의 매번"
+    if ratio >= 0.5:
+        return "대부분의 날"
+    if ratio >= 0.2:
+        return "절반 이하의 날"
+    return "가끔"
+
+
+def _direction_text(
+    change: float | None,
+    change_rate: float | None,
+    deviation: float,
+    direction: str,
+) -> str:
+    """변화의 방향과 세기. 정확한 증감량 대신 이 표현을 쓰게 한다.
+
+    의미 있는 변화 폭은 항목마다 다르다. 체중은 한 달에 1%만 움직여도 흐름이지만
+    걸음 수의 1%는 잡음이다. 그래서 고정 비율 대신 두 잣대를 함께 본다. 제 수준
+    대비 얼마나 움직였는지(change_rate)와, 제 평소 흔들림 대비 얼마나 벗어났는지
+    (change/표준편차)가 모두 서야 흐름으로 인정한다.
+    """
+    if change is None or change_rate is None:
+        return "판단하기 이름"
+    magnitude = abs(change_rate)
+    # 표준편차가 0이면 값이 내내 같았다는 뜻이라 흔들림 잣대를 적용할 것이 없다.
+    effect = abs(change) / deviation if deviation > 0 else 0.0
+    if magnitude < 1 or effect < 0.6:
+        return "큰 변화 없음"
+    rising = change > 0
+    strong = magnitude >= 8 and effect >= 1.0
+    if direction == "trend":
+        return f"{'뚜렷하게' if strong else '조금씩'} {'오르는' if rising else '내려가는'} 흐름"
+    return f"{'뚜렷하게' if strong else '조금씩'} {'높아지는' if rising else '낮아지는'} 흐름"
+
+
+def _stability_text(cv: float | None) -> str:
+    """날마다 들쭉날쭉했는지. 활동·수면에서는 평균보다 이쪽이 중요하다."""
+    if cv is None:
+        return ""
+    if cv < 15:
+        return "안정적"
+    if cv < 30:
+        return "보통"
+    return "날마다 편차가 큼"
+
+
+def _confidence_text(metric: _Metric, days: int, coverage: float) -> str:
+    """추세를 말해도 되는지. 측정형은 횟수로, 누적형은 기록률로 본다."""
+    if days < _MIN_DAYS_FOR_COMPARISON:
+        return "부족"
+    if metric.kind == "accumulation":
+        return "부족" if coverage < 0.3 else "보통" if coverage < 0.6 else "충분"
+    return "보통" if days < 8 else "충분"
+
+
+def _longest_out_of_range_run(metric: _Metric, series: list[dict[str, Any]]) -> int:
+    """기준을 벗어난 기록이 연달아 몇 번 이어졌는지. 반복성을 말할 근거가 된다."""
+    longest = current = 0
+    for point in series:
+        if metric.status(point["value"]) in {STATUS_CAUTION, STATUS_MANAGE}:
+            current += 1
+            longest = max(longest, current)
+        else:
+            current = 0
+    return longest
+
+
+def _co_movements(pairs: list[tuple[_Metric, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+    """같은 탭 안에서 함께 움직인 항목 짝을 찾는다.
+
+    탭별 독립 분석이라 다른 탭과는 엮지 않는다. 대신 이 탭 안의 관계는 사용자가
+    가장 이해하기 쉬운 이야기라 적극적으로 찾아 넘긴다. 인과가 아니라 동행이다.
+    """
+    found = []
+    for index, (left, left_series) in enumerate(pairs):
+        left_values = {point["date"]: point["value"] for point in left_series}
+        for right, right_series in pairs[index + 1:]:
+            shared = [(left_values[point["date"]], point["value"])
+                      for point in right_series if point["date"] in left_values]
+            if len(shared) < _MIN_DAYS_FOR_COMPARISON:
+                continue
+            try:
+                coefficient = correlation([pair[0] for pair in shared], [pair[1] for pair in shared])
+            except StatisticsError:
+                # 한쪽 값이 내내 같으면 상관을 정의할 수 없다.
+                continue
+            if abs(coefficient) < _CO_MOVEMENT_THRESHOLD:
+                continue
+            found.append({
+                "metrics": [left.label, right.label],
+                "relation": "같은 방향으로 움직임" if coefficient > 0 else "반대 방향으로 움직임",
+                "shared_days": len(shared),
+                "coefficient": round(coefficient, 2),
+            })
+    found.sort(key=lambda item: abs(item["coefficient"]), reverse=True)
+    return found[:_MAX_CO_MOVEMENTS]
+
+
 def _downsample(series: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     """긴 계열을 처음과 끝을 남기고 균등하게 솎아 프롬프트 길이를 억제한다."""
     if len(series) <= limit:
@@ -443,6 +503,11 @@ def _summarize_metric(metric: _Metric, series: list[dict[str, Any]], window_days
 
     deviation = pstdev(values) if len(values) > 1 else 0.0
     statuses = [metric.status(value) for value in values]
+    out_of_range_days = sum(1 for status in statuses if status in {STATUS_CAUTION, STATUS_MANAGE})
+    coverage_ratio = round(len(values) / window_days, 2)
+    cv = round(deviation / abs(average) * 100, 1) if average else None
+    # 통계값을 사람 말로 미리 옮겨 둔다. 모델은 숫자보다 이 표현을 쓰게 된다.
+    current_status = metric.status(recent_average)
     return {
         "metric": metric.label,
         "unit": metric.unit,
@@ -457,23 +522,71 @@ def _summarize_metric(metric: _Metric, series: list[dict[str, Any]], window_days
         "maximum": max(values),
         "days": len(values),
         # 구간의 며칠에 기록이 있었는지. 낮으면 총량·평균을 단정할 수 없다.
-        "coverage_ratio": round(len(values) / window_days, 2),
+        "coverage_ratio": coverage_ratio,
+        # 아래 네 값이 사용자에게 그대로 옮겨 써도 되는 표현이다.
+        "level": _level_text(current_status if current_status != STATUS_UNKNOWN else metric.status(latest)),
+        "frequency": _frequency_text(out_of_range_days, len(values)),
+        "direction": _direction_text(change, change_rate, deviation, metric.direction),
+        "stability": _stability_text(cv),
+        "confidence": _confidence_text(metric, len(values), coverage_ratio),
+        # 기준을 벗어난 기록이 연달아 몇 번 이어졌는지. 반복성을 말할 근거다.
+        "longest_out_of_range_run": _longest_out_of_range_run(metric, series),
         "earlier_average": earlier_average,
         "earlier_range": earlier_range,
         "earlier_status": metric.status(earlier_average),
         "recent_average": recent_average,
         "recent_range": recent_range,
-        "current_status": metric.status(recent_average),
+        "current_status": current_status,
         "change": change,
         "change_rate": change_rate,
         "trend": trend,
         "stdev": round(deviation, 2),
         # 변동계수. 평균 대비 얼마나 들쭉날쭉했는지를 단위 없이 견줄 수 있다.
-        "cv": round(deviation / abs(average) * 100, 1) if average else None,
-        "out_of_range_days": sum(1 for status in statuses if status in {STATUS_CAUTION, STATUS_MANAGE}),
+        "cv": cv,
+        "out_of_range_days": out_of_range_days,
         "anomalies": _find_anomalies(metric, series),
         "series": _downsample(series, _MAX_SERIES_POINTS),
         "series_downsampled": len(series) > _MAX_SERIES_POINTS,
+    }
+
+
+# 프롬프트에 넘길 항목 필드. 나머지 통계는 검증용으로만 남기고 모델에게 주지 않는다.
+# 여기에 필드를 더할 때는 그 값이 답변에 숫자로 새어 나와도 괜찮은지 먼저 따져야 한다.
+_PROMPT_METRIC_FIELDS = (
+    "metric", "unit", "kind", "reference",
+    "level", "frequency", "direction", "stability", "confidence",
+    "longest_out_of_range_run", "days",
+)
+
+
+def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
+    """모델에게 보여 줄 압축본을 만든다.
+
+    일별 계열과 전·후반 평균, 변동계수 같은 원시 통계는 넘기지 않는다. 주면 그대로
+    옮겨 적기 때문이다. 대신 같은 뜻을 담은 자연어 표현을 넘긴다. 이상 지점도 예시
+    한 건만 남겨 날짜 나열을 부르지 않게 한다.
+    """
+    metrics = []
+    for metric in analysis.get("metrics", []):
+        view = {key: metric[key] for key in _PROMPT_METRIC_FIELDS if key in metric}
+        # 대표 수치 한 개만 남긴다. 어림수로 한 번 언급할 때 쓰라고 주는 값이다.
+        view["recent_typical"] = metric.get("recent_average")
+        if metric.get("kind") == "accumulation":
+            view["coverage_ratio"] = metric.get("coverage_ratio")
+        example = (metric.get("anomalies") or [])[:_MAX_PROMPT_ANOMALIES]
+        if example:
+            view["example_day"] = [{"date": item["date"], "value": item["value"]} for item in example]
+        metrics.append(view)
+    return {
+        "domain_label": analysis.get("domain_label", ""),
+        "window_days": analysis.get("window_days"),
+        "latest_date": analysis.get("latest_date", ""),
+        "reference_basis": analysis.get("reference_basis", ""),
+        "metrics": metrics,
+        "co_movements": [
+            {key: item[key] for key in ("metrics", "relation", "shared_days")}
+            for item in analysis.get("co_movements", [])
+        ],
     }
 
 
@@ -510,12 +623,13 @@ class LifestyleReportService:
     @staticmethod
     def build_prompt(domain: str, analysis: dict[str, Any], window_days: int) -> str:
         """공통 규칙에 탭별 지침을 붙여 프롬프트를 만든다."""
-        return _REPORT_PROMPT.format(
-            common_rules=_COMMON_RULES.format(latest_date=analysis["latest_date"] or "기록 없음"),
-            domain_guide=_DOMAIN_GUIDES.get(domain, ""),
+        return ACTIVE_PROMPT.REPORT_PROMPT.format(
+            common_rules=ACTIVE_PROMPT.COMMON_RULES,
+            domain_guide=ACTIVE_PROMPT.DOMAIN_GUIDES.get(domain, ""),
             domain_label=DOMAIN_LABELS.get(domain, domain),
             window_days=window_days,
-            analysis_data=json.dumps(analysis, ensure_ascii=False, indent=2),
+            latest_date=analysis["latest_date"] or "기록 없음",
+            analysis_data=json.dumps(_prompt_view(analysis), ensure_ascii=False, indent=2),
         )
 
     @staticmethod
@@ -528,16 +642,17 @@ class LifestyleReportService:
             (series[-1]["date"] for _, series in series_by_metric if series),
             default="",
         )
-        summary = [
-            _summarize_metric(metric, series, window_days, latest_date)
-            for metric, series in series_by_metric
-            if series
-        ]
+        recorded = [(metric, series) for metric, series in series_by_metric if series]
         return {
             "domain": domain,
             "domain_label": DOMAIN_LABELS.get(domain, domain),
             "window_days": window_days,
             "latest_date": latest_date,
             "reference_basis": "일반 성인 기준이며 성별·나이·활동량을 반영하지 않음",
-            "metrics": summary,
+            "metrics": [
+                _summarize_metric(metric, series, window_days, latest_date)
+                for metric, series in recorded
+            ],
+            # 탭 안에서 함께 움직인 항목 짝. 다른 탭과는 엮지 않는다.
+            "co_movements": _co_movements(recorded),
         }
