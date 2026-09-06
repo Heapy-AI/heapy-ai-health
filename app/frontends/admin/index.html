@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#7b68e8" />
     <meta name="description" content="HEAPY 건강정보 AI 챗봇 MVP" />
     <title>HEAPY | 건강정보 AI</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260904-10" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260907-16" />
   </head>
   <body>
     <!-- 작성자: 김진우 -->
@@ -118,9 +118,12 @@
             <div class="personal-environment-heading"><span class="card-eyebrow">LIFESTYLE HEALTH ENV</span><span class="quality-badge info">검증 모드</span></div>
             <dl class="environment-facts personal-environment-facts">
               <div><dt>Supabase 권한</dt><dd>authenticated · 본인 행만 (RLS)</dd></div>
-              <div><dt>조회 범위</dt><dd>선택 기간의 최신 기록 기준</dd></div>
-              <div><dt>집계 방식</dt><dd>1년 월평균 · 3/6개월 주평균 · 1개월/1주일 일평균</dd></div>
-              <div><dt>그래프</dt><dd>기간 평균값 기반 지표별 시각화</dd></div>
+              <div><dt>당일 수치</dt><dd>탭 항목의 최신 기록일 값</dd></div>
+              <div><dt>집계 방식</dt><dd>1년 월평균 · 3/6개월 주평균 · 1개월/1주일 일별</dd></div>
+              <div><dt>그래프</dt><dd>세부 항목별 그래프 + 수치표</dd></div>
+              <div><dt>분석 API</dt><dd>POST /me/lifestyle/report</dd></div>
+              <div><dt>분석 방식</dt><dd>탭별 프롬프트 · 참고범위 판정은 코드 계산</dd></div>
+              <div><dt>참고범위</dt><dd>일반 성인 기준 (성별·나이 미반영)</dd></div>
             </dl>
             <div class="personal-table-list">
               <span>참조 테이블</span>
@@ -257,21 +260,47 @@
               </div>
               <span id="lifestyleMeta" class="data-meta">—</span>
             </div>
-            <div class="lifestyle-periods" role="group" aria-label="생활건강 조회 기간">
-              <button type="button" class="active" data-lifestyle-days="365">1년</button>
-              <button type="button" data-lifestyle-days="180">6개월</button>
-              <button type="button" data-lifestyle-days="90">3개월</button>
-              <button type="button" data-lifestyle-days="30">한달</button>
-              <button type="button" data-lifestyle-days="7">1주일</button>
-            </div>
             <div class="lifestyle-tabs" role="tablist" aria-label="생활건강 종류">
               <button class="active" type="button" role="tab" aria-selected="true" data-lifestyle-tab="bio">생체기록</button>
               <button type="button" role="tab" aria-selected="false" data-lifestyle-tab="activity">활동기록</button>
               <button type="button" role="tab" aria-selected="false" data-lifestyle-tab="nutrition">영양기록</button>
               <button type="button" role="tab" aria-selected="false" data-lifestyle-tab="sleep">수면기록</button>
             </div>
+            <!-- 탭 안은 당일 수치 → AI 분석 → 기간별 추이 순으로 고정한다. 작성자: 고수연 -->
             <div id="lifestyleBody" class="data-body">
-              <p class="data-placeholder">생활건강 데이터를 불러오고 있어요.</p>
+              <p id="lifestyleStatus" class="data-placeholder">생활건강 데이터를 불러오고 있어요.</p>
+              <div id="lifestyleContent" class="lifestyle-content" hidden>
+                <section class="lifestyle-block">
+                  <div class="lifestyle-block-head">
+                    <h3>당일 수치</h3>
+                    <span id="lifestyleTodayDate" class="data-section-range">—</span>
+                  </div>
+                  <div id="lifestyleToday" class="lifestyle-today"></div>
+                </section>
+
+                <section class="lifestyle-block">
+                  <div class="lifestyle-block-head">
+                    <h3>AI 분석</h3>
+                    <button id="lifestyleReportButton" class="report-button" type="button">AI 요약분석</button>
+                  </div>
+                  <!-- 건강검진 탭과 같이 버튼을 눌러야만 분석 결과가 열린다. -->
+                  <div id="lifestyleReport" class="lifestyle-report" aria-live="polite" hidden></div>
+                </section>
+
+                <section class="lifestyle-block">
+                  <div class="lifestyle-block-head">
+                    <h3>기간별 추이</h3>
+                    <div class="lifestyle-periods" role="group" aria-label="생활건강 조회 기간">
+                      <button type="button" data-lifestyle-days="7">1주일</button>
+                      <button type="button" data-lifestyle-days="30">한달</button>
+                      <button type="button" data-lifestyle-days="90">3개월</button>
+                      <button type="button" data-lifestyle-days="180">6개월</button>
+                      <button type="button" class="active" data-lifestyle-days="365">1년</button>
+                    </div>
+                  </div>
+                  <div id="lifestyleTrends" class="lifestyle-trends"></div>
+                </section>
+              </div>
             </div>
           </div>
         </section>
@@ -292,26 +321,27 @@
         </div>
         <div id="dashboardInsightPanel" class="dashboard-insight-panel" hidden>
           <div class="panel-header">
-            <div><span class="panel-eyebrow">AI DASHBOARD</span><h2>검진 분석 검증</h2></div>
+            <div><span class="panel-eyebrow">AI DASHBOARD</span><h2 id="dashboardPanelTitle">검진 분석 검증</h2></div>
             <span id="dashboardStatusBadge" class="quality-badge neutral">대기</span>
           </div>
+          <!-- 검진·생활건강이 같은 뼈대를 쓰고 단계와 지표 이름만 탭에 맞춰 바뀐다. 작성자: 고수연 -->
           <div class="dashboard-flow" aria-live="polite">
-            <div class="dashboard-flow-item" data-dashboard-step="latest"><span></span><div><strong>선택 검진 조회</strong><small id="dashboardLatestStatus">대기 중</small></div></div>
-            <div class="dashboard-flow-item" data-dashboard-step="history"><span></span><div><strong>전체 이력 수집</strong><small id="dashboardHistoryStatus">대기 중</small></div></div>
-            <div class="dashboard-flow-item" data-dashboard-step="analysis"><span></span><div><strong>AI 요약분석</strong><small id="dashboardAnalysisStatus">대기 중</small></div></div>
-            <div class="dashboard-flow-item" data-dashboard-step="result"><span></span><div><strong>리포트 응답</strong><small id="dashboardResultStatus">대기 중</small></div></div>
+            <div class="dashboard-flow-item" data-dashboard-step="latest"><span></span><div><strong data-dashboard-step-label="latest">선택 검진 조회</strong><small data-dashboard-step-status="latest">대기 중</small></div></div>
+            <div class="dashboard-flow-item" data-dashboard-step="history"><span></span><div><strong data-dashboard-step-label="history">전체 이력 수집</strong><small data-dashboard-step-status="history">대기 중</small></div></div>
+            <div class="dashboard-flow-item" data-dashboard-step="analysis"><span></span><div><strong data-dashboard-step-label="analysis">AI 요약분석</strong><small data-dashboard-step-status="analysis">대기 중</small></div></div>
+            <div class="dashboard-flow-item" data-dashboard-step="result"><span></span><div><strong data-dashboard-step-label="result">리포트 응답</strong><small data-dashboard-step-status="result">대기 중</small></div></div>
           </div>
           <div class="dashboard-metrics" aria-label="분석 검증 지표">
-            <div><span>검진 회차</span><strong id="dashboardCheckupCount">—</strong></div>
-            <div><span>분석 지표</span><strong id="dashboardMetricCount">—</strong></div>
-            <div><span>개선</span><strong id="dashboardImprovedCount">—</strong></div>
-            <div><span>관리 필요</span><strong id="dashboardManagementCount">—</strong></div>
+            <div><span data-dashboard-metric-label="0">검진 회차</span><strong data-dashboard-metric-value="0">—</strong></div>
+            <div><span data-dashboard-metric-label="1">분석 지표</span><strong data-dashboard-metric-value="1">—</strong></div>
+            <div><span data-dashboard-metric-label="2">개선</span><strong data-dashboard-metric-value="2">—</strong></div>
+            <div><span data-dashboard-metric-label="3">관리 필요</span><strong data-dashboard-metric-value="3">—</strong></div>
           </div>
           <div id="dashboardReportLog" class="dashboard-report-log">AI 요약분석을 실행하면 처리 단계와 결과가 이곳에 기록됩니다.</div>
           <div id="dashboardVerificationDetails" class="dashboard-verification-details" hidden></div>
         </div>
       </aside>
     </div>
-    <script src="/assets/app.js?v=20260904-10" defer></script>
+    <script src="/assets/app.js?v=20260907-16" defer></script>
   </body>
 </html>

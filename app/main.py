@@ -22,7 +22,16 @@ from app.core.config import (
     SUPABASE_URL,
 )
 from app.core.state import state
-from app.routers import ask, auth, chat, checkup_report, conversations, intent, personal_data
+from app.routers import (
+    ask,
+    auth,
+    chat,
+    checkup_report,
+    conversations,
+    intent,
+    lifestyle_report,
+    personal_data,
+)
 from app.services.chat_orchestrator import ChatOrchestrator
 from app.services.conversation_summary import build_conversation_summarizer
 from app.services.general_chat import build_general_chat_chain
@@ -131,6 +140,7 @@ app.include_router(auth.router)
 app.include_router(conversations.router)
 app.include_router(personal_data.router)
 app.include_router(checkup_report.router)
+app.include_router(lifestyle_report.router)
 app.include_router(chat.router)
 app.include_router(ask.router)
 app.include_router(intent.router)
