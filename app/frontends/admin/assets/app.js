@@ -1831,13 +1831,10 @@ async function loadCheckupReport() {
   }
 }
 
-// AI 분석은 화면에서 고른 기간을 그대로 분석한다. 구간이 다르면 결론도 달라지므로
-// 탭과 기간을 함께 캐시 키로 쓴다. 실행은 버튼을 눌렀을 때만 일어난다.
+// AI 분석 구간은 서비스가 탭마다 정한다. 화면의 기간 버튼은 그래프에만 적용된다.
+// 캐시는 탭당 하나이고, 새 기록이 들어와 기준일이 바뀌면 버린다.
+// 실행은 버튼을 눌렀을 때만 일어난다.
 const lifestyleReports = new Map();
-
-function lifestyleReportKey(tab = activeLifestyleTab, days = lifestyleDays) {
-  return `${tab}|${days}`;
-}
 
 function setLifestyleStatus(message, isError = false) {
   // 안내 문구가 있을 때만 본문을 감춰 당일 수치·AI 분석·추이 순서를 항상 유지한다.
@@ -1971,7 +1968,7 @@ function appendReportSection(nodes, title, className, items, build) {
 }
 
 function renderLifestyleReport(hasData = true) {
-  const state = lifestyleReports.get(lifestyleReportKey());
+  const state = lifestyleReports.get(activeLifestyleTab);
   const isLoading = state?.status === "loading";
   elements.lifestyleReportButton.disabled = isLoading || !hasData;
   elements.lifestyleReportButton.textContent = isLoading ? "분석 중..." : "AI 요약분석";
@@ -2002,7 +1999,9 @@ function renderLifestyleReport(hasData = true) {
   appendReportSection(nodes, "지금 신경 쓰면 좋은 것", "lifestyle-report-actions", report.actions || [],
     (action) => createTextElement("li", "", String(action)));
   nodes.push(createTextElement("small", "lifestyle-report-footnote",
-    `${state.latestDate ? `${state.latestDate}까지의 ` : ""}최근 ${state.windowDays}일 기록을 근거로 생성했습니다.`
+    `최근 ${state.recentDays}일과 전체 ${state.windowDays}일${state.coveredRange ? ` (${state.coveredRange})` : ""} 기록을 함께 보고 생성했습니다.`
+    + " 아래 기간 버튼은 그래프에만 적용됩니다."
+    + (state.dataTruncated ? " 기록이 많아 오래된 일부는 조회에서 제외됐습니다." : "")
     + " 참고범위는 일반 성인 기준이며 성별·나이·활동량을 반영하지 않습니다."));
   elements.lifestyleReport.replaceChildren(...nodes);
 }
@@ -2012,26 +2011,27 @@ function lifestyleTabLabel(tab) {
   return button ? button.textContent.trim() : tab;
 }
 
-function renderLifestyleDashboard(tabLabel, days, payload) {
+function renderLifestyleDashboard(tabLabel, payload) {
   const verification = payload.verification || {};
   const timings = verification.timings || {};
   const analyzed = (verification.analysis_input || {}).metrics || [];
-  // 판정과 이상 지점은 서비스가 계산해 내려준 값을 그대로 센다.
-  const outOfRange = analyzed.filter((metric) => metric.out_of_range_days > 0).length;
+  // 판정과 이상 지점은 서비스가 계산해 내려준 값을 그대로 센다. 지표는 전체 구간 기준이다.
+  const outOfRange = analyzed.filter((metric) => (metric.full || {}).out_of_range_days > 0).length;
   const anomalies = analyzed.reduce((sum, metric) => sum + (metric.anomalies || []).length, 0);
   const managed = analyzed.filter((metric) =>
-    [metric.current_status, metric.latest_status].includes("관리 필요")).length;
+    [(metric.full || {}).current_status, metric.latest_status].includes("관리 필요")).length;
 
-  setDashboardStep("latest", `${tabLabel} 최근 ${days}일 조회 완료 · ${formatElapsed(timings.window_seconds)}`);
-  setDashboardStep("history", `${analyzed.length}개 항목 지표·판정 계산 완료 · ${formatElapsed(timings.analysis_seconds)}`);
+  setDashboardStep("latest", `${tabLabel} 전체 ${payload.window_days}일 조회 완료 · ${formatElapsed(timings.window_seconds)}`);
+  setDashboardStep("history", `${analyzed.length}개 항목 · 최근 ${payload.recent_days}일 대비 계산 완료 · ${formatElapsed(timings.analysis_seconds)}`);
   setDashboardStep("analysis", `Gemini AI 응답 완료 · ${formatElapsed(timings.ai_seconds)}`);
   setDashboardStep("result", `구조화 리포트 수신 완료 · ${formatElapsed(timings.total_seconds)}`);
   finishDashboardRun("lifestyle", {
     badge: { text: "완료", tone: "success" },
     metrics: [analyzed.length, outOfRange, anomalies, managed],
-    log: `${tabLabel} 탭의 최근 ${payload.window_days || days}일 기록에서 ${analyzed.length}개 항목을 계산하고`
+    log: `${tabLabel} 탭의 ${analyzed.length}개 항목을 전체 ${payload.window_days}일과 최근 ${payload.recent_days}일 두 구간으로 계산하고`
       + ` 프롬프트 v${payload.prompt_version || "?"}로 AI 요약분석을 완료했습니다.`
-      + ` 기준일은 ${payload.latest_date || "기록 없음"}입니다.`,
+      + ` 기준일은 ${payload.latest_date || "기록 없음"}, 실제 데이터 범위는 ${payload.covered_range || "없음"}입니다.`
+      + (payload.data_truncated ? " 조회 상한에 걸려 오래된 기록 일부가 제외됐습니다." : ""),
     verification,
     sections: [
       ["항목별 계산 근거와 코드 판정", verification.analysis_input || {}],
@@ -2050,45 +2050,46 @@ function renderLifestyleDashboard(tabLabel, days, payload) {
 
 async function loadLifestyleReport(force = false) {
   const tab = activeLifestyleTab;
-  const days = lifestyleDays;
-  const key = lifestyleReportKey(tab, days);
-  if (!force && lifestyleReports.has(key)) return;
-  lifestyleReports.set(key, { status: "loading" });
+  if (!force && lifestyleReports.has(tab)) return;
+  lifestyleReports.set(tab, { status: "loading" });
   renderLifestyleReport();
   const tabLabel = lifestyleTabLabel(tab);
   dashboardResults.set("lifestyle", { steps: {}, badge: { text: "실행 중", tone: "info" }, metrics: [], log: "" });
-  setDashboardStep("latest", `${tabLabel} 최근 ${days}일 조회 중...`, "active");
+  setDashboardStep("latest", `${tabLabel} 구간 데이터 조회 중...`, "active");
   setDashboardStep("history", "참고범위 판정 대기 중", "pending");
   setDashboardStep("analysis", "Gemini 응답 대기 중...", "active");
   setDashboardStep("result", "응답 대기 중", "pending");
   setDashboardBadge("실행 중", "info");
   try {
     const response = await fetchWithSession(
-      `/me/lifestyle/report?domain=${encodeURIComponent(tab)}&window_days=${days}`,
+      `/me/lifestyle/report?domain=${encodeURIComponent(tab)}`,
       { method: "POST", headers: { Accept: "application/json" } },
     );
     const payload = await response.json().catch(() => ({}));
     if (response.status === 401) {
-      lifestyleReports.delete(key);
+      lifestyleReports.delete(tab);
       showLoginScreen("다시 로그인해 주세요.");
       return;
     }
     if (!response.ok) throw new Error(String(payload.detail || "AI 분석을 생성하지 못했습니다."));
-    lifestyleReports.set(key, {
+    lifestyleReports.set(tab, {
       status: "done",
       report: payload.report,
       latestDate: payload.latest_date || "",
-      windowDays: payload.window_days || days,
+      windowDays: payload.window_days,
+      recentDays: payload.recent_days,
+      coveredRange: payload.covered_range || "",
+      dataTruncated: Boolean(payload.data_truncated),
     });
-    renderLifestyleDashboard(tabLabel, days, payload);
+    renderLifestyleDashboard(tabLabel, payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 분석을 생성하지 못했습니다.";
-    lifestyleReports.set(key, { status: "error", message });
+    lifestyleReports.set(tab, { status: "error", message });
     setDashboardStep("result", "분석 실패", "error");
     failDashboardRun("lifestyle", message);
   }
-  // 응답을 기다리는 사이 탭이나 기간을 바꿨다면 그 화면을 덮어쓰지 않는다.
-  if (key === lifestyleReportKey()) renderLifestyleReport();
+  // 응답을 기다리는 사이 다른 탭으로 옮겼다면 그 탭 화면을 덮어쓰지 않는다.
+  if (tab === activeLifestyleTab) renderLifestyleReport();
 }
 
 function renderLifestyle(payload) {
@@ -2097,6 +2098,12 @@ function renderLifestyle(payload) {
   lifestylePayload = payload;
   const today = renderLifestyleToday(payload, days);
   renderLifestyleTrends(payload, days);
+  // 기간 버튼을 눌러도 분석은 그대로지만, 새 기록이 들어왔다면 옛 분석은 버린다.
+  const cached = lifestyleReports.get(activeLifestyleTab);
+  if (cached?.status === "done" && cached.latestDate && today.latestDate
+    && cached.latestDate !== today.latestDate) {
+    lifestyleReports.delete(activeLifestyleTab);
+  }
   renderLifestyleReport(Boolean(today.count));
   elements.lifestyleMeta.textContent = today.count
     ? `${today.latestDate} 기준 · 최근 ${days}일 · ${today.count}개 항목`

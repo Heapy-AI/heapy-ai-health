@@ -137,7 +137,7 @@ class GetRelevantContextTest(unittest.TestCase):
                         "steps": 8123,
                         "floors_climbed": 3,
                         "active_time": 42,
-                        "active_distance": 6.58,
+                        "active_distance_km": 6.58,
                         "active_calories": 210,
                     }
                 ]
@@ -156,8 +156,9 @@ class GetRelevantContextTest(unittest.TestCase):
         self.assertIn("[인증된 사용자 생활습관 정보]", context.prompt_text)
         self.assertIn("걸음 8,123보", context.prompt_text)
         self.assertIn("2026-08-19", context.prompt_text)
-        # active_distance는 km 단위로 적재되므로 환산 없이 km로 표기한다.
+        # lifestyle_activity.distance_m은 컬럼명과 달리 km로 적재돼 환산 없이 표기한다.
         self.assertIn("이동 6.6km", context.prompt_text)
+        self.assertIn("active_distance_km:distance_m", mocked_get.call_args.args[0])
 
         self.assertEqual(mocked_get.call_count, 1)
         url = mocked_get.call_args.args[0]
@@ -199,8 +200,7 @@ class GetRelevantContextTest(unittest.TestCase):
                     {
                         "measured_at": "2026-08-19T07:10:00",
                         "bio_type": "weight",
-                        "value": 71.25,
-                        "unit": "kg",
+                        "weight_kg": 71.25,
                     }
                 ]
             ),
@@ -219,6 +219,9 @@ class GetRelevantContextTest(unittest.TestCase):
         )
         self.assertEqual(requested_types, ["blood_pressure", "weight"])
         self.assertIn("체중 | 71.2 kg", context.prompt_text)
+        # 지표별 컬럼으로 바뀐 스키마를 그대로 조회해야 한다.
+        self.assertIn("weight_kg", mocked_get.call_args_list[0].args[0])
+        self.assertNotIn("select=measured_at,bio_type,value", mocked_get.call_args_list[0].args[0])
 
     def test_blood_pressure_shows_systolic_and_diastolic(self) -> None:
         with patch(
@@ -228,13 +231,9 @@ class GetRelevantContextTest(unittest.TestCase):
                     {
                         "measured_at": "2026-08-18T08:00:00",
                         "bio_type": "blood_pressure",
-                        "value": 133.2,
-                        "unit": "mmHg",
-                        "detail_data": {
-                            "pulse": 69,
-                            "systolic": 133,
-                            "diastolic": 84,
-                        },
+                        "systolic_mmhg": 133,
+                        "diastolic_mmhg": 84,
+                        "pulse_bpm": 69,
                     }
                 ]
             ),
@@ -257,9 +256,8 @@ class GetRelevantContextTest(unittest.TestCase):
                             {
                                 "measured_at": "2026-08-17T07:30:00",
                                 "bio_type": "blood_glucose",
-                                "value": 101.3,
-                                "unit": "mg/dL",
-                                "detail_data": {"fasting": fasting},
+                                "blood_glucose_mg_dl": 101.3,
+                                "is_fasting": fasting,
                             }
                         ]
                     ),
@@ -271,25 +269,22 @@ class GetRelevantContextTest(unittest.TestCase):
                     )
                 self.assertIn(f"101.3 mg/dL | {expected}", context.prompt_text)
 
-    def test_sleep_unit_is_localized_and_stages_included(self) -> None:
+    def test_sleep_reads_dedicated_table_and_converts_minutes(self) -> None:
+        """수면은 lifestyle_bio가 아니라 lifestyle_sleep에서 분 단위로 조회한다."""
         with patch(
             "app.services.supabase_lifestyle_context.requests.get",
             return_value=_response(
                 [
                     {
                         "measured_at": "2026-08-19T07:10:00",
-                        "bio_type": "sleep",
-                        "value": 6.21,
-                        "unit": "hour",
-                        "detail_data": {
-                            "awake_min": 31,
-                            "sleep_score": 74,
-                            "deep_sleep_min": 78,
-                        },
+                        "total_sleep_minutes": 372.6,
+                        "awake_minutes": 31,
+                        "deep_sleep_minutes": 78,
+                        "sleep_score": 74,
                     }
                 ]
             ),
-        ):
+        ) as mocked_get:
             context = _service().get_relevant_context(
                 "token",
                 "user-1",
@@ -300,8 +295,13 @@ class GetRelevantContextTest(unittest.TestCase):
             "수면시간 | 6.2 시간 | 수면점수 74 | 깊은수면 78분 | 깬시간 31분",
             context.prompt_text,
         )
+        url = mocked_get.call_args.args[0]
+        self.assertIn("/rest/v1/lifestyle_sleep", url)
+        self.assertIn("order=start_at.desc", url)
+        self.assertNotIn("bio_type=eq.sleep", url)
 
-    def test_null_detail_data_is_tolerated(self) -> None:
+    def test_missing_metric_column_is_tolerated(self) -> None:
+        """지표 값이 비어 있어도 조회가 끊기지 않는다."""
         with patch(
             "app.services.supabase_lifestyle_context.requests.get",
             return_value=_response(
@@ -309,9 +309,7 @@ class GetRelevantContextTest(unittest.TestCase):
                     {
                         "measured_at": "2026-08-19T07:00:00",
                         "bio_type": "weight",
-                        "value": 79.4,
-                        "unit": "kg",
-                        "detail_data": None,
+                        "weight_kg": None,
                     }
                 ]
             ),
@@ -322,7 +320,7 @@ class GetRelevantContextTest(unittest.TestCase):
                 "내 체중 어때?",
             )
 
-        self.assertIn("체중 | 79.4 kg", context.prompt_text)
+        self.assertEqual(context.prompt_text.splitlines()[-1], "2026-08-19 | 체중")
 
     def test_exercise_distance_in_meters_is_converted_to_km(self) -> None:
         with patch(
@@ -386,6 +384,14 @@ class GetRelevantContextTest(unittest.TestCase):
         self.assertIn("나트륨 1,200mg", context.prompt_text)
         self.assertIn("[수분 섭취]", context.prompt_text)
         self.assertIn("250mL", context.prompt_text)
+        # 수분 섭취는 lifestyle_nutrition에서 전용 테이블로 분리됐다.
+        water_url = next(
+            call.args[0]
+            for call in mocked_get.call_args_list
+            if "nutrition_type=eq.food" not in call.args[0]
+        )
+        self.assertIn("/rest/v1/lifestyle_water_intake", water_url)
+        self.assertIn("water_amount:amount_ml", water_url)
 
     def test_empty_rows_return_none(self) -> None:
         with patch(
@@ -406,7 +412,7 @@ class GetRelevantContextTest(unittest.TestCase):
                         "steps": 4000,
                         "floors_climbed": None,
                         "active_time": None,
-                        "active_distance": None,
+                        "active_distance_km": None,
                         "active_calories": None,
                     }
                 ]

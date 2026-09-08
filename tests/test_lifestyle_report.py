@@ -19,6 +19,7 @@ from app.services.lifestyle_report import (
     _prompt_view,
 )
 from app.services.prompts import lifestyle_report_v1 as prompt_v1
+from app.services.prompts import lifestyle_report_v2 as prompt_v2
 
 
 def _bio_days(bio_type: str, values: dict[str, float], detail_key: str = "") -> list[dict]:
@@ -128,7 +129,7 @@ class LifestyleAnalysisTest(unittest.TestCase):
     """탭마다 당일 값과 구간 통계를 화면과 같은 단위로 계산한다."""
 
     def test_bio_tab_splits_blood_pressure_and_glucose_items(self) -> None:
-        analysis = LifestyleReportService.build_analysis("bio", LIFESTYLE_WINDOW, 30)
+        analysis = LifestyleReportService.build_analysis("bio", LIFESTYLE_WINDOW)
 
         self.assertEqual(analysis["latest_date"], "2026-09-01")
         self.assertEqual(_metric(analysis, "수축기 혈압")["latest"], 121)
@@ -137,21 +138,21 @@ class LifestyleAnalysisTest(unittest.TestCase):
         # 체중은 이틀치라 당일 값과 구간 평균이 갈린다.
         weight = _metric(analysis, "체중")
         self.assertEqual(weight["latest"], 70.4)
-        self.assertEqual(weight["average"], 70.7)
-        self.assertEqual(weight["days"], 2)
+        self.assertEqual(weight["full"]["average"], 70.7)
+        self.assertEqual(weight["full"]["days"], 2)
 
     def test_metric_without_record_on_latest_date_has_no_latest_value(self) -> None:
         """항목마다 마지막 기록일이 달라도 당일 값은 당일 것만 채운다."""
-        analysis = LifestyleReportService.build_analysis("bio", LIFESTYLE_WINDOW, 30)
+        analysis = LifestyleReportService.build_analysis("bio", LIFESTYLE_WINDOW)
 
         glucose_after = _metric(analysis, "식후 혈당")
         self.assertIsNone(glucose_after["latest"])
         self.assertEqual(glucose_after["latest_date"], "2026-08-30")
-        self.assertEqual(glucose_after["average"], 132)
+        self.assertEqual(glucose_after["full"]["average"], 132)
 
     def test_activity_tab_converts_exercise_units(self) -> None:
         """운동 기록은 초를 분으로, 미터를 km로 바꿔 화면 표기와 맞춘다."""
-        analysis = LifestyleReportService.build_analysis("activity", LIFESTYLE_WINDOW, 30)
+        analysis = LifestyleReportService.build_analysis("activity", LIFESTYLE_WINDOW)
 
         self.assertEqual(_metric(analysis, "운동시간")["latest"], 30)
         self.assertEqual(_metric(analysis, "운동거리")["latest"], 5)
@@ -161,14 +162,14 @@ class LifestyleAnalysisTest(unittest.TestCase):
 
     def test_nutrition_tab_sums_same_day_records(self) -> None:
         """하루에 여러 번 먹은 기록은 당일 합계로 묶는다."""
-        analysis = LifestyleReportService.build_analysis("nutrition", LIFESTYLE_WINDOW, 30)
+        analysis = LifestyleReportService.build_analysis("nutrition", LIFESTYLE_WINDOW)
 
         self.assertEqual(_metric(analysis, "섭취칼로리")["latest"], 1100)
         self.assertEqual(_metric(analysis, "나트륨")["latest"], 1500)
         self.assertEqual(_metric(analysis, "수분 섭취")["latest"], 850)
 
     def test_sleep_tab_reads_detail_data_items(self) -> None:
-        analysis = LifestyleReportService.build_analysis("sleep", LIFESTYLE_WINDOW, 30)
+        analysis = LifestyleReportService.build_analysis("sleep", LIFESTYLE_WINDOW)
 
         self.assertEqual(_metric(analysis, "수면시간")["latest"], 7.2)
         self.assertEqual(_metric(analysis, "수면점수")["latest"], 82)
@@ -177,7 +178,7 @@ class LifestyleAnalysisTest(unittest.TestCase):
 
     def test_empty_window_produces_no_metrics(self) -> None:
         """기록이 없으면 항목을 만들지 않아 라우터가 400으로 막을 수 있다."""
-        analysis = LifestyleReportService.build_analysis("bio", {}, 30)
+        analysis = LifestyleReportService.build_analysis("bio", {})
 
         self.assertEqual(analysis["metrics"], [])
         self.assertEqual(analysis["latest_date"], "")
@@ -186,8 +187,8 @@ class LifestyleAnalysisTest(unittest.TestCase):
 class LifestyleStatusTest(unittest.TestCase):
     """참고범위 판정은 코드가 계산한다. AI는 이 값을 바꾸지 못한다."""
 
-    def _bio_analysis(self, rows: list[dict], window_days: int = 30) -> dict:
-        return LifestyleReportService.build_analysis("bio", {"bio": {"rows": rows}}, window_days)
+    def _bio_analysis(self, rows: list[dict]) -> dict:
+        return LifestyleReportService.build_analysis("bio", {"bio": {"rows": rows}})
 
     def test_range_metric_marks_good_caution_and_manage(self) -> None:
         """적정 범위형 항목은 양호·주의·관리 필요를 경계값으로 가른다."""
@@ -201,7 +202,7 @@ class LifestyleStatusTest(unittest.TestCase):
         self.assertEqual(systolic["latest_status"], STATUS_GOOD)
         self.assertEqual(by_date["2026-08-02"]["status"], STATUS_CAUTION)
         self.assertEqual(by_date["2026-08-03"]["status"], STATUS_MANAGE)
-        self.assertEqual(systolic["out_of_range_days"], 2)
+        self.assertEqual(systolic["full"]["out_of_range_days"], 2)
 
     def test_metric_without_reference_stays_unjudged(self) -> None:
         """기준을 정할 수 없는 항목은 판정하지 않고 추세만 남긴다."""
@@ -212,10 +213,10 @@ class LifestyleStatusTest(unittest.TestCase):
 
         self.assertEqual(weight["reference"], "")
         self.assertEqual(weight["latest_status"], STATUS_UNKNOWN)
-        self.assertEqual(weight["current_status"], STATUS_UNKNOWN)
-        self.assertEqual(weight["out_of_range_days"], 0)
+        self.assertEqual(weight["full"]["current_status"], STATUS_UNKNOWN)
+        self.assertEqual(weight["full"]["out_of_range_days"], 0)
         self.assertEqual(weight["anomalies"], [])
-        self.assertEqual(weight["trend"], "상승")
+        self.assertEqual(weight["full"]["direction"], "조금씩 오르는 흐름")
 
     def test_past_and_present_are_compared_by_half(self) -> None:
         """구간을 반으로 갈라 과거에 좋았는지 지금은 어떤지를 판정으로 남긴다."""
@@ -224,12 +225,12 @@ class LifestyleStatusTest(unittest.TestCase):
         }, "systolic"))
         systolic = _metric(analysis, "수축기 혈압")
 
-        self.assertEqual(systolic["earlier_average"], 111)
-        self.assertEqual(systolic["earlier_status"], STATUS_GOOD)
-        self.assertEqual(systolic["recent_average"], 131)
-        self.assertEqual(systolic["current_status"], STATUS_CAUTION)
-        self.assertEqual(systolic["change"], 20)
-        self.assertEqual(systolic["trend"], "상승")
+        self.assertEqual(systolic["full"]["earlier_average"], 111)
+        self.assertEqual(systolic["full"]["earlier_status"], STATUS_GOOD)
+        self.assertEqual(systolic["full"]["recent_average"], 131)
+        self.assertEqual(systolic["full"]["current_status"], STATUS_CAUTION)
+        self.assertEqual(systolic["full"]["change"], 20)
+        self.assertEqual(systolic["full"]["direction"], "뚜렷하게 높아지는 흐름")
 
     def test_short_series_skips_half_comparison(self) -> None:
         """양쪽에 2점씩 없으면 전후반 비교를 하지 않고 데이터 부족으로 남긴다."""
@@ -238,9 +239,10 @@ class LifestyleStatusTest(unittest.TestCase):
         }, "systolic"))
         systolic = _metric(analysis, "수축기 혈압")
 
-        self.assertIsNone(systolic["earlier_average"])
-        self.assertIsNone(systolic["change"])
-        self.assertEqual(systolic["trend"], "데이터 부족")
+        self.assertIsNone(systolic["full"]["earlier_average"])
+        self.assertIsNone(systolic["full"]["change"])
+        self.assertEqual(systolic["full"]["direction"], "판단하기 이름")
+        self.assertEqual(systolic["full"]["confidence"], "부족")
 
     def test_spike_day_is_reported_with_both_reasons(self) -> None:
         """평소와 크게 다르면서 범위도 벗어난 날은 두 사유를 함께 남긴다."""
@@ -260,7 +262,7 @@ class LifestyleStatusTest(unittest.TestCase):
         analysis = self._bio_analysis(_bio_days("blood_pressure", values, "systolic"))
         systolic = _metric(analysis, "수축기 혈압")
 
-        self.assertEqual(systolic["out_of_range_days"], 10)
+        self.assertEqual(systolic["full"]["out_of_range_days"], 10)
         self.assertEqual(len(systolic["anomalies"]), 1)
 
     def test_coverage_ratio_flags_sparse_records(self) -> None:
@@ -270,21 +272,22 @@ class LifestyleStatusTest(unittest.TestCase):
                 {"consumed_at": "2026-08-01T12:00:00", "calories": 900, "sodium": 3400},
                 {"consumed_at": "2026-08-15T12:00:00", "calories": 900, "sodium": 3400},
             ]},
-        }, 30)
+        })
         calories = _metric(analysis, "섭취칼로리")
 
-        self.assertEqual(calories["days"], 2)
-        self.assertEqual(calories["coverage_ratio"], 0.07)
+        self.assertEqual(calories["full"]["days"], 2)
+        # 영양 탭의 전체 구간은 90일이다.
+        self.assertEqual(calories["full"]["coverage_ratio"], 0.02)
         self.assertEqual(calories["kind"], "accumulation")
 
     def test_long_series_is_downsampled_for_the_prompt(self) -> None:
         """1년 구간이어도 프롬프트에 넣는 계열은 상한을 넘지 않는다."""
         values = {f"2026-{month:02d}-{day:02d}": 110.0
                   for month in (1, 2, 3) for day in range(1, 29)}
-        analysis = self._bio_analysis(_bio_days("blood_pressure", values, "systolic"), 365)
+        analysis = self._bio_analysis(_bio_days("blood_pressure", values, "systolic"))
         systolic = _metric(analysis, "수축기 혈압")
 
-        self.assertEqual(systolic["days"], 84)
+        self.assertEqual(systolic["full"]["days"], 84)
         self.assertTrue(systolic["series_downsampled"])
         self.assertLessEqual(len(systolic["series"]), 30)
         # 처음과 끝은 솎아내지 않는다.
@@ -295,43 +298,43 @@ class LifestyleStatusTest(unittest.TestCase):
 class LifestyleSignalTest(unittest.TestCase):
     """통계를 사람 말로 옮겨 두는 층. 모델이 숫자를 베끼지 않게 하는 장치다."""
 
-    def _bio_analysis(self, rows: list[dict], window_days: int = 30) -> dict:
-        return LifestyleReportService.build_analysis("bio", {"bio": {"rows": rows}}, window_days)
+    def _bio_analysis(self, rows: list[dict]) -> dict:
+        return LifestyleReportService.build_analysis("bio", {"bio": {"rows": rows}})
 
     def test_steady_rise_reads_as_a_trend_even_when_the_percentage_is_small(self) -> None:
         """의미 있는 변화 폭은 항목마다 다르다. 체중 1%대 상승도 흐름으로 읽혀야 한다."""
         values = {f"2026-08-{day:02d}": 70.0 + day * 0.06 for day in range(1, 31)}
         weight = _metric(self._bio_analysis(_bio_days("weight", values)), "체중")
 
-        self.assertEqual(weight["direction"], "조금씩 오르는 흐름")
-        self.assertEqual(weight["stability"], "안정적")
+        self.assertEqual(weight["full"]["direction"], "조금씩 오르는 흐름")
+        self.assertEqual(weight["full"]["stability"], "안정적")
 
     def test_tiny_wobble_on_a_flat_metric_is_not_called_a_trend(self) -> None:
         """제 수준 대비 미미한 움직임은 표준편차만 작다고 흐름으로 부르지 않는다."""
         values = {f"2026-08-{day:02d}": 72.0 + (0.1 if day % 2 else -0.1) for day in range(1, 31)}
         heart = _metric(self._bio_analysis(_bio_days("heart_rate", values)), "심박수")
 
-        self.assertEqual(heart["direction"], "큰 변화 없음")
-        self.assertEqual(heart["level"], "기준 범위 안")
+        self.assertEqual(heart["full"]["direction"], "큰 변화 없음")
+        self.assertEqual(heart["full"]["level"], "기준 범위 안")
 
     def test_repeated_breach_is_described_by_frequency_and_run_length(self) -> None:
         """한 번 벗어난 것과 계속 벗어나는 것은 뜻이 다르므로 빈도와 연속 횟수로 구분한다."""
         values = {f"2026-08-{day:02d}": 150.0 for day in range(1, 11)}
         systolic = _metric(self._bio_analysis(_bio_days("blood_pressure", values, "systolic")), "수축기 혈압")
 
-        self.assertEqual(systolic["frequency"], "거의 매번")
-        self.assertEqual(systolic["longest_out_of_range_run"], 10)
-        self.assertEqual(systolic["level"], "기준을 크게 벗어남")
+        self.assertEqual(systolic["full"]["frequency"], "거의 매번")
+        self.assertEqual(systolic["full"]["longest_out_of_range_run"], 10)
+        self.assertEqual(systolic["full"]["level"], "기준을 크게 벗어남")
 
     def test_sparse_records_lower_confidence(self) -> None:
         """기록이 적으면 추세를 단정하지 못하도록 confidence로 알린다."""
         short = self._bio_analysis(_bio_days("weight", {"2026-08-01": 70.0, "2026-08-02": 70.5}))
-        self.assertEqual(_metric(short, "체중")["confidence"], "부족")
+        self.assertEqual(_metric(short, "체중")["full"]["confidence"], "부족")
 
         sparse = LifestyleReportService.build_analysis("nutrition", {"food": {"rows": [
             {"consumed_at": f"2026-08-{day:02d}T12:00:00", "calories": 900} for day in (1, 5, 9, 13)
-        ]}}, 30)
-        self.assertEqual(_metric(sparse, "섭취칼로리")["confidence"], "부족")
+        ]}})
+        self.assertEqual(_metric(sparse, "섭취칼로리")["full"]["confidence"], "부족")
 
     def test_co_movement_pairs_items_inside_the_same_tab(self) -> None:
         """탭 안에서 함께 움직인 짝을 찾는다. 다른 탭과는 엮지 않는다."""
@@ -341,7 +344,7 @@ class LifestyleSignalTest(unittest.TestCase):
             rows += _bio_days("weight", {date: 70.0 + day * 0.1})
             rows += _bio_days("bmi", {date: 23.0 + day * 0.03})
             rows += _bio_days("heart_rate", {date: 72.0 + (2 if day % 2 else -2)})
-        pairs = self._bio_analysis(rows, 20)["co_movements"]
+        pairs = self._bio_analysis(rows)["co_movements"]
         paired = {tuple(sorted(item["metrics"])): item for item in pairs}
 
         self.assertIn(("BMI", "체중"), paired)
@@ -357,24 +360,26 @@ class LifestyleSignalTest(unittest.TestCase):
             rows += _bio_days("weight", {date: 70.0})
             rows += _bio_days("bmi", {date: 23.0})
 
-        self.assertEqual(self._bio_analysis(rows, 10)["co_movements"], [])
+        self.assertEqual(self._bio_analysis(rows)["co_movements"], [])
 
 
 class LifestylePromptTest(unittest.TestCase):
     """프롬프트 v2.0은 탭마다 다른 지침을 주고, 원시 통계는 넘기지 않는다."""
 
     def _prompt(self, domain: str) -> str:
-        analysis = LifestyleReportService.build_analysis(domain, LIFESTYLE_WINDOW, 30)
-        return LifestyleReportService.build_prompt(domain, analysis, 30)
+        analysis = LifestyleReportService.build_analysis(domain, LIFESTYLE_WINDOW)
+        return LifestyleReportService.build_prompt(domain, analysis)
 
-    def test_active_prompt_is_version_two(self) -> None:
-        self.assertEqual(PROMPT_VERSION, "2.0")
+    def test_active_prompt_is_version_three(self) -> None:
+        self.assertEqual(PROMPT_VERSION, "3.0")
 
-    def test_version_one_prompt_is_kept_for_comparison(self) -> None:
-        """이전 판을 지우지 않아야 두 판을 견주고 되돌릴 수 있다."""
-        self.assertEqual(prompt_v1.VERSION, "1.0")
-        self.assertIn("bio", prompt_v1.DOMAIN_GUIDES)
-        self.assertTrue(prompt_v1.COMMON_RULES.strip())
+    def test_earlier_prompts_are_kept_for_comparison(self) -> None:
+        """이전 판을 지우지 않아야 여러 판을 견주고 되돌릴 수 있다."""
+        for module, version in ((prompt_v1, "1.0"), (prompt_v2, "2.0")):
+            with self.subTest(version=version):
+                self.assertEqual(module.VERSION, version)
+                self.assertIn("bio", module.DOMAIN_GUIDES)
+                self.assertTrue(module.COMMON_RULES.strip())
 
     def test_each_domain_gets_only_its_own_guide(self) -> None:
         guides = {
@@ -434,7 +439,7 @@ class LifestylePromptTest(unittest.TestCase):
         values = {f"2026-08-{day:02d}": 110.0 for day in range(1, 21)}
         values.update({"2026-08-05": 145.0, "2026-08-11": 152.0, "2026-08-17": 149.0})
         analysis = LifestyleReportService.build_analysis(
-            "bio", {"bio": {"rows": _bio_days("blood_pressure", values, "systolic")}}, 30)
+            "bio", {"bio": {"rows": _bio_days("blood_pressure", values, "systolic")}})
         view = _prompt_view(analysis)
         systolic = next(item for item in view["metrics"] if item["metric"] == "수축기 혈압")
 
@@ -444,13 +449,16 @@ class LifestylePromptTest(unittest.TestCase):
 
     def test_full_statistics_stay_available_for_verification(self) -> None:
         """사용자 화면에서 뺀 통계는 개발자 검증 화면에서 그대로 볼 수 있어야 한다."""
-        analysis = LifestyleReportService.build_analysis("bio", LIFESTYLE_WINDOW, 30)
+        analysis = LifestyleReportService.build_analysis("bio", LIFESTYLE_WINDOW)
         weight = _metric(analysis, "체중")
 
-        for kept in ("earlier_average", "recent_average", "change", "cv", "stdev",
-                     "out_of_range_days", "series", "anomalies", "coverage_ratio"):
+        for kept in ("series", "anomalies", "latest", "latest_status"):
             with self.subTest(field=kept):
                 self.assertIn(kept, weight)
+        for kept in ("earlier_average", "recent_average", "change", "change_rate", "cv",
+                     "stdev", "out_of_range_days", "coverage_ratio", "covered_range"):
+            with self.subTest(field=kept):
+                self.assertIn(kept, weight["full"])
 
 
 if __name__ == "__main__":

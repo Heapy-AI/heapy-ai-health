@@ -78,7 +78,12 @@ class LifestyleReportResponse(BaseModel):
 
     success: bool
     domain: str
+    # 분석 구간은 서비스가 정한다. window_days는 전체 흐름, recent_days는 최근 구간이다.
     window_days: int
+    recent_days: int = 0
+    # 실제로 데이터가 있었던 범위. 조회 상한에 걸리면 요청한 구간보다 짧을 수 있다.
+    covered_range: str = ""
+    data_truncated: bool = False
     latest_date: str = ""
     # 어느 판 프롬프트로 만든 결과인지. 화면과 검증 로그가 함께 참조한다.
     prompt_version: str = ""

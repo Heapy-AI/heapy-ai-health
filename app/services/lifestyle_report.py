@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from datetime import date, timedelta
 from statistics import StatisticsError, correlation, fmean, pstdev
 from time import perf_counter
 from typing import Any
@@ -29,13 +30,33 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.core.config import MODEL
 from app.schemas.lifestyle_report import LifestyleReportContent
-from app.services.prompts import lifestyle_report_v2 as prompt_v2
+from app.services.prompts import lifestyle_report_v3 as prompt_v3
 
 
-# 쓰고 있는 프롬프트 판. v1.0으로 되돌리려면 이 모듈만 바꾸면 된다.
+# 쓰고 있는 프롬프트 판. 이전 판으로 되돌리려면 이 모듈만 바꾸면 된다.
 # (v1.0은 출력 계약이 달라 LifestyleReportContentV1을 함께 써야 한다.)
-ACTIVE_PROMPT = prompt_v2
-PROMPT_VERSION = prompt_v2.VERSION
+ACTIVE_PROMPT = prompt_v3
+PROMPT_VERSION = prompt_v3.VERSION
+
+# 탭별 분석 구간. 화면의 기간 버튼과 무관하게 서비스가 정한다.
+#
+# full은 흐름을 보기 위한 구간, recent는 요즘을 보기 위한 구간이다. 둘을 함께 넘겨야
+# "길게 보면 오르는 중이지만 최근 한 달은 잠잠하다"를 한 번에 말할 수 있다.
+#
+# 생체만 full이 긴 이유는 측정 주기 때문이다. 체중은 주 2회, 혈압은 주 1회, 혈당은
+# 2주에 한 번 재는 것이 흔해서 90일로는 추세를 말할 표본이 모이지 않는다. 나머지 셋은
+# 기기·앱이 매일 남기므로 90일이면 충분하고, 더 늘리면 오히려 요즘 습관이 묻힌다.
+ANALYSIS_WINDOWS = {
+    "bio": {"full": 180, "recent": 30},
+    "activity": {"full": 90, "recent": 30},
+    "nutrition": {"full": 90, "recent": 30},
+    "sleep": {"full": 90, "recent": 30},
+}
+
+
+def analysis_window(domain: str) -> dict[str, int]:
+    """탭의 분석 구간. 알 수 없는 탭은 가장 흔한 설정으로 돌려준다."""
+    return ANALYSIS_WINDOWS.get(domain, {"full": 90, "recent": 30})
 
 
 DOMAIN_LABELS = {
@@ -474,63 +495,44 @@ def _find_anomalies(metric: _Metric, series: list[dict[str, Any]]) -> list[dict[
     return found[:_MAX_ANOMALIES_PER_METRIC]
 
 
-def _summarize_metric(metric: _Metric, series: list[dict[str, Any]], window_days: int, latest_date: str) -> dict[str, Any]:
-    """항목 하나의 당일 값·구간 통계·전후반 비교·이상 지점을 한데 모은다."""
+def _signals(metric: _Metric, series: list[dict[str, Any]], window_days: int) -> dict[str, Any]:
+    """한 구간에서 항목이 어떤 상태였는지 계산한다.
+
+    전체 구간과 최근 구간에 같은 잣대를 대야 두 결과를 견줄 수 있으므로, 구간을 받아
+    같은 계산을 두 번 돌린다. 반환하는 값 중 level·frequency·direction·stability·
+    confidence는 사용자에게 그대로 옮겨 써도 되는 표현이다.
+    """
     values = [point["value"] for point in series]
     average = fmean(values)
-    latest = next((point["value"] for point in reversed(series) if point["date"] == latest_date), None)
+    deviation = pstdev(values) if len(values) > 1 else 0.0
 
     # 구간을 반으로 갈라 과거와 현재를 견준다. 양쪽에 2점씩은 있어야 의미가 있다.
     earlier_average = recent_average = change = change_rate = None
     earlier_range = recent_range = ""
     if len(series) >= _MIN_DAYS_FOR_COMPARISON:
         half = len(series) // 2
-        earlier, recent = series[:half], series[half:]
+        earlier, later = series[:half], series[half:]
         earlier_average = round(fmean(point["value"] for point in earlier), 2)
-        recent_average = round(fmean(point["value"] for point in recent), 2)
+        recent_average = round(fmean(point["value"] for point in later), 2)
         change = round(recent_average - earlier_average, 2)
         if earlier_average:
             change_rate = round(change / abs(earlier_average) * 100, 1)
         earlier_range = f"{earlier[0]['date']}~{earlier[-1]['date']}"
-        recent_range = f"{recent[0]['date']}~{recent[-1]['date']}"
+        recent_range = f"{later[0]['date']}~{later[-1]['date']}"
 
-    if change is None:
-        trend = "데이터 부족"
-    elif change == 0:
-        trend = "유지"
-    else:
-        trend = "상승" if change > 0 else "하락"
-
-    deviation = pstdev(values) if len(values) > 1 else 0.0
     statuses = [metric.status(value) for value in values]
     out_of_range_days = sum(1 for status in statuses if status in {STATUS_CAUTION, STATUS_MANAGE})
     coverage_ratio = round(len(values) / window_days, 2)
     cv = round(deviation / abs(average) * 100, 1) if average else None
-    # 통계값을 사람 말로 미리 옮겨 둔다. 모델은 숫자보다 이 표현을 쓰게 된다.
     current_status = metric.status(recent_average)
     return {
-        "metric": metric.label,
-        "unit": metric.unit,
-        "kind": metric.kind,
-        "direction": metric.direction,
-        "reference": metric.reference_text,
-        "latest": latest,
-        "latest_date": series[-1]["date"],
-        "latest_status": metric.status(latest),
+        "window_days": window_days,
+        "covered_range": f"{series[0]['date']}~{series[-1]['date']}",
+        "days": len(values),
         "average": round(average, 2),
         "minimum": min(values),
         "maximum": max(values),
-        "days": len(values),
-        # 구간의 며칠에 기록이 있었는지. 낮으면 총량·평균을 단정할 수 없다.
         "coverage_ratio": coverage_ratio,
-        # 아래 네 값이 사용자에게 그대로 옮겨 써도 되는 표현이다.
-        "level": _level_text(current_status if current_status != STATUS_UNKNOWN else metric.status(latest)),
-        "frequency": _frequency_text(out_of_range_days, len(values)),
-        "direction": _direction_text(change, change_rate, deviation, metric.direction),
-        "stability": _stability_text(cv),
-        "confidence": _confidence_text(metric, len(values), coverage_ratio),
-        # 기준을 벗어난 기록이 연달아 몇 번 이어졌는지. 반복성을 말할 근거다.
-        "longest_out_of_range_run": _longest_out_of_range_run(metric, series),
         "earlier_average": earlier_average,
         "earlier_range": earlier_range,
         "earlier_status": metric.status(earlier_average),
@@ -539,24 +541,77 @@ def _summarize_metric(metric: _Metric, series: list[dict[str, Any]], window_days
         "current_status": current_status,
         "change": change,
         "change_rate": change_rate,
-        "trend": trend,
         "stdev": round(deviation, 2),
-        # 변동계수. 평균 대비 얼마나 들쭉날쭉했는지를 단위 없이 견줄 수 있다.
         "cv": cv,
         "out_of_range_days": out_of_range_days,
+        "longest_out_of_range_run": _longest_out_of_range_run(metric, series),
+        # 아래 다섯 값이 사용자에게 그대로 옮겨 써도 되는 표현이다.
+        "level": _level_text(current_status if current_status != STATUS_UNKNOWN else metric.status(values[-1])),
+        "frequency": _frequency_text(out_of_range_days, len(values)),
+        "direction": _direction_text(change, change_rate, deviation, metric.direction),
+        "stability": _stability_text(cv),
+        "confidence": _confidence_text(metric, len(values), coverage_ratio),
+    }
+
+
+def _summarize_metric(
+    metric: _Metric,
+    series: list[dict[str, Any]],
+    windows: dict[str, int],
+    latest_date: str,
+) -> dict[str, Any]:
+    """항목 하나를 전체 구간과 최근 구간 두 벌로 정리한다."""
+    latest = next((point["value"] for point in reversed(series) if point["date"] == latest_date), None)
+    # 최근 구간은 마지막 기록일에서 되짚는다. 오늘로 자르면 기기 연동이 끊긴 사용자는
+    # 최근 구간이 통째로 비어 버린다. 저장소가 구간을 잡는 방식과 같은 기준이다.
+    recent_series = _tail_since(series, latest_date, windows["recent"])
+    return {
+        "metric": metric.label,
+        "unit": metric.unit,
+        "kind": metric.kind,
+        "direction_type": metric.direction,
+        "reference": metric.reference_text,
+        "latest": latest,
+        "latest_date": series[-1]["date"],
+        "latest_status": metric.status(latest),
+        "full": _signals(metric, series, windows["full"]),
+        "recent": _signals(metric, recent_series, windows["recent"]) if recent_series else None,
         "anomalies": _find_anomalies(metric, series),
         "series": _downsample(series, _MAX_SERIES_POINTS),
         "series_downsampled": len(series) > _MAX_SERIES_POINTS,
     }
 
 
-# 프롬프트에 넘길 항목 필드. 나머지 통계는 검증용으로만 남기고 모델에게 주지 않는다.
+def _tail_since(series: list[dict[str, Any]], latest_date: str, days: int) -> list[dict[str, Any]]:
+    """마지막 기록일에서 days일 되짚은 구간만 남긴다."""
+    try:
+        since = (date.fromisoformat(latest_date) - timedelta(days=days - 1)).isoformat()
+    except ValueError:
+        return series
+    return [point for point in series if point["date"] >= since]
+
+
+# 항목마다 프롬프트에 넘길 값. 나머지 통계는 검증용으로만 남기고 모델에게 주지 않는다.
 # 여기에 필드를 더할 때는 그 값이 답변에 숫자로 새어 나와도 괜찮은지 먼저 따져야 한다.
-_PROMPT_METRIC_FIELDS = (
-    "metric", "unit", "kind", "reference",
+_PROMPT_METRIC_FIELDS = ("metric", "unit", "kind", "reference")
+# 구간마다 넘길 신호. 전부 사람 말로 옮겨 둔 표현이거나 세기를 나타내는 횟수다.
+_PROMPT_SIGNAL_FIELDS = (
     "level", "frequency", "direction", "stability", "confidence",
     "longest_out_of_range_run", "days",
 )
+
+
+def _signal_view(signals: dict[str, Any] | None, with_coverage: bool) -> dict[str, Any] | None:
+    """한 구간의 신호에서 모델에게 줄 것만 고른다."""
+    if not signals:
+        return None
+    view = {key: signals[key] for key in _PROMPT_SIGNAL_FIELDS if key in signals}
+    # 대표 수치 한 개만 남긴다. 어림수로 한 번 언급할 때 쓰라고 주는 값이다.
+    view["typical"] = signals.get("recent_average") or signals.get("average")
+    if with_coverage:
+        # 하루 누적 항목은 기록이 빠지면 총량이 실제보다 적게 잡힌다.
+        view["coverage_ratio"] = signals.get("coverage_ratio")
+    return view
 
 
 def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
@@ -568,18 +623,19 @@ def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
     """
     metrics = []
     for metric in analysis.get("metrics", []):
+        accumulation = metric.get("kind") == "accumulation"
         view = {key: metric[key] for key in _PROMPT_METRIC_FIELDS if key in metric}
-        # 대표 수치 한 개만 남긴다. 어림수로 한 번 언급할 때 쓰라고 주는 값이다.
-        view["recent_typical"] = metric.get("recent_average")
-        if metric.get("kind") == "accumulation":
-            view["coverage_ratio"] = metric.get("coverage_ratio")
+        view["full"] = _signal_view(metric.get("full"), accumulation)
+        view["recent"] = _signal_view(metric.get("recent"), accumulation)
         example = (metric.get("anomalies") or [])[:_MAX_PROMPT_ANOMALIES]
         if example:
             view["example_day"] = [{"date": item["date"], "value": item["value"]} for item in example]
         metrics.append(view)
     return {
         "domain_label": analysis.get("domain_label", ""),
-        "window_days": analysis.get("window_days"),
+        "windows": analysis.get("windows", {}),
+        "covered_range": analysis.get("covered_range", ""),
+        "data_truncated": analysis.get("data_truncated", False),
         "latest_date": analysis.get("latest_date", ""),
         "reference_basis": analysis.get("reference_basis", ""),
         "metrics": metrics,
@@ -602,14 +658,13 @@ class LifestyleReportService:
         self,
         domain: str,
         window: dict[str, Any],
-        window_days: int,
     ) -> tuple[LifestyleReportContent, dict[str, Any]]:
         """탭 하나의 분석 본문과 검증용 계산 근거를 함께 반환한다."""
         started = perf_counter()
-        analysis = self.build_analysis(domain, window, window_days)
+        analysis = self.build_analysis(domain, window)
         analysis_elapsed = perf_counter() - started
         ai_started = perf_counter()
-        report = await self._llm.ainvoke(self.build_prompt(domain, analysis, window_days))
+        report = await self._llm.ainvoke(self.build_prompt(domain, analysis))
         ai_elapsed = perf_counter() - ai_started
         return report, {
             "analysis_input": analysis,
@@ -621,20 +676,20 @@ class LifestyleReportService:
         }
 
     @staticmethod
-    def build_prompt(domain: str, analysis: dict[str, Any], window_days: int) -> str:
+    def build_prompt(domain: str, analysis: dict[str, Any]) -> str:
         """공통 규칙에 탭별 지침을 붙여 프롬프트를 만든다."""
         return ACTIVE_PROMPT.REPORT_PROMPT.format(
             common_rules=ACTIVE_PROMPT.COMMON_RULES,
             domain_guide=ACTIVE_PROMPT.DOMAIN_GUIDES.get(domain, ""),
             domain_label=DOMAIN_LABELS.get(domain, domain),
-            window_days=window_days,
             latest_date=analysis["latest_date"] or "기록 없음",
             analysis_data=json.dumps(_prompt_view(analysis), ensure_ascii=False, indent=2),
         )
 
     @staticmethod
-    def build_analysis(domain: str, window: dict[str, Any], window_days: int) -> dict[str, Any]:
-        """탭의 세부 항목마다 당일 값·구간 통계·판정·이상 지점을 계산한다."""
+    def build_analysis(domain: str, window: dict[str, Any]) -> dict[str, Any]:
+        """탭의 세부 항목마다 전체 구간과 최근 구간을 두 벌로 계산한다."""
+        windows = analysis_window(domain)
         metrics = _DOMAIN_METRICS.get(domain, [])
         series_by_metric = [(metric, metric.daily_series(window)) for metric in metrics]
         # 마지막 기록일은 항목마다 갈릴 수 있어 탭 안에서 가장 늦은 날을 당일 기준으로 삼는다.
@@ -643,14 +698,21 @@ class LifestyleReportService:
             default="",
         )
         recorded = [(metric, series) for metric, series in series_by_metric if series]
+        covered = sorted(point["date"] for _, series in recorded for point in (series[0], series[-1]))
+        # 조회 상한에 걸려 오래된 기록이 잘렸다면 없는 기간까지 말하지 않도록 알린다.
+        truncated = any(
+            (window.get(metric.source) or {}).get("truncated") for metric, _ in recorded
+        )
         return {
             "domain": domain,
             "domain_label": DOMAIN_LABELS.get(domain, domain),
-            "window_days": window_days,
+            "windows": windows,
+            "covered_range": f"{covered[0]}~{covered[-1]}" if covered else "",
+            "data_truncated": truncated,
             "latest_date": latest_date,
             "reference_basis": "일반 성인 기준이며 성별·나이·활동량을 반영하지 않음",
             "metrics": [
-                _summarize_metric(metric, series, window_days, latest_date)
+                _summarize_metric(metric, series, windows, latest_date)
                 for metric, series in recorded
             ],
             # 탭 안에서 함께 움직인 항목 짝. 다른 탭과는 엮지 않는다.

@@ -30,7 +30,7 @@ _LIFESTYLE_PLAN: tuple[tuple[str, str, str, str, str], ...] = (
         "",
         "record_date",
         "record_date,steps,floors_climbed:floors,active_time:active_time_minutes,"
-        "active_distance_m:distance_m,active_calories:active_calories_kcal",
+        "active_distance_km:distance_m,active_calories:active_calories_kcal",
     ),
     (
         "exercise",
@@ -257,7 +257,7 @@ class SupabasePersonalDataService:
         """Supabase 미설정 환경에서도 응답 형태를 유지한다."""
         window: dict[str, Any] = {"window_days": self.window_days}
         for plan in _LIFESTYLE_PLAN:
-            window[plan[0]] = {"since": "", "until": "", "rows": []}
+            window[plan[0]] = {"since": "", "until": "", "rows": [], "truncated": False}
         return window
 
     @staticmethod
@@ -347,7 +347,7 @@ class SupabasePersonalDataService:
             access_token,
         )
         if not latest_rows:
-            return {"since": "", "until": "", "rows": []}
+            return {"since": "", "until": "", "rows": [], "truncated": False}
 
         until = self._date(latest_rows[0].get(date_column))
         try:
@@ -355,7 +355,7 @@ class SupabasePersonalDataService:
                 date.fromisoformat(until) - timedelta(days=window_days - 1)
             ).isoformat()
         except ValueError:
-            return {"since": "", "until": "", "rows": []}
+            return {"since": "", "until": "", "rows": [], "truncated": False}
 
         rows = self._request(
             f"/rest/v1/{table}?{filters}&select={select}"
@@ -363,7 +363,13 @@ class SupabasePersonalDataService:
             f"&order={date_column}.desc&limit={self.max_rows}",
             access_token,
         )
-        return {"since": since, "until": until, "rows": rows}
+        # 상한에 걸리면 최신순 정렬이라 오래된 쪽이 잘린다. 요청한 구간을 그대로
+        # since로 돌려주면 없는 기간까지 분석한 것처럼 보이므로, 실제로 받아 온
+        # 가장 오래된 날짜로 고쳐 주고 잘렸다는 사실을 함께 알린다.
+        truncated = len(rows) >= self.max_rows
+        if truncated and rows:
+            since = self._date(rows[-1].get(date_column)) or since
+        return {"since": since, "until": until, "rows": rows, "truncated": truncated}
 
     def _get_catalog(self, access_token: str) -> tuple[dict[str, Any], ...]:
         """검사 항목명·단위 마스터를 프로세스 수명 동안 한 번만 읽는다."""

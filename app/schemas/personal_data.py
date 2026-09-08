@@ -34,8 +34,9 @@ class ActivityRowResponse(BaseModel):
     steps: float | None = None
     floors_climbed: float | None = None
     active_time: float | None = None
-    # lifestyle_activity.distance_m은 미터 단위이므로 화면에서 km로 환산한다.
-    active_distance_m: float | None = None
+    # lifestyle_activity.distance_m은 컬럼명과 달리 km로 적재된다.
+    # (미터로 적재되는 lifestyle_exercise.distance_m과 단위가 다르다.)
+    active_distance_km: float | None = None
     active_calories: float | None = None
 
 
@@ -87,6 +88,8 @@ class ActivityWindowResponse(BaseModel):
 
     since: str = ""
     until: str = ""
+    # 조회 상한에 걸려 오래된 기록이 잘렸는지. 참이면 since는 실제로 받아 온 범위다.
+    truncated: bool = False
     rows: list[ActivityRowResponse] = []
 
 
@@ -95,6 +98,8 @@ class ExerciseWindowResponse(BaseModel):
 
     since: str = ""
     until: str = ""
+    # 조회 상한에 걸려 오래된 기록이 잘렸는지. 참이면 since는 실제로 받아 온 범위다.
+    truncated: bool = False
     rows: list[ExerciseRowResponse] = []
 
 
@@ -103,6 +108,8 @@ class BioWindowResponse(BaseModel):
 
     since: str = ""
     until: str = ""
+    # 조회 상한에 걸려 오래된 기록이 잘렸는지. 참이면 since는 실제로 받아 온 범위다.
+    truncated: bool = False
     rows: list[BioRowResponse] = []
 
 
@@ -111,6 +118,8 @@ class FoodWindowResponse(BaseModel):
 
     since: str = ""
     until: str = ""
+    # 조회 상한에 걸려 오래된 기록이 잘렸는지. 참이면 since는 실제로 받아 온 범위다.
+    truncated: bool = False
     rows: list[FoodRowResponse] = []
 
 
@@ -119,6 +128,8 @@ class WaterWindowResponse(BaseModel):
 
     since: str = ""
     until: str = ""
+    # 조회 상한에 걸려 오래된 기록이 잘렸는지. 참이면 since는 실제로 받아 온 범위다.
+    truncated: bool = False
     rows: list[WaterRowResponse] = []
 
 

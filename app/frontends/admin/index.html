@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#7b68e8" />
     <meta name="description" content="HEAPY 건강정보 AI 챗봇 MVP" />
     <title>HEAPY | 건강정보 AI</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260907-17" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260907-18" />
   </head>
   <body>
     <!-- 작성자: 김진우 -->
@@ -122,7 +122,8 @@
               <div><dt>집계 방식</dt><dd>1년 월평균 · 3/6개월 주평균 · 1개월/1주일 일별</dd></div>
               <div><dt>그래프</dt><dd>세부 항목별 그래프 + 수치표</dd></div>
               <div><dt>분석 API</dt><dd>POST /me/lifestyle/report</dd></div>
-              <div><dt>분석 방식</dt><dd>탭별 프롬프트 v2.0 · 참고범위 판정은 코드 계산</dd></div>
+              <div><dt>분석 방식</dt><dd>탭별 프롬프트 v3.0 · 참고범위 판정은 코드 계산</dd></div>
+              <div><dt>분석 구간</dt><dd>생체 180일 · 그 외 90일 (각 최근 30일 대비)</dd></div>
               <div><dt>참고범위</dt><dd>일반 성인 기준 (성별·나이 미반영)</dd></div>
             </dl>
             <div class="personal-table-list">
@@ -281,6 +282,7 @@
                 <section class="lifestyle-block">
                   <div class="lifestyle-block-head">
                     <h3>AI 분석</h3>
+                    <span class="lifestyle-block-note">아래 기간 버튼과 무관하게 최근 흐름 전체를 봅니다</span>
                     <button id="lifestyleReportButton" class="report-button" type="button">AI 요약분석</button>
                   </div>
                   <!-- 건강검진 탭과 같이 버튼을 눌러야만 분석 결과가 열린다. -->
@@ -342,6 +344,6 @@
         </div>
       </aside>
     </div>
-    <script src="/assets/app.js?v=20260907-17" defer></script>
+    <script src="/assets/app.js?v=20260907-18" defer></script>
   </body>
 </html>

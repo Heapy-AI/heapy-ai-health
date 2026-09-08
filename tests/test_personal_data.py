@@ -117,11 +117,11 @@ class PersonalDataApiTest(unittest.TestCase):
                 "until": "2026-08-26",
                 "rows": [{"record_date": "2026-08-26", "steps": 8421}],
             },
-            "exercise": {"since": "", "until": "", "rows": []},
-            "bio": {"since": "", "until": "", "rows": []},
-            "food": {"since": "", "until": "", "rows": []},
-            "water": {"since": "", "until": "", "rows": []},
-            "sleep": {"since": "", "until": "", "rows": []},
+            "exercise": {"since": "", "until": "", "rows": [], "truncated": False},
+            "bio": {"since": "", "until": "", "rows": [], "truncated": False},
+            "food": {"since": "", "until": "", "rows": [], "truncated": False},
+            "water": {"since": "", "until": "", "rows": [], "truncated": False},
+            "sleep": {"since": "", "until": "", "rows": [], "truncated": False},
         }
 
         response = self.client.get("/me/lifestyle")
@@ -302,7 +302,10 @@ class PersonalDataServiceTest(unittest.TestCase):
         self.assertEqual(window["activity"]["until"], "2026-08-26")
         self.assertEqual(window["activity"]["since"], "2026-08-20")
         self.assertEqual(window["activity"]["rows"][0]["steps"], 8421)
-        self.assertEqual(window["exercise"], {"since": "", "until": "", "rows": []})
+        self.assertEqual(
+            window["exercise"], {"since": "", "until": "", "rows": [], "truncated": False}
+        )
+        self.assertFalse(window["activity"]["truncated"])
 
         window_urls = [
             call.args[0]
@@ -311,7 +314,30 @@ class PersonalDataServiceTest(unittest.TestCase):
         ]
         self.assertEqual(len(window_urls), 1)
         self.assertIn("record_date=gte.2026-08-20", window_urls[0])
-        self.assertIn("limit=500", window_urls[0])
+        self.assertIn(f"limit={self.service.max_rows}", window_urls[0])
+
+    def test_row_limit_reports_the_range_actually_fetched(self) -> None:
+        """상한에 걸리면 오래된 쪽이 잘린다. 요청한 구간을 그대로 돌려주면 없는 기간까지
+        분석한 것처럼 보이므로, 실제로 받아 온 범위로 고쳐 주고 잘렸다고 알려야 한다."""
+        service = SupabasePersonalDataService(
+            "https://project.supabase.co", "key", window_days=30, max_rows=3
+        )
+        # 최신순으로 상한만큼 채워 돌려준다. 요청 구간(30일)보다 훨씬 짧은 범위다.
+        rows = [{"record_date": f"2026-08-{day:02d}", "steps": 100} for day in (26, 25, 24)]
+
+        def fake_get(url: str, **_: object) -> Mock:
+            if "limit=1" in url:
+                return _rows_response([{"record_date": "2026-08-26"}])
+            return _rows_response(rows if "lifestyle_activity" in url else [])
+
+        with patch("app.services.supabase_personal_data.requests.get", side_effect=fake_get):
+            window = service.get_lifestyle_window("access-token", "user-id")
+
+        activity = window["activity"]
+        self.assertTrue(activity["truncated"])
+        self.assertEqual(activity["until"], "2026-08-26")
+        # 요청한 2026-07-28이 아니라 실제로 받아 온 가장 오래된 날이어야 한다.
+        self.assertEqual(activity["since"], "2026-08-24")
 
     def test_domain_without_record_skips_window_query(self) -> None:
         """기록이 없는 영역은 구간 조회를 보내지 않는다."""
@@ -322,7 +348,9 @@ class PersonalDataServiceTest(unittest.TestCase):
             window = self.service.get_lifestyle_window("access-token", "user-id")
 
         for domain in ("activity", "exercise", "bio", "food", "water"):
-            self.assertEqual(window[domain], {"since": "", "until": "", "rows": []})
+            self.assertEqual(
+                window[domain], {"since": "", "until": "", "rows": [], "truncated": False}
+            )
         self.assertEqual(len(requests_get.call_args_list), 6)
 
     def test_unconfigured_service_returns_empty_shape(self) -> None:
