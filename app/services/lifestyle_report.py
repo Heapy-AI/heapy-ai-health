@@ -322,9 +322,12 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
         _Metric("수면점수", "점", source="sleep", date_key="measured_at", daily="mean", kind="measurement",
                 value=lambda row: _detail(row, "sleep_score"),
                 direction="higher", low=80, caution_low=60),
-        # 깊은수면은 총 수면시간 대비 비율로 보는 값이라 절대 분수 기준을 두지 않는다.
-        _Metric("깊은수면", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "deep_sleep_min"))),
-        _Metric("깬 시간", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "awake_min")),
+        # 수면 단계 셋은 총 수면시간 대비 비율로 보는 값이라 절대 분수 기준을 두지 않는다.
+        # 같은 7시간을 자도 어떻게 나뉘었는지가 수면점수의 차이를 설명한다.
+        _Metric("깊은수면", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "deep_sleep_minutes"))),
+        _Metric("얕은수면", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "light_sleep_minutes"))),
+        _Metric("REM수면", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "rem_sleep_minutes"))),
+        _Metric("깬 시간", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "awake_minutes")),
                 direction="lower", high=30, caution_high=60),
     ],
 }

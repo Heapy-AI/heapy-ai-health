@@ -69,7 +69,9 @@ LIFESTYLE_WINDOW = {
                 "measured_at": "2026-09-01T23:00:00",
                 "bio_type": "sleep",
                 "value": 7.2,
-                "detail_data": {"sleep_score": 82, "deep_sleep_min": 70, "awake_min": 12},
+                "detail_data": {"sleep_score": 82, "deep_sleep_minutes": 70,
+                                "light_sleep_minutes": 240, "rem_sleep_minutes": 95,
+                                "awake_minutes": 12},
             }
         ],
     },
@@ -169,12 +171,46 @@ class LifestyleAnalysisTest(unittest.TestCase):
         self.assertEqual(_metric(analysis, "수분 섭취")["latest"], 850)
 
     def test_sleep_tab_reads_detail_data_items(self) -> None:
+        """수면 단계는 저장소가 내려주는 *_minutes 키로 읽어야 한다.
+
+        deep_sleep_min처럼 짧은 이름으로 읽으면 값이 조용히 비어 화면에서 사라진다.
+        """
         analysis = LifestyleReportService.build_analysis("sleep", LIFESTYLE_WINDOW)
 
         self.assertEqual(_metric(analysis, "수면시간")["latest"], 7.2)
         self.assertEqual(_metric(analysis, "수면점수")["latest"], 82)
         self.assertEqual(_metric(analysis, "깊은수면")["latest"], 70)
+        self.assertEqual(_metric(analysis, "얕은수면")["latest"], 240)
+        self.assertEqual(_metric(analysis, "REM수면")["latest"], 95)
         self.assertEqual(_metric(analysis, "깬 시간")["latest"], 12)
+
+    def test_sleep_tab_covers_every_fetched_column(self) -> None:
+        """조회해 놓고 화면에 안 쓰는 수면 컬럼이 없어야 한다."""
+        analysis = LifestyleReportService.build_analysis("sleep", LIFESTYLE_WINDOW)
+
+        self.assertEqual(
+            [item["metric"] for item in analysis["metrics"]],
+            ["수면시간", "수면점수", "깊은수면", "얕은수면", "REM수면", "깬 시간"],
+        )
+
+    def test_sleep_metric_keys_match_the_storage_contract(self) -> None:
+        """저장소 정규화가 만드는 키와 분석이 읽는 키가 같은지 직접 맞춰 본다."""
+        from app.services.supabase_personal_data import SupabasePersonalDataService
+
+        normalized = SupabasePersonalDataService._normalize_domain("sleep", {
+            "since": "", "until": "", "truncated": False,
+            "rows": [{
+                "measured_at": "2026-09-01T23:00:00", "total_sleep_minutes": 432,
+                "awake_minutes": 12, "deep_sleep_minutes": 70,
+                "light_sleep_minutes": 240, "rem_sleep_minutes": 95, "sleep_score": 82,
+            }],
+        })
+        analysis = LifestyleReportService.build_analysis("sleep", {"sleep": normalized})
+
+        # 키가 어긋나면 해당 항목이 통째로 빠지므로 개수로 잡힌다.
+        self.assertEqual(len(analysis["metrics"]), 6)
+        self.assertEqual(_metric(analysis, "수면시간")["latest"], 7.2)
+        self.assertEqual(_metric(analysis, "얕은수면")["latest"], 240)
 
     def test_empty_window_produces_no_metrics(self) -> None:
         """기록이 없으면 항목을 만들지 않아 라우터가 400으로 막을 수 있다."""

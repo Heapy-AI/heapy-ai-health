@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#7b68e8" />
     <meta name="description" content="HEAPY 건강정보 AI 챗봇 MVP" />
     <title>HEAPY | 건강정보 AI</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260907-18" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260909-32" />
   </head>
   <body>
     <!-- 작성자: 김진우 -->
@@ -282,7 +282,7 @@
                 <section class="lifestyle-block">
                   <div class="lifestyle-block-head">
                     <h3>AI 분석</h3>
-                    <span class="lifestyle-block-note">아래 기간 버튼과 무관하게 최근 흐름 전체를 봅니다</span>
+                    <span id="lifestyleAnalysisScope" class="lifestyle-block-note"></span>
                     <button id="lifestyleReportButton" class="report-button" type="button">AI 요약분석</button>
                   </div>
                   <!-- 건강검진 탭과 같이 버튼을 눌러야만 분석 결과가 열린다. -->
@@ -293,11 +293,11 @@
                   <div class="lifestyle-block-head">
                     <h3>기간별 추이</h3>
                     <div class="lifestyle-periods" role="group" aria-label="생활건강 조회 기간">
-                      <button type="button" data-lifestyle-days="7">1주일</button>
+                      <button type="button" class="active" data-lifestyle-days="7">1주일</button>
                       <button type="button" data-lifestyle-days="30">한달</button>
                       <button type="button" data-lifestyle-days="90">3개월</button>
                       <button type="button" data-lifestyle-days="180">6개월</button>
-                      <button type="button" class="active" data-lifestyle-days="365">1년</button>
+                      <button type="button" data-lifestyle-days="365">1년</button>
                     </div>
                   </div>
                   <div id="lifestyleTrends" class="lifestyle-trends"></div>
@@ -344,6 +344,6 @@
         </div>
       </aside>
     </div>
-    <script src="/assets/app.js?v=20260907-18" defer></script>
+    <script src="/assets/app.js?v=20260909-32" defer></script>
   </body>
 </html>

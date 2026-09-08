@@ -78,6 +78,7 @@ const elements = {
   lifestyleTodayDate: document.querySelector("#lifestyleTodayDate"),
   lifestyleReport: document.querySelector("#lifestyleReport"),
   lifestyleReportButton: document.querySelector("#lifestyleReportButton"),
+  lifestyleAnalysisScope: document.querySelector("#lifestyleAnalysisScope"),
   lifestyleTrends: document.querySelector("#lifestyleTrends"),
   lifestyleTabs: [...document.querySelectorAll("[data-lifestyle-tab]")],
   lifestylePeriods: [...document.querySelectorAll("[data-lifestyle-days]")],
@@ -120,7 +121,9 @@ let authMode = "login";
 let activeView = "chat";
 let activeDataTab = "checkup";
 let activeLifestyleTab = "bio";
-let lifestyleDays = 365;
+// 생활건강 탭의 기본 조회 기간. index.html에서 active로 표시한 버튼과 같아야 한다.
+const LIFESTYLE_DEFAULT_DAYS = 7;
+let lifestyleDays = LIFESTYLE_DEFAULT_DAYS;
 let lifestylePayload = null;
 let checkupRecords = [];
 let selectedCheckupRecordId = "";
@@ -1219,7 +1222,8 @@ const lifestyleMetrics = {
   weight: { label: "체중", unit: "kg", digits: 1, ...bioMetric("weight", (row) => row.value) },
   // 체중과 단위가 달라 한 그래프에 겹칠 때는 오른쪽 축을 쓴다.
   bmi: { label: "BMI", unit: "", digits: 1, axis: "right", ...bioMetric("bmi", (row) => row.value) },
-  systolic: { label: "수축기 혈압", unit: "mmHg", digits: 0, ...bioMetric("blood_pressure", (row) => row.detail_data?.systolic) },
+  // 당일 카드에서는 이완기와 묶어 '121/79'로 보여 준다. 그래프와 수치표는 그대로 둘로 나눈다.
+  systolic: { label: "수축기 혈압", unit: "mmHg", digits: 0, pairedWith: "diastolic", pairedLabel: "혈압", ...bioMetric("blood_pressure", (row) => row.detail_data?.systolic) },
   diastolic: { label: "이완기 혈압", unit: "mmHg", digits: 0, ...bioMetric("blood_pressure", (row) => row.detail_data?.diastolic) },
   glucoseFasting: {
     label: "공복 혈당", unit: "mg/dL", digits: 0,
@@ -1264,8 +1268,12 @@ const lifestyleMetrics = {
 
   sleepHours: { label: "수면시간", unit: "시간", digits: 1, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.value },
   sleepScore: { label: "수면점수", unit: "점", digits: 0, source: "sleep", dateKey: "measured_at", daily: "mean", value: (row) => row.detail_data?.sleep_score },
-  deepSleep: { label: "깊은수면", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.deep_sleep_min },
-  awake: { label: "깬 시간", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.awake_min },
+  // 수면 단계는 lifestyle_sleep의 *_minutes 컬럼에서 온다. 같은 7시간을 자도 어떻게
+  // 나뉘었는지가 수면점수의 차이를 설명하므로 셋을 함께 본다.
+  deepSleep: { label: "깊은수면", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.deep_sleep_minutes },
+  lightSleep: { label: "얕은수면", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.light_sleep_minutes },
+  remSleep: { label: "REM수면", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.rem_sleep_minutes },
+  awake: { label: "깬 시간", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.awake_minutes },
 };
 
 /* 탭마다 '세부 항목별 그래프 + 수치표' 한 묶음을 그릴 그룹 목록.
@@ -1308,16 +1316,32 @@ const lifestyleTabConfigs = {
   sleep: {
     chart: "line",
     groups: [
-      { title: "수면시간", metrics: ["sleepHours"] },
+      // 단계는 서로 견줘야 뜻이 생긴다. 쌓아 보여야 하루 수면의 구성이 보인다.
+      // 눈금은 3·6·9시간을 실선으로 고정하고 그 사이는 점선으로 둔다.
+      // 잠이 3시간보다 짧거나 9시간보다 길면 3시간 단위로 축을 넓힌다.
+      {
+        title: "수면시간 및 단계", chart: "stack",
+        axis: { unit: "시간", divisor: 60, step: 1, major: 3, min: 3, max: 9, palette: "sleep-stages" },
+        // 막대에 쌓는 것은 단계뿐이다. 총 수면시간은 합이 아니라 견줄 값이라 쌓지 않는다.
+        metrics: ["deepSleep", "lightSleep", "remSleep", "awake"],
+        // 표에서는 총 수면시간을 앞에 세워 단계 합과 나란히 읽게 한다.
+        columns: ["sleepHours", "deepSleep", "lightSleep", "remSleep", "awake"],
+        // 단계는 서로 견줘야 뜻이 생기는 값이라 카드 한 장씩으로는 읽히지 않는다.
+        // 카드에는 총 수면시간만 두고 구성은 아래 그래프와 표에서 본다.
+        cards: ["sleepHours"],
+      },
       { title: "수면점수", metrics: ["sleepScore"] },
-      { title: "깊은수면과 깬 시간", metrics: ["deepSleep", "awake"] },
     ],
   },
 };
 
 // 당일 카드는 그래프 그룹에 쓰인 항목을 같은 순서로 보여준다.
 function lifestyleTabMetricKeys(tab) {
-  return (lifestyleTabConfigs[tab]?.groups || []).flatMap((group) => group.metrics);
+  // 카드에 넣을 항목은 그룹이 cards로 따로 고를 수 있다. 없으면 표 항목을, 그것도
+  // 없으면 그래프 항목을 쓴다. 수면 단계처럼 표에만 두고 카드에서는 뺄 때 쓴다.
+  const keys = (lifestyleTabConfigs[tab]?.groups || [])
+    .flatMap((group) => group.cards || group.columns || group.metrics);
+  return [...new Set(keys)];
 }
 function buildDataTable(columns, rows) {
   const scroll = document.createElement("div");
@@ -1378,7 +1402,18 @@ function metricDailySeries(payload, metric) {
     }));
 }
 
-function buildLifestyleBarChart(title, metric, points) {
+// 눈금선의 세로 위치. bottom으로 잡으면 맨 위 눈금이 컨테이너 밖 1px에 그려져
+// overflow에 잘린다(9시간 실선이 안 보이던 원인). 위에서부터 재면 안쪽에 들어온다.
+// 숫자는 .data-chart-bars(150px, 아래 여백 22px)와 .data-chart-item(128px)에서 온다.
+const _CHART_PLOT_HEIGHT = 150;
+const _CHART_PLOT_BOTTOM = 22;
+const _CHART_BAR_HEIGHT = 128;
+
+function chartGuideTop(tick, max) {
+  return _CHART_PLOT_HEIGHT - _CHART_PLOT_BOTTOM - (tick / max) * _CHART_BAR_HEIGHT;
+}
+
+function buildLifestyleBarChart(title, metric, points, days, gapDate) {
   if (!points.length) return null;
   const max = Math.max(...points.map((point) => point.value), 1);
   const ticks = [0, max / 2, max];
@@ -1403,24 +1438,158 @@ function buildLifestyleBarChart(title, metric, points) {
     const guide = document.createElement("i");
     guide.className = "data-chart-guide";
     if (tick === 0) guide.classList.add("zero");
-    guide.style.bottom = `${22 + (tick / max) * 128}px`;
+    guide.style.top = `${chartGuideTop(tick, max)}px`;
     bars.appendChild(guide);
   });
+  if (gapDate) bars.appendChild(buildEmptyChartSlot(gapDate, days));
   points.forEach((point) => {
     const item = document.createElement("div");
     item.className = "data-chart-item";
     const bar = document.createElement("span");
-    bar.className = "data-chart-bar";
+    bar.className = isSparseBucket(metric, point) ? "data-chart-bar is-sparse" : "data-chart-bar";
     bar.style.height = `${Math.max((point.value / max) * 100, 8)}%`;
-    bar.title = `${formatGraphDate(point.date)}: ${formatDataNumber(point.value, metric.digits)}${metric.unit ? ` ${metric.unit}` : ""}`;
+    const coverage = point.span > 1 ? ` (${bucketCoverageText(point)})` : "";
+    bar.title = `${formatBucketDate(point.date, days)}: ${formatDataNumber(point.value, metric.digits)}${metric.unit ? ` ${metric.unit}` : ""}${coverage}`;
     const label = document.createElement("small");
-    label.textContent = formatGraphDate(point.date);
+    label.textContent = formatBucketDate(point.date, days);
     item.append(bar, label);
     bars.appendChild(item);
   });
   plot.append(axis, bars);
   chart.append(heading, plot);
   return chart;
+}
+
+function stackedAxisTicks(totals, axisSpec) {
+  // 눈금은 늘 같은 자리에 있어야 날짜를 오가며 봐도 높이가 비교된다. 그래서 기본
+  // 구간(수면은 3~9시간)을 고정해 두고, 값이 그 밖으로 나갈 때만 major 간격으로 넓힌다.
+  const step = axisSpec.step || 1;
+  const major = axisSpec.major || step;
+  const scaled = totals.map((total) => total / (axisSpec.divisor || 1));
+  const baseLow = axisSpec.min === undefined ? 0 : axisSpec.min;
+  const baseHigh = axisSpec.max === undefined ? major : axisSpec.max;
+  const low = Math.min(baseLow, Math.floor(Math.min(...scaled) / major) * major);
+  const high = Math.max(baseHigh, Math.ceil(Math.max(...scaled) / major) * major);
+  const ticks = [];
+  for (let tick = low; tick <= high; tick += step) ticks.push(tick);
+  // 막대는 0부터 쌓이므로 눈금의 위치는 축 전체(0~high) 기준으로 잡는다.
+  return { ticks, major, max: high };
+}
+
+function buildStackedChart(title, series, axisSpec, days, gapDate) {
+  // 날짜마다 계열을 쌓아 하루가 어떻게 나뉘었는지 보여 준다.
+  const dates = [...new Set(series.flatMap((item) => item.points.map((point) => point.date)))].sort();
+  if (!dates.length) return null;
+  const valueAt = series.map((item) => new Map(item.points.map((point) => [point.date, point.value])));
+  const totals = dates.map((date) => valueAt.reduce((sum, map) => sum + (map.get(date) || 0), 0));
+  // 축은 원래 단위(분)를 읽기 쉬운 단위(시간)로 바꿔 표시한다.
+  const axisSpecs = axisSpec || { unit: series[0].unit, divisor: 1, step: 1 };
+  const { ticks, major, max } = stackedAxisTicks(totals, axisSpecs);
+
+  const chart = document.createElement("div");
+  chart.className = axisSpecs.palette ? `data-chart ${axisSpecs.palette}` : "data-chart";
+  const heading = createTextElement("div", "data-chart-title",
+    axisSpecs.unit ? `${title} (${axisSpecs.unit})` : title);
+  const plot = document.createElement("div");
+  plot.className = "data-chart-plot";
+  const axis = document.createElement("div");
+  axis.className = "data-chart-axis";
+  // 눈금선은 한 시간마다 긋되 숫자는 실선(3시간 배수)에만 붙여 왼쪽이 빽빽해지지 않게 한다.
+  ticks.filter((tick) => tick % major === 0).reverse().forEach((tick) => {
+    const label = createTextElement("span", "", formatDataNumber(tick));
+    label.style.bottom = `${(tick / max) * 100}%`;
+    axis.appendChild(label);
+  });
+  const bars = document.createElement("div");
+  bars.className = "data-chart-bars";
+  ticks.forEach((tick) => {
+    const guide = document.createElement("i");
+    guide.className = tick % major === 0 ? "data-chart-guide solid" : "data-chart-guide";
+    if (tick === 0) guide.classList.add("zero");
+    guide.style.top = `${chartGuideTop(tick, max)}px`;
+    bars.appendChild(guide);
+  });
+  if (gapDate) bars.appendChild(buildEmptyChartSlot(gapDate, days));
+  dates.forEach((date, index) => {
+    const item = document.createElement("div");
+    item.className = "data-chart-item";
+    const stack = document.createElement("span");
+    // 계열 하나만 봐도 그 묶음의 기록 촘촘함은 같다. 첫 계열로 판단한다.
+    const sparse = series.some((entry, order) => {
+      const point = entry.points.find((item) => item.date === date);
+      return point && isSparseBucket(entry, point);
+    });
+    stack.className = sparse ? "data-chart-bar stack is-sparse" : "data-chart-bar stack";
+    const scaledTotal = totals[index] / (axisSpecs.divisor || 1);
+    stack.style.height = `${Math.max((scaledTotal / max) * 100, 4)}%`;
+    // 아래에서 위로 쌓이도록 계열 순서대로 넣는다. 높이는 그날 총합 대비 비율이다.
+    series.forEach((entry, order) => {
+      const value = valueAt[order].get(date) || 0;
+      if (!value) return;
+      const segment = document.createElement("i");
+      segment.className = `data-chart-segment s${order % _CHART_COLOR_COUNT}`;
+      segment.style.height = `${(value / (totals[index] || 1)) * 100}%`;
+      const point = entry.points.find((item) => item.date === date);
+      const coverage = point && point.span > 1 ? ` · ${bucketCoverageText(point)}` : "";
+      segment.title = `${formatBucketDate(date, days)} ${entry.label}: ${formatDataNumber(value, entry.digits)}${entry.unit ? ` ${entry.unit}` : ""}${coverage}`;
+      stack.appendChild(segment);
+    });
+    item.append(stack, createTextElement("small", "", formatBucketDate(date, days)));
+    bars.appendChild(item);
+  });
+  plot.append(axis, bars);
+  const legend = document.createElement("div");
+  legend.className = "line-chart-legend";
+  series.forEach((entry, order) => {
+    const label = createTextElement("span", "", entry.label);
+    label.style.setProperty("--legend-color", `var(--chart-s${order % _CHART_COLOR_COUNT})`);
+    legend.appendChild(label);
+  });
+  chart.append(heading, plot, legend);
+  return chart;
+}
+
+function weekOfMonthLabel(date) {
+  // 월~일 한 주에서 목요일은 늘 그 주가 더 많이 걸친 달에 있다(ISO 주 규칙).
+  // 그래서 목요일이 속한 달과 그 달에서 몇 번째 주인지로 이름을 붙인다.
+  const monday = new Date(`${date}T00:00:00Z`);
+  const thursday = new Date(monday.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const week = Math.floor((thursday.getUTCDate() - 1) / 7) + 1;
+  return `${thursday.getUTCMonth() + 1}월${week}주`;
+}
+
+function formatBucketDate(date, days) {
+  // 묶음 단위에 맞춰 x축을 읽는다. 주 단위는 날짜보다 '몇 월 몇 주'가 알아보기 쉽다.
+  if (days >= 180) return formatGraphDate(date);
+  if (days >= 90) return weekOfMonthLabel(date);
+  return formatGraphDate(date);
+}
+
+function bucketCoverageText(point) {
+  return `${point.span}일 중 ${point.count}일 기록`;
+}
+
+function isSparseBucket(metric, point) {
+  // 하루 누적 지표만 해당한다. 체중·혈압처럼 이따금 재는 값은 며칠 비어도 정상이다.
+  return metric.daily === "sum" && point.span > 1 && point.count * 2 < point.span;
+}
+
+function withTopicParticle(word) {
+  // 한글은 끝 글자의 받침으로 은/는이 갈린다. BMI·REM처럼 로마자로 끝나면 '는'을 쓴다.
+  const last = String(word || "").trim().slice(-1);
+  const code = last.charCodeAt(0);
+  const isHangul = code >= 0xac00 && code <= 0xd7a3;
+  if (!isHangul) return `${word}는`;
+  return `${word}${(code - 0xac00) % 28 === 0 ? "는" : "은"}`;
+}
+
+function buildEmptyChartSlot(date, days) {
+  // 값은 없고 x축 이름만 있는 칸. 기록이 시작되기 직전 자리를 보여 준다.
+  const item = document.createElement("div");
+  item.className = "data-chart-item is-blank";
+  item.title = "기록 없음";
+  item.appendChild(createTextElement("small", "", formatBucketDate(date, days)));
+  return item;
 }
 
 function lifestyleBucketLabel(days) {
@@ -1435,7 +1604,7 @@ function buildTrendTable(series, days) {
     .sort((left, right) => right.localeCompare(left));
   const valueByDate = series.map((item) => new Map(item.points.map((point) => [point.date, point.value])));
   const columns = [
-    { label: lifestyleBucketLabel(days), value: (row) => row.date },
+    { label: lifestyleBucketLabel(days), value: (row) => formatBucketDate(row.date, days) },
     ...series.map((item, index) => ({
       label: item.unit ? `${item.label}(${item.unit})` : item.label,
       numeric: true,
@@ -1458,6 +1627,32 @@ function lifestyleBucket(value, days) {
   return text;
 }
 
+function bucketSpan(date, days) {
+  // 묶음 하나가 며칠짜리인지. 기록이 얼마나 촘촘한지 재는 분모가 된다.
+  if (days >= 180) return new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).getUTCDate();
+  return days >= 90 ? 7 : 1;
+}
+
+function previousBucket(date, days) {
+  // 묶음 단위만큼 하나 앞으로 되짚는다. 기록 시작 전에 빈칸을 한 칸 두기 위한 것이다.
+  if (days >= 180) {
+    const month = new Date(`${date}-01T00:00:00Z`);
+    month.setUTCMonth(month.getUTCMonth() - 1);
+    return month.toISOString().slice(0, 7);
+  }
+  const day = new Date(`${date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - (days >= 90 ? 7 : 1));
+  return day.toISOString().slice(0, 10);
+}
+
+function windowStartBucket(latestDate, days) {
+  // 고른 기간이 실제로 어디까지 거슬러 올라가는지. 기록 시작일과 견줄 기준이다.
+  if (!latestDate) return "";
+  const start = new Date(`${latestDate}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  return lifestyleBucket(start.toISOString().slice(0, 10), days);
+}
+
 function bucketSeries(series, days) {
   // 구간이 길면 일별 점이 너무 촘촘해지므로 주·월로 묶어 일평균으로 본다.
   const buckets = new Map();
@@ -1472,6 +1667,9 @@ function bucketSeries(series, days) {
     .map(([date, values]) => ({
       date,
       value: values.reduce((sum, value) => sum + value, 0) / values.length,
+      // 기록이 있는 날만 평균에 들어간다. 며칠이 빠졌는지 알아야 값을 믿을지 판단할 수 있다.
+      count: values.length,
+      span: bucketSpan(date, days),
     }));
 }
 
@@ -1488,7 +1686,7 @@ function svgNode(name, attributes, text = "") {
   return node;
 }
 
-function buildLineChart(title, series) {
+function buildLineChart(title, series, days, gapDate) {
   const colors = ["#2f8f6b", "#e3924d", "#5e83c5", "#bd6c9b"];
   const plots = series.map((item) => item.points
     .map((point) => ({ x: String(point.date || ""), value: Number(point.value) }))
@@ -1497,6 +1695,8 @@ function buildLineChart(title, series) {
   // 시리즈마다 x를 새로 매기면 선이 옆으로 나열되므로 측정 시점을 공통 축으로 삼아 겹쳐 그린다.
   const axis = [...new Set(plots.flat().map((point) => point.x))].sort();
   if (!axis.length) return null;
+  // 기록이 시작되기 전 한 칸을 비워 두면 언제부터 값이 생겼는지 눈에 들어온다.
+  if (gapDate) axis.unshift(gapDate);
   const scaleOf = (group) => {
     const values = group.flat().map((point) => point.value);
     if (!values.length) return null;
@@ -1569,7 +1769,7 @@ function buildLineChart(title, series) {
       y: height + 16,
       "text-anchor": index === 0 ? "start" : index === axis.length - 1 ? "end" : "middle",
       class: "line-chart-label",
-    }, formatGraphDate(axis[index])));
+    }, formatBucketDate(axis[index], days)));
   });
   const chart = document.createElement("div"); chart.className = "line-chart";
   const heading = document.createElement("div"); heading.className = "line-chart-title"; heading.textContent = title;
@@ -1831,6 +2031,13 @@ async function loadCheckupReport() {
   }
 }
 
+// 당일 카드의 미니 그래프에 쓸 점의 개수. 너무 많으면 카드 안에서 뭉개진다.
+const _SPARKLINE_MAX_POINTS = 24;
+// 누적 막대에 쓰는 계열 색 수. styles.css의 --chart-s0~3과 짝을 맞춘다.
+const _CHART_COLOR_COUNT = 4;
+// 안내 문구에 늘어놓을 지표 이름 수. 넘치면 '외 N개'로 줄인다.
+const _SCOPE_TITLE_LIMIT = 4;
+
 // AI 분석 구간은 서비스가 탭마다 정한다. 화면의 기간 버튼은 그래프에만 적용된다.
 // 캐시는 탭당 하나이고, 새 기록이 들어와 기준일이 바뀌면 버린다.
 // 실행은 버튼을 눌렀을 때만 일어난다.
@@ -1845,47 +2052,119 @@ function setLifestyleStatus(message, isError = false) {
 }
 
 function lifestyleTabSeries(payload, tab) {
-  return lifestyleTabMetricKeys(tab)
+  const items = lifestyleTabMetricKeys(tab)
     .map((key) => {
       const metric = lifestyleMetrics[key];
       return { key, ...metric, series: metricDailySeries(payload, metric) };
     })
     .filter((item) => item.series.length);
+
+  // 혈압처럼 둘을 같이 읽어야 뜻이 서는 항목은 카드 하나로 합친다.
+  const byKey = new Map(items.map((item) => [item.key, item]));
+  const merged = new Set();
+  return items
+    .map((item) => {
+      const partner = item.pairedWith && byKey.get(item.pairedWith);
+      if (!partner) return item;
+      merged.add(partner.key);
+      return { ...item, label: item.pairedLabel || item.label, pair: partner };
+    })
+    .filter((item) => !merged.has(item.key));
+}
+
+function buildSparkline(seriesList, unit) {
+  // 점이 하나면 그릴 선이 없고, 너무 많으면 카드 안에서 뭉개진다.
+  const plots = seriesList
+    .map((series) => series.slice(-_SPARKLINE_MAX_POINTS))
+    .filter((points) => points.length >= 2);
+  if (!plots.length) return null;
+  // 혈압처럼 둘을 겹쳐 그릴 때는 눈금을 같이 써야 두 값의 간격이 보인다.
+  const values = plots.flat().map((point) => point.value);
+  const low = Math.min(...values);
+  const span = Math.max(...values) - low || 1;
+  const width = 68;
+  const height = 24;
+  const svg = svgNode("svg", {
+    class: "today-card-spark",
+    viewBox: `0 0 ${width} ${height}`,
+    "aria-label": `최근 ${plots[0].length}회 흐름`,
+  });
+  plots.forEach((points, order) => {
+    const step = width / (points.length - 1);
+    // 위아래로 2px씩 여백을 둬야 꼭짓점이 잘리지 않는다.
+    const coords = points.map((point, index) => [
+      index * step,
+      height - 2 - ((point.value - low) / span) * (height - 4),
+    ]);
+    svg.appendChild(svgNode("polyline", {
+      class: `today-card-spark-line s${order % _CHART_COLOR_COUNT}`,
+      points: coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" "),
+    }));
+    const [lastX, lastY] = coords[coords.length - 1];
+    svg.appendChild(svgNode("circle", {
+      class: `today-card-spark-dot s${order % _CHART_COLOR_COUNT}`, cx: lastX, cy: lastY, r: 2.2,
+    }));
+  });
+  svg.appendChild(svgNode("title", {}, `최근 ${plots[0].length}회 흐름${unit ? ` (${unit})` : ""}`));
+  return svg;
+}
+
+function todayCardPoint(series, latestDate) {
+  return series.find((point) => point.date === latestDate);
+}
+
+function todayCardText(item, pick) {
+  // 짝지은 항목은 '121/79'처럼 한 칸에 둘을 적는다. 값이 없는 쪽은 —로 둔다.
+  const own = pick(item);
+  const text = own === null || own === undefined ? "—" : formatDataNumber(own, item.digits);
+  if (!item.pair) return text;
+  const other = pick(item.pair);
+  const otherText = other === null || other === undefined ? "—" : formatDataNumber(other, item.pair.digits);
+  return `${text}/${otherText}`;
 }
 
 function buildTodayMetricCard(item, latestDate, days) {
   const card = document.createElement("article");
   card.className = "today-card";
+  card.append(createTextElement("span", "today-card-label", item.label));
 
-  const head = document.createElement("header");
-  head.className = "today-card-head";
-  const label = document.createElement("span");
-  label.className = "today-card-label";
-  label.textContent = item.label;
-  head.appendChild(label);
-  if (item.unit) {
-    const unit = document.createElement("span");
-    unit.className = "today-card-unit";
-    unit.textContent = item.unit;
-    head.appendChild(unit);
-  }
-
-  const todayPoint = item.series.find((point) => point.date === latestDate);
+  const todayPoint = todayCardPoint(item.series, latestDate);
+  const main = document.createElement("div");
+  main.className = "today-card-main";
   const value = document.createElement("strong");
   value.className = "today-card-value";
-  value.textContent = todayPoint ? formatDataNumber(todayPoint.value, item.digits) : "—";
+  value.textContent = todayCardText(item, (entry) => todayCardPoint(entry.series, latestDate)?.value);
+  if (item.unit) {
+    const unit = document.createElement("small");
+    unit.className = "today-card-unit";
+    unit.textContent = item.unit;
+    value.appendChild(unit);
+  }
+  main.appendChild(value);
+  // 카드 안에서 최근 흐름을 한눈에 보여 준다. 숫자 하나만으로는 방향을 알 수 없다.
+  const spark = buildSparkline(
+    [item.series, ...(item.pair ? [item.pair.series] : [])],
+    item.unit,
+  );
+  if (spark) main.appendChild(spark);
+  card.appendChild(main);
 
   const foot = document.createElement("footer");
   foot.className = "today-card-foot";
-  const average = item.series.reduce((sum, point) => sum + point.value, 0) / item.series.length;
-  const last = item.series[item.series.length - 1];
+  const mean = (entry) => entry.series.reduce((sum, point) => sum + point.value, 0) / entry.series.length;
+  const average = mean(item);
   if (!todayPoint) {
     // 항목마다 마지막 기록일이 갈릴 수 있어, 당일 기록이 없으면 언제 값인지 알린다.
     card.classList.add("is-empty");
+    const last = item.series[item.series.length - 1];
     foot.appendChild(createTextElement("span", "today-card-average",
-      `마지막 기록 ${last.date} · ${formatDataNumber(last.value, item.digits)}`));
+      `마지막 기록 ${last.date} · ${todayCardText(item, (entry) => todayCardPoint(entry.series, last.date)?.value)}`));
   } else if (item.series.length < 2) {
     foot.appendChild(createTextElement("span", "today-card-average", `최근 ${days}일 중 1일 기록`));
+  } else if (item.pair) {
+    // 짝지은 항목에 화살표를 둘 붙이면 어수선하다. 방향은 위의 미니 그래프가 말한다.
+    foot.appendChild(createTextElement("span", "today-card-average",
+      `${days}일 평균 ${todayCardText(item, mean)}`));
   } else {
     const gap = todayPoint.value - average;
     // 표기 자릿수로 반올림했을 때 차이가 없으면 화살표 대신 '평균과 비슷'으로 적는다.
@@ -1899,8 +2178,7 @@ function buildTodayMetricCard(item, latestDate, days) {
     foot.append(delta, createTextElement("span", "today-card-average",
       `${days}일 평균 ${formatDataNumber(average, item.digits)}`));
   }
-
-  card.append(head, value, foot);
+  card.appendChild(foot);
   return card;
 }
 
@@ -1921,16 +2199,24 @@ function renderLifestyleToday(payload, days) {
   return { latestDate, count: metrics.length };
 }
 
-function renderLifestyleTrends(payload, days) {
+function renderLifestyleTrends(payload, days, latestDate) {
   const config = lifestyleTabConfigs[activeLifestyleTab] || { groups: [] };
+  const toSeries = (keys) => keys
+    .map((key) => {
+      const metric = lifestyleMetrics[key];
+      return { key, ...metric, points: bucketSeries(metricDailySeries(payload, metric), days) };
+    })
+    .filter((item) => item.points.length);
+
   const blocks = (config.groups || []).map((group) => {
-    const series = group.metrics
-      .map((key) => {
-        const metric = lifestyleMetrics[key];
-        return { key, ...metric, points: bucketSeries(metricDailySeries(payload, metric), days) };
-      })
-      .filter((item) => item.points.length);
+    const series = toSeries(group.metrics);
+    // 표는 그래프와 다른 항목을 볼 수 있다. 없으면 그래프와 같은 항목을 쓴다.
+    const tableSeries = group.columns ? toSeries(group.columns) : series;
     if (!series.length) return null;
+    // 고른 기간보다 기록이 늦게 시작했으면 그 사실을 알리고 직전 한 칸을 비워 둔다.
+    const firstBucket = series.map((item) => item.points[0].date).sort()[0];
+    const startsLate = Boolean(latestDate) && windowStartBucket(latestDate, days) < firstBucket;
+    const gapDate = startsLate ? previousBucket(firstBucket, days) : "";
     const block = document.createElement("section");
     block.className = "data-section";
     const heading = document.createElement("h3");
@@ -1939,12 +2225,20 @@ function renderLifestyleTrends(payload, days) {
     range.className = "data-section-range";
     range.textContent = `${lifestyleAggregationLabel(days)} · ${series[0].points.length}구간`;
     heading.appendChild(range);
-    const chart = config.chart === "line"
-      ? buildLineChart(group.title, series)
-      : buildLifestyleBarChart(group.title, series[0], series[0].points);
+    // 그래프 종류는 그룹이 정하고, 없으면 탭 기본값을 따른다.
+    const kind = group.chart || config.chart;
+    const chart = kind === "stack"
+      ? buildStackedChart(group.title, series, group.axis, days, gapDate)
+      : kind === "line"
+        ? buildLineChart(group.title, series, days, gapDate)
+        : buildLifestyleBarChart(group.title, series[0], series[0].points, days, gapDate);
     block.append(heading);
+    if (startsLate) {
+      block.append(createTextElement("p", "data-section-note",
+        `${withTopicParticle(group.title)} ${formatBucketDate(firstBucket, days)}부터 기록되었습니다.`));
+    }
     if (chart) block.append(chart);
-    block.append(buildTrendTable(series, days));
+    block.append(buildTrendTable(tableSeries, days));
     return block;
   }).filter(Boolean);
   if (!blocks.length) {
@@ -1967,8 +2261,23 @@ function appendReportSection(nodes, title, className, items, build) {
   nodes.push(buildReportList(className, items, build));
 }
 
+function lifestyleAnalysisScopeText(state) {
+  // 이 탭이 어떤 지표를 보는지 그래프 그룹 제목에서 그대로 가져온다.
+  const groups = (lifestyleTabConfigs[activeLifestyleTab] || {}).groups || [];
+  const titles = groups.map((group) => group.title);
+  const shown = titles.slice(0, _SCOPE_TITLE_LIMIT).join(" · ");
+  const rest = titles.length - _SCOPE_TITLE_LIMIT;
+  const metrics = rest > 0 ? `${shown} 외 ${rest}개` : shown;
+  // 분석 구간은 서비스가 정하므로 한 번 돌려 보기 전에는 알 수 없다.
+  const window = state?.status === "done"
+    ? ` · 최근 ${state.recentDays}일과 전체 ${state.windowDays}일`
+    : "";
+  return metrics ? `${metrics}${window}` : "";
+}
+
 function renderLifestyleReport(hasData = true) {
   const state = lifestyleReports.get(activeLifestyleTab);
+  elements.lifestyleAnalysisScope.textContent = lifestyleAnalysisScopeText(state);
   const isLoading = state?.status === "loading";
   elements.lifestyleReportButton.disabled = isLoading || !hasData;
   elements.lifestyleReportButton.textContent = isLoading ? "분석 중..." : "AI 요약분석";
@@ -1992,7 +2301,7 @@ function renderLifestyleReport(hasData = true) {
   const report = state.report || {};
   const nodes = [
     createTextElement("h4", "", String(report.headline || "")),
-    createTextElement("p", "lifestyle-report-state", String(report.current_state || "")),
+    createTextElement("p", "", String(report.current_state || "")),
   ];
   appendReportSection(nodes, "", "lifestyle-report-points", report.key_points || [],
     (point) => createTextElement("li", "", String(point)));
@@ -2097,7 +2406,7 @@ function renderLifestyle(payload) {
   // 당일 수치는 원본 기록을 그대로 읽어야 하므로 집계 전 응답을 그대로 보관한다.
   lifestylePayload = payload;
   const today = renderLifestyleToday(payload, days);
-  renderLifestyleTrends(payload, days);
+  renderLifestyleTrends(payload, days, today.latestDate);
   // 기간 버튼을 눌러도 분석은 그대로지만, 새 기록이 들어왔다면 옛 분석은 버린다.
   const cached = lifestyleReports.get(activeLifestyleTab);
   if (cached?.status === "done" && cached.latestDate && today.latestDate
@@ -2214,6 +2523,10 @@ function resetPersonalData() {
   resetDashboardFlow();
   lifestylePayload = null;
   lifestyleReports.clear();
+  lifestyleDays = LIFESTYLE_DEFAULT_DAYS;
+  elements.lifestylePeriods.forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.lifestyleDays) === lifestyleDays);
+  });
   setDataPlaceholder(elements.checkupBody, "검진 결과를 불러오고 있어요.");
   setLifestyleStatus("생활 데이터를 불러오고 있어요.");
   setActiveView("chat");
