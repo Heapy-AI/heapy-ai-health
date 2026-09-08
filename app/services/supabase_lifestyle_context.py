@@ -323,7 +323,7 @@ class SupabaseLifestyleContextService:
             "/rest/v1/lifestyle_activity"
             f"?user_id=eq.{quote(user_id, safe='')}"
             "&select=record_date,steps,floors_climbed:floors,"
-            "active_time:active_time_minutes,active_distance_m:distance_m,"
+            "active_time:active_time_minutes,active_distance_km:distance_m,"
             "active_calories:active_calories_kcal"
             f"&order=record_date.desc&limit={limit}",
             access_token,
@@ -474,7 +474,12 @@ class SupabaseLifestyleContextService:
 
     @staticmethod
     def _km(value: Any) -> str:
-        """미터 단위로 적재된 이동 거리를 km 표기로 바꾼다."""
+        """미터 단위로 적재된 이동 거리를 km 표기로 바꾼다.
+
+        lifestyle_exercise.distance_m 전용이다. lifestyle_activity.distance_m은 컬럼명과
+        달리 km로 적재되므로 이 함수를 쓰면 1,000분의 1로 줄어든다. 그쪽은 별칭을
+        active_distance_km으로 두고 환산 없이 표기한다.
+        """
         if value in (None, ""):
             return ""
         try:
@@ -493,7 +498,7 @@ class SupabaseLifestyleContextService:
             steps = cls._number(row.get("steps"), "보")
             floors = cls._number(row.get("floors_climbed"), "층")
             active = cls._number(row.get("active_time"), "분")
-            distance = cls._km(row.get("active_distance_m"))
+            distance = cls._number(row.get("active_distance_km"), "km", 1)
             calories = cls._number(row.get("active_calories"), "kcal")
             parts = [
                 f"걸음 {steps}" if steps else "",

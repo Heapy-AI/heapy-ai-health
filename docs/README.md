@@ -82,6 +82,8 @@ Supabase Data API의 의료용어 일괄 검색 RPC를 사용한다.
 6. **[다중 컬렉션 병렬 검색 방법론](./multi_collection_parallel_retrieval.md)** — Sub-intent 분류기 없이 여러 Pinecone namespace를 병렬 검색하고 결과를 병합하는 기준. 검색 상수는 전체 데이터 적재 후 평가를 통해 확정한다.
 
 7. **[Supabase 인증·대화 DB 설계](./supabase_auth_chat_db_design.md)** — Auth 계정과 공개 프로필의 연결, 기존 사용자 보존, RLS, 세션·메시지·요약 저장 경계.
+
+8. **[생활건강 AI해석 prompt 연구결과](./생활건강_AI해석_prompt_연구결과.md)** — 내건강 > 생활건강 탭의 AI 요약분석이 어떤 구간을 보고 무엇을 근거로 판정하는지. 항목별 참고범위와 그 출처, 프롬프트 v1.0~v3.0의 변화 이유를 정리한다.
 ```
 docs/
 ├── README.md                    (진입점)
@@ -92,7 +94,8 @@ docs/
 ├── response_schema.py           (응답 스키마 + 예시 + fixture)
 ├── supabase_auth_chat_db_design.md (인증·대화 DB 설계)
 ├── multi_collection_parallel_retrieval.md (다중 namespace 검색 방법론)
-└── pipeline-state-design.md     (설계 배경)
+├── pipeline-state-design.md     (설계 배경)
+└── 생활건강_AI해석_prompt_연구결과.md (생활건강 AI 분석 프롬프트 판·지표 기준)
 ```
 ## 분업 가이드
 
