@@ -512,6 +512,13 @@ class LifestylePromptTest(unittest.TestCase):
         self.assertIn("actions: 0~2개", prompt)
         self.assertNotIn("key_points", prompt)
 
+    def test_actions_must_be_concrete(self) -> None:
+        """'일찍 주무세요'는 조언이 아니다. 몇 시에 자면 되는지가 조언이다."""
+        prompt = self._prompt("sleep")
+
+        self.assertIn('"일찍 주무세요"는 조언이 아니다', prompt)
+        self.assertIn("오늘 당장 할 수 있는 모습으로 적어라", prompt)
+
     def test_active_prompt_is_version_four(self) -> None:
         self.assertEqual(PROMPT_VERSION, "4.0")
 
@@ -533,7 +540,7 @@ class LifestylePromptTest(unittest.TestCase):
         # 기기의 점수 산출식은 공개되지 않는다. 특정 단계를 원인으로 못박으면 안 된다.
         self.assertNotIn("REM수면이 낮으면", prompt)
         self.assertNotIn("깊은수면이 낮으면", prompt)
-        self.assertIn("짝이 없으면 원인을 지어내지 말고", prompt)
+        self.assertIn("co_movements에 수면점수와 함께 움직인 항목이 잡혔다면", prompt)
         # 총량과 구성요소가 같이 움직이는 것은 당연하다.
         self.assertIn("총량과 그 구성요소가 같이 움직이는 것은 당연한 일", prompt)
 
@@ -586,6 +593,52 @@ class LifestylePromptTest(unittest.TestCase):
         for stage in ("깊은수면", "얕은수면", "REM수면", "뒤척임"):
             with self.subTest(stage=stage):
                 self.assertNotIn(frozenset({"수면시간", stage}), found)
+
+    def test_bedtime_target_is_computed_not_left_to_the_model(self) -> None:
+        """시각 뺄셈은 자정을 넘나들어 모델이 틀리기 쉽다. 코드가 계산해 넘긴다."""
+        rows = []
+        for day in range(1, 29):
+            date = f"2026-09-{day:02d}"
+            # 매일 0시 40분에 자고 7시 10분에 일어난다. 6시간 30분이라 권장에 못 미친다.
+            rows.append({
+                "measured_at": f"{date}T00:40:00+09:00", "bio_type": "sleep", "value": 6.5,
+                "detail_data": {"start_at": f"{date}T00:40:00+09:00",
+                                "end_at": f"{date}T07:10:00+09:00"},
+            })
+        timing = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})["sleep_timing"]
+
+        # 기상 7:10에서 7시간을 빼면 0:10이다.
+        self.assertEqual(timing["waketime_typical"], "오전 7:10")
+        self.assertEqual(timing["bedtime_target"], "오전 12:10")
+        self.assertEqual(timing["bedtime_shift"], "지금보다 30분쯤 일찍")
+
+    def test_bedtime_target_stays_quiet_when_already_enough(self) -> None:
+        """이미 권장 시간을 채우고 있으면 취침을 당기라고 하지 않는다."""
+        rows = [{"measured_at": f"2026-09-{day:02d}T23:00:00+09:00", "bio_type": "sleep",
+                 "value": 8.0,
+                 "detail_data": {"start_at": f"2026-09-{day:02d}T23:00:00+09:00",
+                                 "end_at": f"2026-09-{day:02d}T07:00:00+09:00"}}
+                for day in range(1, 29)]
+        timing = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})["sleep_timing"]
+
+        self.assertEqual(timing["bedtime_shift"], "지금 취침 시각으로도 닿는다")
+
+    def test_sleep_prompt_ties_the_score_to_stage_shares(self) -> None:
+        """점수·시간·비중을 따로 늘어놓지 말고 어느 쪽이 원인에 가까운지 말하게 한다."""
+        prompt = self._prompt("sleep")
+
+        self.assertIn("비중은 기준 안인데 점수가 낮다면 구성이 아니라 잠의 길이가", prompt)
+        self.assertIn("단정하지는 마라", prompt)
+        # 막연한 '일찍 자라' 대신 계산된 시각을 그대로 쓰게 한다.
+        self.assertIn("bedtime_target이 있으면", prompt)
+
+    def test_prompt_teaches_how_to_connect_sentences(self) -> None:
+        """'하나의 이야기로 묶어라'만으로는 한 문장에 한 항목씩 나열했다."""
+        prompt = self._prompt("bio")
+
+        self.assertIn("한 문장에 한 항목씩 늘어놓으면 나열이지 이야기가 아니다", prompt)
+        self.assertIn("그래서·반면·그런데·다만", prompt)
+        self.assertIn("서로 어긋나 보이는 값이 있으면", prompt)
 
     def test_sleep_prompt_carries_bedtime_and_waketime(self) -> None:
         """취침·기상 시각은 잠의 길이만으로는 안 보이는 것이라 프롬프트에 넘긴다."""

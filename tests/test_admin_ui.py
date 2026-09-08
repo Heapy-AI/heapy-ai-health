@@ -377,11 +377,9 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertIn("report.actions", body)
         self.assertIn("지금 신경 쓰면 좋은 것", body)
         self.assertIn(".lifestyle-report-actions", styles)
-        # 긴 설명 뒤에 간추린 정리가 붙는다. 소제목 없이 문단 바로 아래 놓인다.
-        self.assertIn("report.key_points", body)
-        self.assertIn(".lifestyle-report-points", styles)
-        # 항목별 수치와 날짜 목록은 여전히 자리를 만들지 않는다. 자리가 있으면 모델이 채운다.
+        # 자리가 있으면 모델이 채운다. key_points는 current_state를 되풀이해 없앴다.
         for removed in ("report.metrics", "report.patterns", "report.anomalies",
+                        "report.key_points", "lifestyle-report-points",
                         "overall_analysis", "report.summary", "항목별 변화", "눈에 띈 날"):
             with self.subTest(removed=removed):
                 self.assertNotIn(removed, body)
