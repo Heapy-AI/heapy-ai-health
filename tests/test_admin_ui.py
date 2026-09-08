@@ -215,6 +215,10 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertIn("function buildSparkline", script)
         self.assertIn('class: "today-card-spark"', script)
         self.assertIn(".today-card-spark-line", styles)
+        # 기록은 UTC로 저장돼 문자열을 잘라 읽으면 새벽이 오후로 보인다.
+        self.assertIn("function formatClockTime", script)
+        self.assertIn("const moment = new Date(String(value || \"\"));", script)
+        self.assertNotIn("Number(text.slice(11, 13))", script)
         self.assertIn(".today-card:hover", styles)
 
     def test_blood_pressure_shares_one_today_card(self) -> None:
@@ -370,11 +374,13 @@ class AdminWebUiTest(unittest.TestCase):
         start = script.index("function renderLifestyleReport(")
         body = script[start:script.index("\nfunction ", start + 1)]
         self.assertIn("report.current_state", body)
-        self.assertIn("report.key_points", body)
         self.assertIn("report.actions", body)
         self.assertIn("지금 신경 쓰면 좋은 것", body)
         self.assertIn(".lifestyle-report-actions", styles)
-        # 항목별 수치와 날짜를 늘어놓던 자리는 없앴다. 자리가 있으면 모델이 채운다.
+        # 긴 설명 뒤에 간추린 정리가 붙는다. 소제목 없이 문단 바로 아래 놓인다.
+        self.assertIn("report.key_points", body)
+        self.assertIn(".lifestyle-report-points", styles)
+        # 항목별 수치와 날짜 목록은 여전히 자리를 만들지 않는다. 자리가 있으면 모델이 채운다.
         for removed in ("report.metrics", "report.patterns", "report.anomalies",
                         "overall_analysis", "report.summary", "항목별 변화", "눈에 띈 날"):
             with self.subTest(removed=removed):

@@ -11,15 +11,19 @@ import unittest
 
 from app.services.lifestyle_report import (
     PROMPT_VERSION,
+    _clock_minutes,
     STATUS_CAUTION,
     STATUS_GOOD,
     STATUS_MANAGE,
     STATUS_UNKNOWN,
     LifestyleReportService,
+    _clock_stats,
+    _clock_text,
     _prompt_view,
 )
 from app.services.prompts import lifestyle_report_v1 as prompt_v1
 from app.services.prompts import lifestyle_report_v2 as prompt_v2
+from app.services.prompts import lifestyle_report_v3 as prompt_v3
 
 
 def _bio_days(bio_type: str, values: dict[str, float], detail_key: str = "") -> list[dict]:
@@ -182,7 +186,7 @@ class LifestyleAnalysisTest(unittest.TestCase):
         self.assertEqual(_metric(analysis, "깊은수면")["latest"], 70)
         self.assertEqual(_metric(analysis, "얕은수면")["latest"], 240)
         self.assertEqual(_metric(analysis, "REM수면")["latest"], 95)
-        self.assertEqual(_metric(analysis, "깬 시간")["latest"], 12)
+        self.assertEqual(_metric(analysis, "뒤척임")["latest"], 12)
 
     def test_sleep_tab_covers_every_fetched_column(self) -> None:
         """조회해 놓고 화면에 안 쓰는 수면 컬럼이 없어야 한다."""
@@ -190,7 +194,8 @@ class LifestyleAnalysisTest(unittest.TestCase):
 
         self.assertEqual(
             [item["metric"] for item in analysis["metrics"]],
-            ["수면시간", "수면점수", "깊은수면", "얕은수면", "REM수면", "깬 시간"],
+            ["수면시간", "수면점수", "깊은수면", "얕은수면", "REM수면", "뒤척임",
+             "깊은수면 비중", "REM수면 비중"],
         )
 
     def test_sleep_metric_keys_match_the_storage_contract(self) -> None:
@@ -208,7 +213,7 @@ class LifestyleAnalysisTest(unittest.TestCase):
         analysis = LifestyleReportService.build_analysis("sleep", {"sleep": normalized})
 
         # 키가 어긋나면 해당 항목이 통째로 빠지므로 개수로 잡힌다.
-        self.assertEqual(len(analysis["metrics"]), 6)
+        self.assertEqual(len(analysis["metrics"]), 8)
         self.assertEqual(_metric(analysis, "수면시간")["latest"], 7.2)
         self.assertEqual(_metric(analysis, "얕은수면")["latest"], 240)
 
@@ -372,6 +377,86 @@ class LifestyleSignalTest(unittest.TestCase):
         ]}})
         self.assertEqual(_metric(sparse, "섭취칼로리")["full"]["confidence"], "부족")
 
+    def test_weekend_difference_is_reported_in_plain_words(self) -> None:
+        """주말에 몰아 자는 습관은 전체 평균만 봐서는 보이지 않는다."""
+        values = {}
+        for day in range(1, 29):
+            date = f"2026-09-{day:02d}"
+            weekend = __import__("datetime").date.fromisoformat(date).isoweekday() >= 6
+            values[date] = 9.0 if weekend else 6.0
+        rows = [{"measured_at": f"{d}T23:00:00", "bio_type": "sleep", "value": v,
+                 "detail_data": {}} for d, v in values.items()]
+        analysis = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})
+
+        self.assertEqual(_metric(analysis, "수면시간")["weekly_pattern"], "주말이 더 높음")
+
+    def test_weekday_weekend_needs_both_sides(self) -> None:
+        """한쪽에 이틀도 없으면 견줄 값이 아니다."""
+        rows = [{"measured_at": f"2026-09-{day:02d}T23:00:00", "bio_type": "sleep",
+                 "value": 7.0, "detail_data": {}} for day in (1, 2, 3)]
+        analysis = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})
+
+        self.assertEqual(_metric(analysis, "수면시간")["weekly_pattern"], "판단하기 이름")
+
+    def test_clock_reads_utc_records_in_local_time(self) -> None:
+        """기록은 UTC로 저장된다. 문자열을 잘라 읽으면 새벽이 오후가 된다."""
+        # 새벽 1시 20분(KST)은 전날 16시 20분(UTC)으로 저장된다.
+        self.assertEqual(_clock_text(_clock_minutes("2026-09-01T16:20:00+00:00")), "오전 1:20")
+        self.assertEqual(_clock_text(_clock_minutes("2026-09-01T22:10:00+00:00")), "오전 7:10")
+        # 시간대가 없으면 이미 지역 시간으로 적힌 값으로 본다.
+        self.assertEqual(_clock_text(_clock_minutes("2026-09-01T01:20:00")), "오전 1:20")
+        self.assertIsNone(_clock_minutes("날짜 아님"))
+
+    def test_clock_average_wraps_around_midnight(self) -> None:
+        """시각은 자정에서 되감긴다. 선형 평균을 쓰면 정반대 시각이 나온다."""
+        # 23:50과 00:10의 평균은 정오가 아니라 자정이다.
+        stats = _clock_stats([23 * 60 + 50, 10])
+
+        self.assertEqual(_clock_text(stats["typical_minutes"]), "오전 12:00")
+        self.assertLessEqual(stats["spread_minutes"], 20)
+
+    def test_clock_spread_tells_regular_from_erratic(self) -> None:
+        """같은 시각에 자는 사람과 들쭉날쭉한 사람이 갈려야 한다."""
+        steady = _clock_stats([60, 65, 55, 70, 50])
+        erratic = _clock_stats([60, 300, 1380, 180, 720])
+
+        self.assertLess(steady["spread_minutes"], erratic["spread_minutes"])
+        self.assertLessEqual(steady["spread_minutes"], 30)
+
+    def test_sleep_timing_reads_bedtime_and_waketime(self) -> None:
+        """취침·기상 시각의 규칙성과 주중·주말 차이를 잰다."""
+        rows = []
+        for day in range(1, 29):
+            date = f"2026-09-{day:02d}"
+            weekend = __import__("datetime").date.fromisoformat(date).isoweekday() >= 6
+            bed = "03:00" if weekend else "01:00"
+            wake = "11:00" if weekend else "07:00"
+            rows.append({
+                "measured_at": f"{date}T{bed}:00", "bio_type": "sleep", "value": 6.0,
+                "detail_data": {"start_at": f"{date}T{bed}:00", "end_at": f"{date}T{wake}:00"},
+            })
+        timing = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})["sleep_timing"]
+
+        self.assertEqual(timing["bedtime_typical"], "오전 1:34")
+        # 주중 1시 · 주말 3시라 흔들림이 45분쯤 된다.
+        self.assertEqual(timing["bedtime_regularity"], "보통")
+        self.assertEqual(timing["bedtime_weekend"], "주말에 취침이 늦어짐")
+        self.assertEqual(timing["waketime_weekend"], "주말에 기상이 늦어짐")
+
+    def test_sleep_timing_needs_the_times(self) -> None:
+        """시각이 없는 기록만 있으면 취침·기상 분석을 만들지 않는다."""
+        rows = [{"measured_at": f"2026-09-{day:02d}T23:00:00", "bio_type": "sleep",
+                 "value": 7.0, "detail_data": {}} for day in range(1, 11)]
+        analysis = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})
+
+        self.assertIsNone(analysis["sleep_timing"])
+
+    def test_sleep_timing_only_exists_on_the_sleep_tab(self) -> None:
+        for domain in ("bio", "activity", "nutrition"):
+            with self.subTest(domain=domain):
+                analysis = LifestyleReportService.build_analysis(domain, LIFESTYLE_WINDOW)
+                self.assertIsNone(analysis["sleep_timing"])
+
     def test_co_movement_pairs_items_inside_the_same_tab(self) -> None:
         """탭 안에서 함께 움직인 짝을 찾는다. 다른 탭과는 엮지 않는다."""
         rows = []
@@ -406,16 +491,117 @@ class LifestylePromptTest(unittest.TestCase):
         analysis = LifestyleReportService.build_analysis(domain, LIFESTYLE_WINDOW)
         return LifestyleReportService.build_prompt(domain, analysis)
 
-    def test_active_prompt_is_version_three(self) -> None:
-        self.assertEqual(PROMPT_VERSION, "3.0")
+    def test_output_contract_leaves_no_room_to_pad(self) -> None:
+        """자리가 있으면 모델이 채운다. 빈칸을 줄여 되풀이와 뜬구름 조언을 막는다."""
+        from app.schemas.lifestyle_report import LifestyleReportContent
+
+        self.assertEqual(set(LifestyleReportContent.model_fields),
+                         {"headline", "current_state", "actions"})
+        self.assertEqual(
+            LifestyleReportContent.model_fields["actions"].metadata[0].max_length, 2)
+
+    def test_prompt_allows_the_reference_range_once(self) -> None:
+        """참고범위는 자기 위치를 가늠하는 데 쓸모가 있어 한 번은 허용한다."""
+        prompt = self._prompt("sleep")
+
+        self.assertIn("딱 한 번만 쓸 수 있다", prompt)
+        # 금지 목록에서는 빠졌다.
+        self.assertNotIn("상관계수, 참고범위 수치, 측정 날짜", prompt)
+        # 개수를 채우려고 일반 조언을 덧붙이지 못하게 막는다.
+        self.assertIn("개수를 채우려고 데이터에 없는 일반 조언을 덧붙이지 마라", prompt)
+        self.assertIn("actions: 0~2개", prompt)
+        self.assertNotIn("key_points", prompt)
+
+    def test_active_prompt_is_version_four(self) -> None:
+        self.assertEqual(PROMPT_VERSION, "4.0")
 
     def test_earlier_prompts_are_kept_for_comparison(self) -> None:
         """이전 판을 지우지 않아야 여러 판을 견주고 되돌릴 수 있다."""
-        for module, version in ((prompt_v1, "1.0"), (prompt_v2, "2.0")):
+        for module, version in ((prompt_v1, "1.0"), (prompt_v2, "2.0"), (prompt_v3, "3.0")):
             with self.subTest(version=version):
                 self.assertEqual(module.VERSION, version)
                 self.assertIn("bio", module.DOMAIN_GUIDES)
                 self.assertTrue(module.COMMON_RULES.strip())
+
+    def test_sleep_guide_judges_quality_by_stage_share(self) -> None:
+        """잠의 길이는 시간으로, 잠의 질은 단계 비중으로 말하게 한다."""
+        prompt = self._prompt("sleep")
+
+        self.assertIn("수면시간과 수면점수를 나란히 놓고 비교하지 마라", prompt)
+        self.assertIn("잠의 길이는 시간으로, 잠의 질은 단계 비중으로 말하라", prompt)
+        self.assertIn("분 단위 단계(깊은수면·얕은수면·REM수면)는 참고범위가 없다", prompt)
+        # 기기의 점수 산출식은 공개되지 않는다. 특정 단계를 원인으로 못박으면 안 된다.
+        self.assertNotIn("REM수면이 낮으면", prompt)
+        self.assertNotIn("깊은수면이 낮으면", prompt)
+        self.assertIn("짝이 없으면 원인을 지어내지 말고", prompt)
+        # 총량과 구성요소가 같이 움직이는 것은 당연하다.
+        self.assertIn("총량과 그 구성요소가 같이 움직이는 것은 당연한 일", prompt)
+
+    def test_sleep_stages_are_judged_by_share_not_minutes(self) -> None:
+        """분수만으로는 좋고 나쁨을 말할 수 없다. 총 수면 대비 비중이라야 판정이 선다."""
+        # 6시간 자면서 REM 60분은 16.7%로 권장(20~25%)에 못 미친다.
+        rows = [{
+            "measured_at": f"2026-09-{day:02d}T23:00:00", "bio_type": "sleep", "value": 6.0,
+            "detail_data": {"deep_sleep_minutes": 54, "light_sleep_minutes": 200,
+                            "rem_sleep_minutes": 60, "awake_minutes": 20, "sleep_score": 70},
+        } for day in range(1, 15)]
+        analysis = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})
+
+        # 분으로 보는 항목은 여전히 판정하지 않는다.
+        self.assertEqual(_metric(analysis, "REM수면")["full"]["level"], "기준 없음")
+        # 비중으로 보면 판정이 선다.
+        rem_share = _metric(analysis, "REM수면 비중")
+        self.assertEqual(rem_share["reference"], "20~25 %")
+        self.assertEqual(rem_share["full"]["level"], "기준을 조금 벗어남")
+        self.assertEqual(rem_share["full"]["frequency"], "거의 매번")
+        # 깊은수면 54분은 15%라 권장(13~23%) 안이다.
+        self.assertEqual(_metric(analysis, "깊은수면 비중")["full"]["level"], "기준 범위 안")
+
+    def test_share_needs_the_total(self) -> None:
+        """총 수면시간이 없으면 비중을 낼 수 없다. 0으로 나누지 않는다."""
+        rows = [{"measured_at": f"2026-09-{day:02d}T23:00:00", "bio_type": "sleep", "value": 0,
+                 "detail_data": {"rem_sleep_minutes": 60}} for day in range(1, 8)]
+        analysis = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})
+
+        self.assertNotIn("REM수면 비중", [item["metric"] for item in analysis["metrics"]])
+
+    def test_trivial_pairs_never_reach_the_model(self) -> None:
+        """쓰지 말라고 한 짝을 재료로 건네면 모델은 그것을 쓴다. 아예 넘기지 않는다."""
+        rows = []
+        for day in range(1, 29):
+            # 잠이 길수록 점수도 오르고 단계도 함께 길어지는, 흔한 모양이다.
+            total = 5.0 + (day % 7) * 0.5
+            rows.append({
+                "measured_at": f"2026-09-{day:02d}T23:00:00", "bio_type": "sleep", "value": total,
+                "detail_data": {"sleep_score": 50 + total * 5,
+                                "deep_sleep_minutes": total * 9,
+                                "light_sleep_minutes": total * 34,
+                                "rem_sleep_minutes": total * 12,
+                                "awake_minutes": total * 4},
+            })
+        pairs = LifestyleReportService.build_analysis("sleep", {"sleep": {"rows": rows}})["co_movements"]
+        found = {frozenset(item["metrics"]) for item in pairs}
+
+        self.assertNotIn(frozenset({"수면시간", "수면점수"}), found)
+        for stage in ("깊은수면", "얕은수면", "REM수면", "뒤척임"):
+            with self.subTest(stage=stage):
+                self.assertNotIn(frozenset({"수면시간", stage}), found)
+
+    def test_sleep_prompt_carries_bedtime_and_waketime(self) -> None:
+        """취침·기상 시각은 잠의 길이만으로는 안 보이는 것이라 프롬프트에 넘긴다."""
+        prompt = self._prompt("sleep")
+
+        self.assertIn("sleep_timing은 취침·기상 시각을 따로 잰 값이다", prompt)
+        self.assertIn("regularity가 \'들쭉날쭉함\'이면 몇 시간 잤는지보다 그것이 먼저다", prompt)
+        # 시각 통계 원본은 넘기지 않는다. 대표 시각과 판정어만 간다.
+        self.assertNotIn("spread_minutes", prompt)
+        self.assertNotIn("typical_minutes", prompt)
+
+    def test_every_prompt_mentions_the_weekday_weekend_split(self) -> None:
+        """주중·주말 차이는 모든 탭에서 쓸 수 있는 재료다."""
+        for domain in ("bio", "activity", "nutrition", "sleep"):
+            with self.subTest(domain=domain):
+                self.assertIn("weekly_pattern은 주중과 주말의 차이다", self._prompt(domain))
 
     def test_each_domain_gets_only_its_own_guide(self) -> None:
         guides = {

@@ -27,7 +27,11 @@ class LifestyleReportContent(BaseModel):
     headline: str
     # 지금 상태 → 변화 방향 → 반복 여부를 이어 쓴 2~4문장.
     current_state: str
-    # 핵심 패턴을 짧게 덧붙일 자리. current_state와 겹치면 비워 둔다.
+    # current_state에서 기억할 것만 한 줄씩 뽑은 요약. 겹치는 것이 이 자리의 일이다.
+    #
+    # 한때 '핵심 패턴을 짧게 덧붙이는 자리'로 적어 두고, current_state를 되풀이한다는
+    # 이유로 없앤 적이 있다. 그런데 읽는 쪽에서는 그 되풀이가 긴 설명 뒤의 정리로 읽혔다.
+    # 자리가 나빴던 게 아니라 자리의 뜻을 잘못 적었던 것이라 뜻을 바꿔 되살린다.
     key_points: list[str] = Field(default_factory=list, max_length=3)
     # 이 탭 데이터에서 우선순위가 높은 행동만. 문제가 없으면 비울 수 있다.
     actions: list[str] = Field(default_factory=list, max_length=3)

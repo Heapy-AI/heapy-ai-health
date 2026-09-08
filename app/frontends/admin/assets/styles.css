@@ -422,11 +422,13 @@ svg text { stroke: none; }
 .today-card-delta { padding: 2px 8px; border-radius: 999px; color: var(--health-green-dark); background: var(--health-green-soft); font-size: 9.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .today-card-delta.flat { color: #6f7885; background: #eef1f0; }
 .today-card-average { color: #8a9994; font-size: 9.5px; }
+/* 수면시간 카드의 취침~기상 시각. 값 아래 한 줄로 붙는다. */
+.today-card-detail { color: #55736a; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .lifestyle-today .data-placeholder { grid-column: 1 / -1; margin: 0; padding: 18px; }
 .lifestyle-report .data-placeholder { margin: 0; padding: 18px; }
 /* 분석 결과는 '현재 상태'와 '지금 신경 쓰면 좋은 것' 두 덩어리로만 읽힌다.
    항목별 수치와 날짜 목록은 오른쪽 검증 패널에만 두어 여기서는 자리를 만들지 않는다. */
-.lifestyle-report-points, .lifestyle-report-actions { margin: 8px 0 0; padding-left: 18px; }
+.lifestyle-report-actions { margin: 8px 0 0; padding-left: 18px; }
 /* 검진에는 없는 소제목이라 문단과 같은 크기로 두어 튀지 않게 한다. */
 .lifestyle-report-subtitle { margin: 14px 0 0; color: var(--health-green-dark); font-size: 12px; font-weight: 800; }
 /* 참고범위 한계를 밝히는 각주. 본문과 구분되도록 위에 선을 둔다. */

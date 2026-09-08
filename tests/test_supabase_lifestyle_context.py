@@ -292,7 +292,7 @@ class GetRelevantContextTest(unittest.TestCase):
             )
 
         self.assertIn(
-            "수면시간 | 6.2 시간 | 수면점수 74 | 깊은수면 78분 | 깬시간 31분",
+            "수면시간 | 6.2 시간 | 수면점수 74 | 깊은수면 78분 | 뒤척임 31분",
             context.prompt_text,
         )
         url = mocked_get.call_args.args[0]

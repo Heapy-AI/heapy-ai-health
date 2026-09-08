@@ -549,7 +549,7 @@ class SupabaseLifestyleContextService:
             if detail.get("deep_sleep_minutes") is not None:
                 parts.append(f"깊은수면 {detail['deep_sleep_minutes']}분")
             if detail.get("awake_minutes") is not None:
-                parts.append(f"깬시간 {detail['awake_minutes']}분")
+                parts.append(f"뒤척임 {detail['awake_minutes']}분")
             return parts
         return []
 

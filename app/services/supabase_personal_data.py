@@ -67,8 +67,8 @@ _LIFESTYLE_PLAN: tuple[tuple[str, str, str, str, str], ...] = (
         "lifestyle_sleep",
         "",
         "start_at",
-        "measured_at:start_at,total_sleep_minutes,awake_minutes,deep_sleep_minutes,"
-        "light_sleep_minutes,rem_sleep_minutes,sleep_score",
+        "measured_at:start_at,start_at,end_at,total_sleep_minutes,awake_minutes,"
+        "deep_sleep_minutes,light_sleep_minutes,rem_sleep_minutes,sleep_score",
     ),
 )
 
@@ -287,6 +287,9 @@ class SupabasePersonalDataService:
                                 "light_sleep_minutes",
                                 "rem_sleep_minutes",
                                 "sleep_score",
+                                # 취침·기상 시각. 날짜로 자르지 않고 시각까지 그대로 넘긴다.
+                                "start_at",
+                                "end_at",
                             )
                         },
                     }

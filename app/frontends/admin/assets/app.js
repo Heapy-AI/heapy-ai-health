@@ -1266,14 +1266,24 @@ const lifestyleMetrics = {
   sugar: { label: "당", unit: "g", digits: 1, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.sugar },
   water: { label: "수분 섭취", unit: "mL", digits: 0, source: "water", dateKey: "consumed_at", daily: "sum", value: (row) => row.water_amount },
 
-  sleepHours: { label: "수면시간", unit: "시간", digits: 1, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.value },
+  sleepHours: {
+    label: "수면시간", unit: "시간", digits: 1,
+    source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.value,
+    // 몇 시간 잤는지 옆에 몇 시에 자고 일어났는지를 같이 보여 준다.
+    note: (rows) => {
+      const row = rows[rows.length - 1];
+      const start = formatClockTime(row?.detail_data?.start_at);
+      const end = formatClockTime(row?.detail_data?.end_at);
+      return start && end ? `${start} - ${end}` : "";
+    },
+  },
   sleepScore: { label: "수면점수", unit: "점", digits: 0, source: "sleep", dateKey: "measured_at", daily: "mean", value: (row) => row.detail_data?.sleep_score },
   // 수면 단계는 lifestyle_sleep의 *_minutes 컬럼에서 온다. 같은 7시간을 자도 어떻게
   // 나뉘었는지가 수면점수의 차이를 설명하므로 셋을 함께 본다.
   deepSleep: { label: "깊은수면", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.deep_sleep_minutes },
   lightSleep: { label: "얕은수면", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.light_sleep_minutes },
   remSleep: { label: "REM수면", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.rem_sleep_minutes },
-  awake: { label: "깬 시간", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.awake_minutes },
+  awake: { label: "뒤척임", unit: "분", digits: 0, source: "sleep", dateKey: "measured_at", daily: "sum", value: (row) => row.detail_data?.awake_minutes },
 };
 
 /* 탭마다 '세부 항목별 그래프 + 수치표' 한 묶음을 그릴 그룹 목록.
@@ -2055,7 +2065,14 @@ function lifestyleTabSeries(payload, tab) {
   const items = lifestyleTabMetricKeys(tab)
     .map((key) => {
       const metric = lifestyleMetrics[key];
-      return { key, ...metric, series: metricDailySeries(payload, metric) };
+      return {
+        key,
+        ...metric,
+        series: metricDailySeries(payload, metric),
+        // 카드에 곁들이는 한 줄은 집계값이 아니라 그날 원본 기록에서 뽑는다.
+        rowsAt: (date) => ((payload[metric.source] || {}).rows || [])
+          .filter((row) => String(row[metric.dateKey] || "").slice(0, 10) === date),
+      };
     })
     .filter((item) => item.series.length);
 
@@ -2123,6 +2140,16 @@ function todayCardText(item, pick) {
   return `${text}/${otherText}`;
 }
 
+function formatClockTime(value) {
+  // 기록은 UTC로 저장된다(예: 새벽 1시 20분이 T16:20:00+00:00). 문자열을 잘라 읽으면
+  // 오후 4시 20분으로 보이므로, 시각으로 파싱해 보는 사람의 시간대로 옮겨 적는다.
+  const moment = new Date(String(value || ""));
+  if (Number.isNaN(moment.getTime())) return "";
+  const hour = moment.getHours();
+  const minute = String(moment.getMinutes()).padStart(2, "0");
+  return `${hour < 12 ? "오전" : "오후"} ${hour % 12 || 12}:${minute}`;
+}
+
 function buildTodayMetricCard(item, latestDate, days) {
   const card = document.createElement("article");
   card.className = "today-card";
@@ -2177,6 +2204,10 @@ function buildTodayMetricCard(item, latestDate, days) {
     );
     foot.append(delta, createTextElement("span", "today-card-average",
       `${days}일 평균 ${formatDataNumber(average, item.digits)}`));
+  }
+  if (item.note) {
+    const note = item.note(item.rowsAt(latestDate));
+    if (note) card.appendChild(createTextElement("span", "today-card-detail", note));
   }
   card.appendChild(foot);
   return card;
@@ -2303,8 +2334,6 @@ function renderLifestyleReport(hasData = true) {
     createTextElement("h4", "", String(report.headline || "")),
     createTextElement("p", "", String(report.current_state || "")),
   ];
-  appendReportSection(nodes, "", "lifestyle-report-points", report.key_points || [],
-    (point) => createTextElement("li", "", String(point)));
   appendReportSection(nodes, "지금 신경 쓰면 좋은 것", "lifestyle-report-actions", report.actions || [],
     (action) => createTextElement("li", "", String(action)));
   nodes.push(createTextElement("small", "lifestyle-report-footnote",

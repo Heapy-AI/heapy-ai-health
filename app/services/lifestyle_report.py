@@ -20,8 +20,9 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from statistics import StatisticsError, correlation, fmean, pstdev
 from time import perf_counter
 from typing import Any
@@ -30,13 +31,13 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.core.config import MODEL
 from app.schemas.lifestyle_report import LifestyleReportContent
-from app.services.prompts import lifestyle_report_v3 as prompt_v3
+from app.services.prompts import lifestyle_report_v4 as prompt_v4
 
 
 # 쓰고 있는 프롬프트 판. 이전 판으로 되돌리려면 이 모듈만 바꾸면 된다.
 # (v1.0은 출력 계약이 달라 LifestyleReportContentV1을 함께 써야 한다.)
-ACTIVE_PROMPT = prompt_v3
-PROMPT_VERSION = prompt_v3.VERSION
+ACTIVE_PROMPT = prompt_v4
+PROMPT_VERSION = prompt_v4.VERSION
 
 # 탭별 분석 구간. 화면의 기간 버튼과 무관하게 서비스가 정한다.
 #
@@ -81,11 +82,37 @@ _MAX_ANOMALIES_PER_METRIC = 5
 _CHRONIC_OUT_OF_RANGE_RATIO = 0.5
 # 검증 패널에 남기는 계열 길이 상한. 1년 구간이면 일별 점이 너무 많아진다.
 _MAX_SERIES_POINTS = 30
+# 상관이 높아도 새 이야기가 안 되는 짝. 프롬프트로 "쓰지 마라"고만 하면 모델은
+# 눈앞에 있는 재료를 쓴다. 그래서 아예 넘기지 않는다.
+_TRIVIAL_CO_MOVEMENTS = {
+    # 잠이 길면 점수도 오른다. 견주면 같은 말을 두 번 하게 된다.
+    frozenset({"수면시간", "수면점수"}),
+    # 총량과 그 구성요소. 같이 움직이는 것이 당연하다.
+    frozenset({"수면시간", "깊은수면"}),
+    frozenset({"수면시간", "얕은수면"}),
+    frozenset({"수면시간", "REM수면"}),
+    frozenset({"수면시간", "뒤척임"}),
+    # 같은 값을 분과 비중으로 두 번 본 것이다.
+    frozenset({"깊은수면", "깊은수면 비중"}),
+    frozenset({"REM수면", "REM수면 비중"}),
+}
+
 # 같은 탭 안에서 함께 움직인 항목으로 볼 상관계수 문턱과 보고 상한.
 _CO_MOVEMENT_THRESHOLD = 0.6
-_MAX_CO_MOVEMENTS = 4
+_MAX_CO_MOVEMENTS = 6
 # 프롬프트에 예시로 넘기는 이상 지점 수. 날짜 나열을 부르지 않도록 최소로 준다.
 _MAX_PROMPT_ANOMALIES = 1
+# 기록은 UTC로 저장된다. 취침·기상 시각은 사용자가 사는 시간대로 읽어야 뜻이 통한다.
+# 한국 사용자 기준 서비스라 KST로 고정한다. 다른 지역을 지원하게 되면 여기를 바꾼다.
+_LOCAL_TIMEZONE = timezone(timedelta(hours=9))
+
+# 취침·기상 시각의 규칙성을 가르는 문턱(분). 원형 표준편차로 잰다.
+_CLOCK_STEADY_MINUTES = 30
+_CLOCK_LOOSE_MINUTES = 60
+# 주중과 주말의 시각 차이를 '다르다'고 볼 문턱(분).
+_CLOCK_WEEKEND_SHIFT_MINUTES = 45
+# 이보다 덜 늦게 자면 굳이 취침을 당기라고 하지 않는다.
+_BEDTIME_SHIFT_MINUTES = 15
 
 
 def _number(value: Any) -> float | None:
@@ -110,6 +137,19 @@ def _detail(row: dict[str, Any], key: str) -> Any:
     return detail.get(key) if isinstance(detail, dict) else None
 
 
+def _stage_ratio(part: Any, total_hours: Any) -> float | None:
+    """수면 단계를 총 수면 대비 비중(%)으로 바꾼다.
+
+    분수만으로는 좋고 나쁨을 말할 수 없다. 6.5시간 잘 때의 깊은수면 60분(15%)과
+    8시간 잘 때의 60분(12.5%)은 다르다. 참고범위도 비중으로만 정의돼 있다.
+    """
+    minutes = _number(part)
+    hours = _number(total_hours)
+    if minutes is None or not hours:
+        return None
+    return minutes / (hours * 60) * 100
+
+
 def _scaled(value: Any, divisor: float) -> float | None:
     """초를 분으로, 미터를 km로 바꾸는 것처럼 단위만 환산한다."""
     number = _number(value)
@@ -123,7 +163,7 @@ class _Metric:
 
     direction
         higher  채울수록 좋은 항목 (걸음 수, 단백질)
-        lower   적을수록 좋은 항목 (나트륨, 깬 시간)
+        lower   적을수록 좋은 항목 (나트륨, 뒤척임)
         range   적정 범위가 있는 항목 (BMI, 수면시간, 혈당)
         trend   기준을 하나로 정할 수 없어 추세만 보는 항목 (체중, 지방)
     kind
@@ -327,8 +367,18 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
         _Metric("깊은수면", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "deep_sleep_minutes"))),
         _Metric("얕은수면", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "light_sleep_minutes"))),
         _Metric("REM수면", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "rem_sleep_minutes"))),
-        _Metric("깬 시간", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "awake_minutes")),
+        _Metric("뒤척임", "분", **_daily_sum("sleep", "measured_at", lambda row: _detail(row, "awake_minutes")),
                 direction="lower", high=30, caution_high=60),
+        # 단계는 비중으로 봐야 판정이 선다. 화면의 표·그래프는 분으로 두고 여기서만 비중을 본다.
+        # 참고범위는 일반 성인 기준이며 기기마다 단계 판정 알고리즘이 달라 편차가 있다.
+        _Metric("깊은수면 비중", "%", source="sleep", date_key="measured_at", daily="mean",
+                kind="measurement",
+                value=lambda row: _stage_ratio(_detail(row, "deep_sleep_minutes"), row.get("value")),
+                direction="range", low=13, high=23, caution_low=10, caution_high=27),
+        _Metric("REM수면 비중", "%", source="sleep", date_key="measured_at", daily="mean",
+                kind="measurement",
+                value=lambda row: _stage_ratio(_detail(row, "rem_sleep_minutes"), row.get("value")),
+                direction="range", low=20, high=25, caution_low=15, caution_high=30),
     ],
 }
 
@@ -404,6 +454,91 @@ def _confidence_text(metric: _Metric, days: int, coverage: float) -> str:
     return "보통" if days < 8 else "충분"
 
 
+def _clock_minutes(value: Any) -> float | None:
+    """timestamp에서 그날의 몇 분째인지만 꺼낸다. 날짜는 버린다.
+
+    문자열을 잘라 읽으면 안 된다. UTC로 저장된 새벽 1시 20분이 T16:20:00+00:00이라
+    그대로 읽으면 오후 4시 20분이 된다. 시각으로 파싱해 지역 시간으로 옮겨야 한다.
+    """
+    try:
+        moment = datetime.fromisoformat(str(value or ""))
+    except ValueError:
+        return None
+    # 시간대가 붙어 있지 않으면 이미 지역 시간으로 적힌 값으로 본다.
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(_LOCAL_TIMEZONE)
+    return moment.hour * 60 + moment.minute
+
+
+def _clock_stats(minutes: list[float]) -> dict[str, Any] | None:
+    """시각의 대표값과 흔들림을 원형 통계로 잰다.
+
+    시각은 자정에서 되감기는 값이라 선형 평균을 쓰면 안 된다. 23시 50분과 0시 10분의
+    평균은 12시가 아니라 자정이다. 그래서 각도로 바꿔 단위벡터로 평균을 낸다.
+    """
+    if len(minutes) < 2:
+        return None
+    angles = [minute / 1440 * 2 * math.pi for minute in minutes]
+    x = fmean(math.cos(angle) for angle in angles)
+    y = fmean(math.sin(angle) for angle in angles)
+    radius = math.hypot(x, y)
+    if radius < 1e-9:
+        # 시각이 하루에 고르게 흩어져 대표값을 말할 수 없는 경우다.
+        return None
+    typical = (math.atan2(y, x) / (2 * math.pi) * 1440) % 1440
+    # 원형 표준편차. radius가 1에 가까울수록 시각이 한곳에 모여 있다.
+    deviation = 1440 / (2 * math.pi) * math.sqrt(max(-2 * math.log(radius), 0.0))
+    return {"typical_minutes": round(typical), "spread_minutes": round(deviation)}
+
+
+def _clock_text(minutes: float) -> str:
+    """분을 오전/오후 표기로 바꾼다. 화면 카드와 같은 형식이다."""
+    hour, minute = divmod(int(round(minutes)) % 1440, 60)
+    meridiem = "오전" if hour < 12 else "오후"
+    display = hour % 12 or 12
+    return f"{meridiem} {display}:{minute:02d}"
+
+
+def _clock_regularity_text(spread: float) -> str:
+    if spread <= _CLOCK_STEADY_MINUTES:
+        return "일정함"
+    return "보통" if spread <= _CLOCK_LOOSE_MINUTES else "들쭉날쭉함"
+
+
+def _clock_gap(later: float, earlier: float) -> float:
+    """두 시각 사이의 최단 거리(분). 자정을 넘어가도 어긋나지 않게 잰다."""
+    gap = (later - earlier) % 1440
+    return gap - 1440 if gap > 720 else gap
+
+
+def _weekly_pattern_text(series: list[dict[str, Any]]) -> str:
+    """주중과 주말이 다른지 한마디로 돌려준다.
+
+    잠은 주말에 몰아 자고 활동은 주말에 줄기 쉽다. 그런 규칙성은 전체 평균만 봐서는
+    보이지 않는다. 다만 양쪽에 이틀씩은 있어야 비교할 값이 된다.
+    """
+    weekday, weekend = [], []
+    for point in series:
+        try:
+            iso = date.fromisoformat(point["date"]).isoweekday()
+        except ValueError:
+            continue
+        (weekend if iso >= 6 else weekday).append(point["value"])
+    if len(weekday) < 2 or len(weekend) < 2:
+        return "판단하기 이름"
+
+    weekday_mean, weekend_mean = fmean(weekday), fmean(weekend)
+    gap = weekend_mean - weekday_mean
+    values = weekday + weekend
+    deviation = pstdev(values) if len(values) > 1 else 0.0
+    # 방향을 잴 때와 같은 잣대다. 제 수준 대비와 평소 흔들림 대비가 모두 서야 차이로 본다.
+    magnitude = abs(gap) / abs(weekday_mean) * 100 if weekday_mean else 0.0
+    effect = abs(gap) / deviation if deviation > 0 else 0.0
+    if magnitude < 5 or effect < 0.5:
+        return "주중과 주말이 비슷함"
+    return "주말이 더 높음" if gap > 0 else "주말이 더 낮음"
+
+
 def _longest_out_of_range_run(metric: _Metric, series: list[dict[str, Any]]) -> int:
     """기준을 벗어난 기록이 연달아 몇 번 이어졌는지. 반복성을 말할 근거가 된다."""
     longest = current = 0
@@ -414,6 +549,79 @@ def _longest_out_of_range_run(metric: _Metric, series: list[dict[str, Any]]) -> 
         else:
             current = 0
     return longest
+
+
+def _sleep_timing(window: dict[str, Any], target_hours: float | None = None) -> dict[str, Any] | None:
+    """취침·기상 시각의 규칙성과 주중·주말 차이를 정리한다.
+
+    잠의 길이만 봐서는 안 보이는 것이 있다. 같은 7시간을 자도 매일 같은 시각에 자는
+    사람과 새벽 1시에 잤다 11시에 잤다 하는 사람은 다르다. 그 차이를 여기서 잰다.
+    """
+    rows = (window.get("sleep") or {}).get("rows") or []
+    marks: list[tuple[int, float | None, float | None]] = []
+    for row in rows:
+        detail = row.get("detail_data") if isinstance(row.get("detail_data"), dict) else {}
+        start = _clock_minutes(detail.get("start_at"))
+        end = _clock_minutes(detail.get("end_at"))
+        if start is None and end is None:
+            continue
+        try:
+            weekday = date.fromisoformat(_day(row.get("measured_at"))).isoweekday()
+        except ValueError:
+            continue
+        marks.append((weekday, start, end))
+    if len(marks) < _MIN_DAYS_FOR_COMPARISON:
+        return None
+
+    summary: dict[str, Any] = {"days": len(marks)}
+    typical: dict[str, float] = {}
+    for key, label, index in (("bedtime", "취침", 1), ("waketime", "기상", 2)):
+        minutes = [mark[index] for mark in marks if mark[index] is not None]
+        stats = _clock_stats(minutes)
+        if not stats:
+            continue
+        typical[key] = stats["typical_minutes"]
+        summary[f"{key}_typical"] = _clock_text(stats["typical_minutes"])
+        summary[f"{key}_regularity"] = _clock_regularity_text(stats["spread_minutes"])
+        # 주중과 주말은 시각이 갈리기 쉽다. 양쪽에 이틀씩은 있어야 견줄 값이 된다.
+        weekday_stats = _clock_stats([mark[index] for mark in marks
+                                      if mark[0] <= 5 and mark[index] is not None])
+        weekend_stats = _clock_stats([mark[index] for mark in marks
+                                      if mark[0] >= 6 and mark[index] is not None])
+        if not weekday_stats or not weekend_stats:
+            continue
+        gap = _clock_gap(weekend_stats["typical_minutes"], weekday_stats["typical_minutes"])
+        if abs(gap) < _CLOCK_WEEKEND_SHIFT_MINUTES:
+            summary[f"{key}_weekend"] = f"주중과 주말의 {label} 시각이 비슷함"
+        else:
+            summary[f"{key}_weekend"] = (
+                f"주말에 {label}이 {'늦어짐' if gap > 0 else '빨라짐'}"
+            )
+
+    # 기상 시각이 일정한 사람에게는 "몇 시에 자면 되는지"가 가장 손에 잡히는 조언이다.
+    # 기상은 그대로 두고 취침만 당기면 되므로 목표 시각을 계산해 넘긴다.
+    if target_hours and "waketime" in typical:
+        target = (typical["waketime"] - target_hours * 60) % 1440
+        summary["bedtime_target"] = _clock_text(target)
+        summary["bedtime_target_basis"] = (
+            f"지금 기상 시각을 그대로 두고 {target_hours:g}시간을 자려면"
+        )
+        if "bedtime" in typical:
+            # 목표보다 얼마나 늦게 잠드는지. 5분 단위로 뭉뚱그려 어림수로 말하게 한다.
+            late = _clock_gap(typical["bedtime"], target)
+            summary["bedtime_shift"] = (
+                f"지금보다 {round(late / 5) * 5}분쯤 일찍" if late >= _BEDTIME_SHIFT_MINUTES
+                else "지금 취침 시각으로도 닿는다"
+            )
+    return summary if len(summary) > 1 else None
+
+
+def _sleep_target_hours() -> float | None:
+    """권장 수면시간. 항목 정의에서 가져와 두 곳에 적히지 않게 한다."""
+    for metric in _DOMAIN_METRICS.get("sleep", []):
+        if metric.label == "수면시간":
+            return metric.low
+    return None
 
 
 def _co_movements(pairs: list[tuple[_Metric, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
@@ -436,6 +644,8 @@ def _co_movements(pairs: list[tuple[_Metric, list[dict[str, Any]]]]) -> list[dic
                 # 한쪽 값이 내내 같으면 상관을 정의할 수 없다.
                 continue
             if abs(coefficient) < _CO_MOVEMENT_THRESHOLD:
+                continue
+            if frozenset({left.label, right.label}) in _TRIVIAL_CO_MOVEMENTS:
                 continue
             found.append({
                 "metrics": [left.label, right.label],
@@ -577,6 +787,8 @@ def _summarize_metric(
         "latest": latest,
         "latest_date": series[-1]["date"],
         "latest_status": metric.status(latest),
+        # 주중·주말 차이는 구간을 나눠 볼 값이 아니라 전체 기록으로 한 번 본다.
+        "weekly_pattern": _weekly_pattern_text(series),
         "full": _signals(metric, series, windows["full"]),
         "recent": _signals(metric, recent_series, windows["recent"]) if recent_series else None,
         "anomalies": _find_anomalies(metric, series),
@@ -596,7 +808,7 @@ def _tail_since(series: list[dict[str, Any]], latest_date: str, days: int) -> li
 
 # 항목마다 프롬프트에 넘길 값. 나머지 통계는 검증용으로만 남기고 모델에게 주지 않는다.
 # 여기에 필드를 더할 때는 그 값이 답변에 숫자로 새어 나와도 괜찮은지 먼저 따져야 한다.
-_PROMPT_METRIC_FIELDS = ("metric", "unit", "kind", "reference")
+_PROMPT_METRIC_FIELDS = ("metric", "unit", "kind", "reference", "weekly_pattern")
 # 구간마다 넘길 신호. 전부 사람 말로 옮겨 둔 표현이거나 세기를 나타내는 횟수다.
 _PROMPT_SIGNAL_FIELDS = (
     "level", "frequency", "direction", "stability", "confidence",
@@ -646,6 +858,7 @@ def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
             {key: item[key] for key in ("metrics", "relation", "shared_days")}
             for item in analysis.get("co_movements", [])
         ],
+        "sleep_timing": analysis.get("sleep_timing"),
     }
 
 
@@ -720,4 +933,6 @@ class LifestyleReportService:
             ],
             # 탭 안에서 함께 움직인 항목 짝. 다른 탭과는 엮지 않는다.
             "co_movements": _co_movements(recorded),
+            # 잠의 길이만으로는 안 보이는 것. 수면 탭에서만 값이 생긴다.
+            "sleep_timing": _sleep_timing(window, _sleep_target_hours()) if domain == "sleep" else None,
         }
