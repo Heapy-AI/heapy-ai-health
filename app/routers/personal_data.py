@@ -19,6 +19,13 @@ from app.schemas.personal_data import (
     LatestCheckupResponse,
     LifestyleWindowResponse,
 )
+from app.routers.auth import conversation_service
+from app.services.lifestyle_report import (
+    DOMAIN_LABELS,
+    age_from_birth_date,
+    reference_basis,
+    today_standards,
+)
 from app.services.supabase_conversation import SupabaseConversationError
 from app.services.supabase_personal_data import SupabasePersonalDataService
 
@@ -89,4 +96,22 @@ def get_lifestyle_window(
         _raise_personal_data_error(error)
         raise
 
-    return LifestyleWindowResponse(**window)
+    # 기준 대비 비교는 서비스가 계산한다. 화면이 기준값을 들고 판정하면 분석과
+    # 어긋날 수 있다. 프로필을 못 읽으면 성별·나이 없이 일반 기준으로 잰다.
+    try:
+        profile = conversation_service.get_profile(
+            session.access_token,
+            str(session.user.get("id", "")),
+        )
+    except SupabaseConversationError:
+        profile = None
+    sex = str((profile or {}).get("sex", "")) or None
+    age = age_from_birth_date((profile or {}).get("birth_date"))
+    return LifestyleWindowResponse(
+        **window,
+        standards={
+            domain: today_standards(domain, window, sex, age)
+            for domain in DOMAIN_LABELS
+        },
+        reference_basis=reference_basis(sex, age),
+    )

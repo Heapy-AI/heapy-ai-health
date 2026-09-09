@@ -286,12 +286,93 @@ class LifestyleAnalysisTest(unittest.TestCase):
         """2025 한국인 영양소 섭취기준. 기록에 있는데도 안 보던 값들을 살렸다."""
         analysis = LifestyleReportService.build_analysis("nutrition", LIFESTYLE_WINDOW)
 
-        # 식이섬유 충분섭취량은 남자 30g, 여자 20~25g. 성별을 모르므로 낮은 쪽에 문턱을 둔다.
-        self.assertEqual(_metric(analysis, "식이섬유")["reference"], "25 g 이상")
-        # 칼륨 충분섭취량 3,500mg (남녀 같음).
+        # 성별을 모를 때는 남녀 중 낮은 쪽을 쓴다. 채운 사람에게 모자라다고 하지 않는다.
+        self.assertEqual(_metric(analysis, "식이섬유")["reference"], "20 g 이상")
+        self.assertEqual(_metric(analysis, "칼슘")["reference"], "650 mg 이상")
+        # 칼륨 충분섭취량 3,500mg은 남녀가 같다.
         self.assertEqual(_metric(analysis, "칼륨")["reference"], "3500 mg 이상")
-        # 칼슘 권장섭취량은 남자 800mg, 여자 650~750mg.
-        self.assertEqual(_metric(analysis, "칼슘")["reference"], "700 mg 이상")
+
+    def test_reference_ranges_follow_the_users_sex_and_age(self) -> None:
+        """2025 기준은 에너지·단백질·식이섬유·칼슘을 성별과 연령대로 갈라 정한다."""
+        expected = {
+            ("male", 25): {"섭취칼로리": "2200~3000 kcal", "단백질": "65 g 이상",
+                           "식이섬유": "30 g 이상", "칼슘": "800 mg 이상"},
+            ("male", 55): {"섭취칼로리": "1850~2550 kcal", "단백질": "60 g 이상",
+                           "식이섬유": "30 g 이상", "칼슘": "800 mg 이상"},
+            ("female", 25): {"섭취칼로리": "1700~2300 kcal", "단백질": "55 g 이상",
+                             "식이섬유": "20 g 이상", "칼슘": "650 mg 이상"},
+            # 여성은 쉰을 넘으면 식이섬유와 칼슘 기준이 올라간다.
+            ("female", 55): {"섭취칼로리": "1450~1950 kcal", "단백질": "50 g 이상",
+                             "식이섬유": "25 g 이상", "칼슘": "750 mg 이상"},
+        }
+        for (sex, age), references in expected.items():
+            analysis = LifestyleReportService.build_analysis(
+                "nutrition", LIFESTYLE_WINDOW, sex, age)
+            for name, reference in references.items():
+                with self.subTest(sex=sex, age=age, metric=name):
+                    self.assertEqual(_metric(analysis, name)["reference"], reference)
+            # 어느 잣대로 쟀는지 밝혀야 사용자가 자기 수치를 견줄 수 있다.
+            self.assertIn("남성" if sex == "male" else "여성", analysis["reference_basis"])
+            self.assertIn("19~29세" if age == 25 else "50~64세", analysis["reference_basis"])
+
+    def test_unknown_age_widens_rather_than_narrows(self) -> None:
+        """나이를 모른다고 좁히면 스물다섯 살 남성의 제 필요량이 '주의'가 된다."""
+        loose = LifestyleReportService.build_analysis(
+            "nutrition", LIFESTYLE_WINDOW, "male")
+        young = LifestyleReportService.build_analysis(
+            "nutrition", LIFESTYLE_WINDOW, "male", 25)
+        old = LifestyleReportService.build_analysis(
+            "nutrition", LIFESTYLE_WINDOW, "male", 80)
+
+        # 나이를 모를 때의 범위는 모든 연령대를 감싼다.
+        self.assertEqual(_metric(loose, "섭취칼로리")["reference"], "1600~3000 kcal")
+        for known in (young, old):
+            self.assertLessEqual(
+                _metric(loose, "섭취칼로리")["latest_status"] == "관리 필요",
+                _metric(known, "섭취칼로리")["latest_status"] == "관리 필요")
+        # 채울수록 좋은 항목은 반대로 가장 낮은 권장량을 쓴다.
+        self.assertEqual(_metric(loose, "단백질")["reference"], "60 g 이상")
+
+    def test_age_is_read_from_the_birth_date(self) -> None:
+        """생년월일에서 만 나이를 낸다. 생일이 안 지났으면 한 살 적다."""
+        from datetime import date
+
+        from app.services.lifestyle_report import age_from_birth_date
+
+        today = date(2026, 9, 9)
+        self.assertEqual(age_from_birth_date("1996-09-09", today), 30)
+        self.assertEqual(age_from_birth_date("1996-09-10", today), 29)
+        self.assertEqual(age_from_birth_date("1996-09-10T00:00:00+00:00", today), 29)
+        for bad in ("", None, "모름", "2030-01-01"):
+            with self.subTest(value=bad):
+                self.assertIsNone(age_from_birth_date(bad, today))
+
+    def test_children_fall_back_to_the_general_reference(self) -> None:
+        """섭취기준 표는 성인 것만 담았다. 그 아래는 성별 기준을 쓰지 않는다."""
+        analysis = LifestyleReportService.build_analysis(
+            "nutrition", LIFESTYLE_WINDOW, "male", 15)
+
+        self.assertEqual(_metric(analysis, "식이섬유")["reference"], "20 g 이상")
+        self.assertIn("일반 성인 기준", analysis["reference_basis"])
+
+    def test_sex_is_read_loosely_but_never_guessed(self) -> None:
+        """저장소 표기가 여러 가지다. 모르는 값이면 성별 없이 판정한다."""
+        from app.services.lifestyle_report import normalize_sex
+
+        for value in ("Male", "male", "M", "남성"):
+            with self.subTest(value=value):
+                self.assertEqual(normalize_sex(value), "male")
+        for value in ("Female", "female", "F", "여성"):
+            with self.subTest(value=value):
+                self.assertEqual(normalize_sex(value), "female")
+        for value in ("", None, "other", "미상"):
+            with self.subTest(value=value):
+                self.assertIsNone(normalize_sex(value))
+
+        # 모르면 정의에 적힌 값을 그대로 쓴다.
+        analysis = LifestyleReportService.build_analysis("nutrition", LIFESTYLE_WINDOW, "other")
+        self.assertEqual(_metric(analysis, "식이섬유")["reference"], "20 g 이상")
+        self.assertIn("일반 성인 기준", analysis["reference_basis"])
 
     def test_saturated_fat_is_not_counted_twice_in_the_denominator(self) -> None:
         """포화지방은 지방 안에 이미 들어 있다. 분모에 더하면 같은 열량을 두 번 센다."""
@@ -373,6 +454,58 @@ class LifestyleAnalysisTest(unittest.TestCase):
 
         self.assertEqual(meals["snack_effect"],
                          "간식을 먹은 날과 안 먹은 날의 하루 열량이 비슷하다")
+
+    def test_standards_put_the_reference_line_at_one_hundred(self) -> None:
+        """기준선을 100으로 놓아야 넘치는 쪽과 모자란 쪽이 한눈에 갈린다."""
+        from app.services.lifestyle_report import today_standards
+
+        rows = {row["metric"]: row for row in today_standards("nutrition", LIFESTYLE_WINDOW)}
+
+        # 채울수록 좋은 항목은 모자란 만큼이 100보다 작아진다.
+        self.assertEqual(rows["식이섬유"]["side"], "under")
+        self.assertLess(rows["식이섬유"]["ratio"], 100)
+        # 낮을수록 좋은 항목이 기준보다 적은 것은 모자란 것이 아니라 좋은 것이다.
+        self.assertEqual(rows["나트륨"]["status"], "양호")
+        self.assertLess(rows["나트륨"]["ratio"], 100)
+        self.assertEqual(rows["나트륨"]["side"], "inside")
+
+        # 넘쳐서 벗어나면 그때 'over'가 된다.
+        salty = {"food": {"rows": [
+            {"consumed_at": "2026-09-01T12:00:00", "calories": 700, "carbohydrate": 90,
+             "protein": 20, "total_fat": 20, "sodium": 3200}
+        ]}}
+        over = {r["metric"]: r for r in today_standards("nutrition", salty)}
+        self.assertEqual(over["나트륨"]["side"], "over")
+        self.assertGreater(over["나트륨"]["ratio"], 100)
+        # 판정은 서비스가 끝낸다. 화면이 다시 재지 않는다.
+        for row in rows.values():
+            with self.subTest(metric=row["metric"]):
+                self.assertIn(row["status"], {"양호", "주의", "관리 필요", "판단 보류"})
+                self.assertTrue(row["reference"])
+
+    def test_standards_skip_metrics_without_a_reference(self) -> None:
+        """기준이 없는 항목은 견줄 것이 없어 목록에 넣지 않는다."""
+        from app.services.lifestyle_report import today_standards
+
+        listed = {row["metric"] for row in today_standards("nutrition", LIFESTYLE_WINDOW)}
+
+        for name in ("탄수화물", "지방"):
+            with self.subTest(metric=name):
+                self.assertNotIn(name, listed)
+
+    def test_standards_follow_the_users_sex_and_age(self) -> None:
+        """세부항목 목록도 그 사람의 기준으로 잰다. 분석과 같은 잣대여야 한다."""
+        from app.services.lifestyle_report import today_standards
+
+        young = {r["metric"]: r for r in today_standards(
+            "nutrition", LIFESTYLE_WINDOW, "male", 25)}
+        older = {r["metric"]: r for r in today_standards(
+            "nutrition", LIFESTYLE_WINDOW, "female", 55)}
+
+        self.assertEqual(young["식이섬유"]["reference"], "30 g 이상")
+        self.assertEqual(older["식이섬유"]["reference"], "25 g 이상")
+        # 같은 값이라도 기준이 다르면 기준 대비가 달라진다.
+        self.assertLess(young["식이섬유"]["ratio"], older["식이섬유"]["ratio"])
 
     def test_meal_pattern_only_exists_on_the_nutrition_tab(self) -> None:
         for domain in ("bio", "activity", "sleep"):

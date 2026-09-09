@@ -425,6 +425,36 @@ svg text { stroke: none; }
 /* 수면시간 카드의 취침~기상 시각. 값 아래 한 줄로 붙는다. */
 .today-card-detail { color: #55736a; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .lifestyle-today .data-placeholder { grid-column: 1 / -1; margin: 0; padding: 18px; }
+/* 기준 대비 목록은 카드 격자 아래 한 줄을 통째로 쓴다. 접어 두는 것이 기본이다. */
+.lifestyle-standards { grid-column: 1 / -1; border: 1px solid var(--health-green-line); border-radius: 14px; background: rgba(255,255,255,.75); }
+.lifestyle-standards > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px; color: var(--health-green-dark); font-size: 11px; font-weight: 800; cursor: pointer; list-style: none; }
+.lifestyle-standards > summary::-webkit-details-marker { display: none; }
+/* 펼침 표시는 직접 그린다. 브라우저 기본 삼각형은 위치가 제각각이다. */
+.lifestyle-standards > summary::before { content: "▸"; margin-right: 6px; color: #8a9994; font-size: 10px; }
+.lifestyle-standards[open] > summary::before { content: "▾"; }
+.standard-summary-count { margin-left: auto; color: #8a9994; font-size: 10px; font-weight: 700; }
+.standard-list { margin: 0; padding: 2px 14px 12px; list-style: none; display: grid; gap: 7px; }
+/* 항목명 · 막대 · 값 · 기준 · 판정. 막대만 남는 폭을 다 쓴다. */
+.standard-row { display: grid; grid-template-columns: 96px minmax(90px, 1fr) 88px 104px 62px; align-items: center; gap: 9px; font-size: 10.5px; }
+.standard-name { color: var(--health-green-dark); font-weight: 700; }
+.standard-track { position: relative; height: 9px; border-radius: 999px; background: #eef1f0; overflow: hidden; }
+.standard-fill { display: block; height: 100%; border-radius: 999px; background: #9fd3c0; }
+/* 넘쳐서 벗어난 것과 모자라서 벗어난 것은 할 일이 달라 색을 가른다. */
+.standard-row.over .standard-fill { background: #e8a33d; }
+.standard-row.under .standard-fill { background: #7aa7d4; }
+/* 기준선. 막대가 이 선을 넘었는지가 한눈에 보여야 한다. */
+.standard-mark { position: absolute; top: -2px; bottom: -2px; width: 1px; background: #55636d; opacity: .5; }
+.standard-value, .standard-reference { color: #55636d; font-variant-numeric: tabular-nums; }
+.standard-reference { color: #8a9994; }
+.standard-status { justify-self: end; padding: 2px 8px; border-radius: 999px; font-size: 9.5px; font-weight: 800; color: var(--health-green-dark); background: var(--health-green-soft); }
+.standard-status.caution { color: #8a6420; background: #fbf0da; }
+.standard-status.manage { color: #9a3f3f; background: #fbe4e2; }
+.standard-basis { display: block; padding: 0 14px 12px; color: #8a9994; font-size: 9.5px; line-height: 1.5; }
+@media (max-width: 720px) {
+  .standard-row { grid-template-columns: 84px 1fr 74px; }
+  .standard-reference { display: none; }
+  .standard-status { grid-column: 3; }
+}
 .lifestyle-report .data-placeholder { margin: 0; padding: 18px; }
 /* 분석 결과는 '현재 상태'와 '지금 신경 쓰면 좋은 것' 두 덩어리로만 읽힌다.
    항목별 수치와 날짜 목록은 오른쪽 검증 패널에만 두어 여기서는 자리를 만들지 않는다. */
@@ -438,6 +468,8 @@ svg text { stroke: none; }
 .data-section h3 { display: flex; align-items: center; gap: 9px; margin: 0 0 9px; color: var(--health-green-dark); font-size: 12px; }
 .data-section-range { color: #7d8b85; font-size: 10px; font-weight: 600; }
 /* 고른 기간보다 기록이 늦게 시작했을 때의 안내. 그래프 바로 위에 둔다. */
+/* 그래프를 읽는 법을 밝히는 한 줄. 알림이 아니라 안내라 옅은 회색으로 둔다. */
+.data-chart-hint { margin: 0 0 7px; color: #8a9994; font-size: 10px; line-height: 1.5; }
 .data-section-note { margin: 0 0 8px; padding: 7px 11px; border-left: 2px solid #d8c69a; border-radius: 0 8px 8px 0; color: #8a7748; background: var(--sand-soft); font-size: 10.5px; }
 /* 기록이 시작되기 직전 빈 칸. 자리만 잡고 막대는 그리지 않는다. */
 .data-chart-item.is-blank { opacity: .55; }
@@ -464,6 +496,8 @@ svg text { stroke: none; }
 .data-chart-item small { position: absolute; bottom: -22px; left: 50%; color: #84918d; font-size: 9px; white-space: nowrap; transform: translateX(-50%); }
 /* 수면 단계처럼 하루가 어떻게 나뉘었는지 볼 때 쓰는 누적 막대.
    계열 색은 꺾은선 범례와 같은 색을 써서 두 그래프가 따로 놀지 않게 한다. */
+/* 물은 하늘색이다. 항목의 뜻과 색이 어긋나면 읽는 데 한 번 걸린다. */
+.data-chart.water-blue .data-chart-bar { background: linear-gradient(180deg, #5fb3e0, #a8dcf5); }
 .data-chart-bar.stack { display: flex; flex-direction: column-reverse; overflow: hidden; background: none; }
 /* 기록이 절반도 안 되는 묶음. 일평균이 실제보다 높게 나오므로 그대로 믿지 말라는 표시다. */
 .data-chart-bar.is-sparse { opacity: .42; }
@@ -488,6 +522,14 @@ svg text { stroke: none; }
   --chart-s1: #4c9ad4;
   --chart-s2: #e8a33d;
   --chart-s3: #b07cc6;
+}
+/* 3대 영양소는 서로 견주는 값이라 색을 뚜렷이 가른다.
+   쌓는 차례대로 아래부터 탄수화물·지방·단백질이다. 색은 항목에 붙은 것이라
+   차례를 바꿔도 탄수화물은 노랑, 단백질은 민트, 지방은 코랄을 그대로 쓴다. */
+.data-chart.macro-parts {
+  --chart-s0: #ffe29a;
+  --chart-s1: #ffb7a0;
+  --chart-s2: #9fe2cf;
 }
 .data-chart-segment.s0 { background: var(--chart-s0); }
 .data-chart-segment.s1 { background: var(--chart-s1); }

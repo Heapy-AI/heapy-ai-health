@@ -1294,6 +1294,11 @@ const lifestyleMetrics = {
     },
   },
 
+  // 누적 막대에 쌓을 열량 조각. 표와 카드는 그램·비중을 그대로 쓴다.
+  carbEnergy: { label: "탄수화물", unit: "kcal", digits: 0, derive: (payload) => macroEnergySeries(payload, "carbohydrate") },
+  proteinEnergy: { label: "단백질", unit: "kcal", digits: 0, derive: (payload) => macroEnergySeries(payload, "protein") },
+  fatEnergy: { label: "지방", unit: "kcal", digits: 0, derive: (payload) => macroEnergySeries(payload, "totalFat") },
+
   // 3대 영양소는 총열량 대비 비율로 봐야 뜻이 선다. 열량 환산은 Atwater 계수
   // (탄수화물·단백질 4kcal/g, 지방 9kcal/g)를 쓴다. 기록된 calories가 아니라
   // 세 영양소로 낸 열량을 분모로 삼는다. 둘이 어긋날 때 비율의 합이 100%를 벗어난다.
@@ -1379,18 +1384,35 @@ const lifestyleTabConfigs = {
     // 비율 셋을 모두 적어야 한 카드로 합쳐진다. 짝은 이 목록 안에서만 찾는다.
     cards: ["intakeCalories", "carbRatio", "proteinRatio", "fatRatio", "waterCups"],
     groups: [
-      { title: "섭취칼로리", metrics: ["intakeCalories"] },
-      { title: "탄수화물", metrics: ["carbohydrate"] },
-      { title: "단백질", metrics: ["protein"] },
-      { title: "지방", metrics: ["totalFat"] },
-      // 나트륨과 칼륨은 함께 봐야 뜻이 선다. 칼륨이 나트륨을 덜어 내는 쪽이다.
-      { title: "나트륨과 칼륨", metrics: ["sodium", "potassium"] },
-      { title: "당", metrics: ["sugar"] },
-      { title: "식이섬유", metrics: ["dietaryFiber"] },
-      { title: "칼슘", metrics: ["calcium"] },
-      // 지방은 총량보다 그 안에 포화지방이 얼마나 되는지가 문제가 된다.
-      { title: "지방과 포화지방 비중", metrics: ["fatRatio", "saturatedRatio"] },
-      { title: "수분 섭취", metrics: ["water"] },
+      // 셋을 따로 그리면 균형이 안 보인다. 열량으로 환산해 쌓으면 막대 높이가
+      // 하루 총열량이 되고 조각이 곧 균형이 된다. 그램을 그대로 쌓으면 지방이
+      // 실제보다 작게 보인다(1g당 열량이 두 배가 넘는다).
+      //
+      // 막대에 쌓는 것은 3대 영양소뿐이고, 막대 높이는 그 셋이 낸 열량이다.
+      // 기록된 섭취칼로리와는 다르다(중앙값 2.6% 작다). 3대 영양소 밖에도 열량이
+      // 있어서다. 그래서 제목에 '섭취칼로리'를 넣지 않는다. 넣으면 막대 높이가
+      // 섭취칼로리라고 주장하는 셈이 되는데, 표에는 다른 숫자가 적혀 있다.
+      // 총량은 쌓지 않고 표 앞에 세워 구성과 나란히 읽게 한다.
+      // 표의 영양소는 기록한 그대로 그램으로 둔다.
+      {
+        title: "영양소 구성", chart: "stack",
+        note: "막대는 탄수화물·단백질·지방이 낸 열량입니다. "
+          + "이 셋 밖에도 열량이 있어 표의 섭취칼로리와는 조금 다릅니다.",
+        axis: { unit: "kcal", step: 250, major: 500, min: 0, max: 2500, palette: "macro-parts" },
+        metrics: ["carbEnergy", "fatEnergy", "proteinEnergy"],
+        columns: ["intakeCalories", "carbohydrate", "protein", "totalFat"],
+      },
+      // 나트륨·칼륨·당·식이섬유·칼슘·포화지방은 그래프에서 뺐다. 실제 기록에서
+      // 여섯 다 '큰 변화 없음'이라 시계열로는 답할 것이 없었다. 이 항목들이
+      // 답해야 할 물음은 "언제 달라졌나"가 아니라 "기준에서 얼마나 떨어져 있나"라,
+      // 당일 수치의 '세부항목 보기'에서 기준 대비 한 장으로 본다.
+      // 그래프는 잔으로 본다. '여섯 잔'이 '1,500mL'보다 하루치로 가늠하기 쉽다.
+      // 다만 잔은 어림수라 실제로 얼마나 마셨는지는 표의 mL가 정확하다.
+      {
+        title: "수분 섭취", metrics: ["waterCups"], columns: ["water"],
+        palette: "water-blue",
+        note: "그래프는 250mL를 한 잔으로 세어 그립니다. 표는 mL 그대로입니다.",
+      },
     ],
   },
   sleep: {
@@ -1400,7 +1422,11 @@ const lifestyleTabConfigs = {
       // 눈금은 3·6·9시간을 실선으로 고정하고 그 사이는 점선으로 둔다.
       // 잠이 3시간보다 짧거나 9시간보다 길면 3시간 단위로 축을 넓힌다.
       {
-        title: "수면시간 및 단계", chart: "stack",
+        title: "수면 구성", chart: "stack",
+        // 단계 합은 총 수면시간과 늘 조금 어긋난다(실측 92일 모두, 중앙값 0.6%).
+        // 제목에 '수면시간'을 넣으면 막대 높이가 그 값이라고 주장하는 셈이 된다.
+        note: "막대는 단계별 시간을 쌓은 것입니다. "
+          + "표의 수면시간과는 조금 다를 수 있습니다.",
         axis: { unit: "시간", divisor: 60, step: 1, major: 3, min: 3, max: 9, palette: "sleep-stages" },
         // 막대에 쌓는 것은 단계뿐이다. 총 수면시간은 합이 아니라 견줄 값이라 쌓지 않는다.
         metrics: ["deepSleep", "lightSleep", "remSleep", "awake"],
@@ -1421,6 +1447,13 @@ const _WATER_CUP_ML = 250;
 const _MACRO_KCAL = { carbohydrate: 4, protein: 4, totalFat: 9 };
 // 분모에는 들어가지 않고 분자로만 쓰는 항목. 포화지방은 지방 안에 이미 들어 있다.
 const _NON_MACRO_KCAL = { saturatedFat: 9 };
+
+function macroEnergySeries(payload, target) {
+  // 그램에 열량 환산 계수를 곱한다. 세 조각의 합이 그날 총열량이 된다.
+  const factor = _MACRO_KCAL[target];
+  return metricDailySeries(payload, lifestyleMetrics[target])
+    .map((point) => ({ date: point.date, value: point.value * factor }));
+}
 
 function macroRatioSeries(payload, target) {
   // 하루 총열량 대비 몇 %인지. 세 영양소가 모두 있는 날만 비율을 낸다.
@@ -1581,12 +1614,32 @@ function chartGuideTop(tick, max) {
   return _CHART_PLOT_HEIGHT - _CHART_PLOT_BOTTOM - (tick / max) * _CHART_BAR_HEIGHT;
 }
 
-function buildLifestyleBarChart(title, metric, points, days, gapDate) {
+// 눈금 간격으로 쓸 수. 1·2·5를 열 배씩 키워 나간다.
+const _TICK_STEPS = [1, 2, 5];
+// 칸이 이보다 많으면 눈금이 빽빽해 읽기 어렵다.
+const _MAX_TICK_GAPS = 4;
+
+function niceAxisTicks(highest) {
+  // 사람이 셈하기 쉬운 간격을 고르고, 축 꼭대기를 그 배수로 올린다.
+  let step = 1;
+  for (let power = 0; power < 12; power += 1) {
+    const found = _TICK_STEPS.map((unit) => unit * 10 ** power)
+      .find((candidate) => Math.ceil(highest / candidate) <= _MAX_TICK_GAPS);
+    if (found) { step = found; break; }
+  }
+  const top = Math.max(Math.ceil(highest / step) * step, step);
+  const ticks = [];
+  for (let tick = 0; tick <= top; tick += step) ticks.push(tick);
+  return { ticks, top };
+}
+
+function buildLifestyleBarChart(title, metric, points, days, gapDate, palette) {
   if (!points.length) return null;
-  const max = Math.max(...points.map((point) => point.value), 1);
-  const ticks = [0, max / 2, max];
+  const highest = Math.max(...points.map((point) => point.value), 1);
+  const { ticks, top: max } = niceAxisTicks(highest);
   const chart = document.createElement("div");
-  chart.className = "data-chart";
+  // 항목의 뜻과 색이 어긋나면 읽는 데 걸린다. 물은 하늘색으로 그린다.
+  chart.className = palette ? `data-chart ${palette}` : "data-chart";
   const heading = document.createElement("div");
   heading.className = "data-chart-title";
   heading.textContent = metric.unit ? `${title} (${metric.unit})` : title;
@@ -1594,9 +1647,11 @@ function buildLifestyleBarChart(title, metric, points, days, gapDate) {
   plot.className = "data-chart-plot";
   const axis = document.createElement("div");
   axis.className = "data-chart-axis";
+  // 눈금은 셈하기 쉬운 정수라 항목의 자릿수를 따르지 않는다. 8잔을 8.0잔으로 적지 않는다.
+  const tickDigits = ticks.every((tick) => Number.isInteger(tick)) ? 0 : metric.digits;
   ticks.slice().reverse().forEach((tick) => {
     const label = document.createElement("span");
-    label.textContent = formatDataNumber(tick, metric.digits);
+    label.textContent = formatDataNumber(tick, tickDigits);
     label.style.bottom = `${(tick / max) * 100}%`;
     axis.appendChild(label);
   });
@@ -2384,6 +2439,59 @@ function buildTodayMetricCard(item, latestDate, days) {
   return card;
 }
 
+// 막대가 화면을 넘지 않게 자르는 지점. 기준의 두 배 반을 넘으면 더 길게 그려도
+// 읽을 것이 늘지 않는다. 숫자는 그대로 적으므로 정보가 사라지지는 않는다.
+const _STANDARD_BAR_CAP = 250;
+
+function buildStandardRow(item) {
+  const row = document.createElement("li");
+  row.className = `standard-row ${item.side}`;
+  row.append(createTextElement("span", "standard-name", String(item.metric || "")));
+
+  const track = document.createElement("div");
+  track.className = "standard-track";
+  const fill = document.createElement("i");
+  fill.className = "standard-fill";
+  fill.style.width = `${Math.min(Number(item.ratio) || 0, _STANDARD_BAR_CAP) / _STANDARD_BAR_CAP * 100}%`;
+  // 기준선. 넘치는 쪽인지 모자란 쪽인지가 이 선을 기준으로 갈린다.
+  const mark = document.createElement("i");
+  mark.className = "standard-mark";
+  mark.style.left = `${100 / _STANDARD_BAR_CAP * 100}%`;
+  track.append(fill, mark);
+  row.append(track);
+
+  const unit = String(item.unit || "");
+  row.append(createTextElement("span", "standard-value",
+    `${formatDataNumber(Number(item.value))}${unit ? ` ${unit}` : ""}`));
+  row.append(createTextElement("span", "standard-reference", String(item.reference || "")));
+  const status = createTextElement("span", `standard-status ${item.status === "관리 필요" ? "manage"
+    : item.status === "주의" ? "caution" : "good"}`, String(item.status || ""));
+  row.append(status);
+  return row;
+}
+
+function buildStandardList(standards, basis) {
+  // 접어 둔다. 카드 옆에 열두 줄을 펼쳐 두면 대표 값이 묻힌다.
+  const box = document.createElement("details");
+  box.className = "lifestyle-standards";
+  const summary = document.createElement("summary");
+  const off = standards.filter((item) => item.status !== "양호").length;
+  summary.append(createTextElement("span", "", "세부항목 보기"));
+  summary.append(createTextElement("span", "standard-summary-count",
+    off ? `기준을 벗어난 항목 ${off}개` : `${standards.length}개 모두 기준 안`));
+  box.append(summary);
+
+  const list = document.createElement("ul");
+  list.className = "standard-list";
+  standards.forEach((item) => list.appendChild(buildStandardRow(item)));
+  box.append(list);
+  if (basis) {
+    box.append(createTextElement("small", "standard-basis",
+      `기준선은 100%입니다. 참고범위는 ${basis}입니다.`));
+  }
+  return box;
+}
+
 function renderLifestyleToday(payload, days) {
   const metrics = lifestyleTabSeries(payload, activeLifestyleTab);
   const latestDate = metrics.reduce((latest, item) => {
@@ -2395,9 +2503,13 @@ function renderLifestyleToday(payload, days) {
     setDataPlaceholder(elements.lifestyleToday, "이 탭에 표시할 기록이 없습니다.");
     return { latestDate, count: 0 };
   }
-  elements.lifestyleToday.replaceChildren(
-    ...metrics.map((item) => buildTodayMetricCard(item, latestDate, days)),
-  );
+  const cards = metrics.map((item) => buildTodayMetricCard(item, latestDate, days));
+  // 기준을 가진 항목의 '기준 대비'는 서비스가 계산해 보내 준다. 화면은 그리기만 한다.
+  const standards = (payload.standards || {})[activeLifestyleTab] || [];
+  if (standards.length) {
+    cards.push(buildStandardList(standards, payload.reference_basis));
+  }
+  elements.lifestyleToday.replaceChildren(...cards);
   return { latestDate, count: metrics.length };
 }
 
@@ -2437,11 +2549,17 @@ function renderLifestyleTrends(payload, days, latestDate) {
       ? buildStackedChart(group.title, series, group.axis, days, gapDate)
       : kind === "line"
         ? buildLineChart(group.title, series, days, gapDate)
-        : buildLifestyleBarChart(group.title, series[0], series[0].points, days, gapDate);
+        : buildLifestyleBarChart(
+          group.title, series[0], series[0].points, days, gapDate, group.palette);
     block.append(heading);
     if (startsLate) {
       block.append(createTextElement("p", "data-section-note",
         `${withTopicParticle(group.title)} ${formatBucketDate(firstBucket, days)}부터 기록되었습니다.`));
+    }
+    // 그래프가 무엇을 그린 것인지 오해할 여지가 있으면 한 줄로 밝힌다.
+    // 알림이 아니라 읽는 법이라 옅은 회색으로 둔다.
+    if (group.note) {
+      block.append(createTextElement("p", "data-chart-hint", group.note));
     }
     if (chart) block.append(chart);
     block.append(buildTrendTable(tableSeries, days));
@@ -2515,7 +2633,8 @@ function renderLifestyleReport(hasData = true) {
     `최근 ${state.recentDays}일과 전체 ${state.windowDays}일${state.coveredRange ? ` (${state.coveredRange})` : ""} 기록을 함께 보고 생성했습니다.`
     + " 아래 기간 버튼은 그래프에만 적용됩니다."
     + (state.dataTruncated ? " 기록이 많아 오래된 일부는 조회에서 제외됐습니다." : "")
-    + " 참고범위는 일반 성인 기준이며 성별·나이·활동량을 반영하지 않습니다."));
+    // 판정 기준은 사람마다 다르다. 성별을 알면 그 성별 기준으로 재므로 서버가 준 말을 쓴다.
+    + ` 참고범위는 ${state.referenceBasis || "일반 성인 기준이며 성별·나이·활동량을 반영하지 않음"}입니다.`));
   elements.lifestyleReport.replaceChildren(...nodes);
 }
 
@@ -2593,6 +2712,7 @@ async function loadLifestyleReport(force = false) {
       recentDays: payload.recent_days,
       coveredRange: payload.covered_range || "",
       dataTruncated: Boolean(payload.data_truncated),
+      referenceBasis: payload.reference_basis || "",
     });
     renderLifestyleDashboard(tabLabel, payload);
   } catch (error) {

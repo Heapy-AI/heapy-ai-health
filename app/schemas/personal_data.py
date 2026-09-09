@@ -7,7 +7,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CheckupItemResponse(BaseModel):
@@ -141,6 +141,10 @@ class LifestyleWindowResponse(BaseModel):
     """
 
     window_days: int
+    # 탭별 '기준 대비' 목록. 판정과 견줌은 서비스가 끝내고 화면은 그리기만 한다.
+    standards: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    # 어느 잣대로 쟀는지. 성별·나이를 알면 그 사람 기준이라 사람마다 다르다.
+    reference_basis: str = ""
     activity: ActivityWindowResponse
     exercise: ExerciseWindowResponse
     bio: BioWindowResponse

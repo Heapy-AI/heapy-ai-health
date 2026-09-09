@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import math
+from copy import copy
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from statistics import StatisticsError, correlation, fmean, median, pstdev
@@ -268,6 +269,13 @@ class _Metric:
         self.caution_low = caution_low
         self.caution_high = caution_high
 
+    def with_thresholds(self, **bounds: float | None) -> "_Metric":
+        """기준만 바꾼 사본. 값 추출 방식은 그대로 둔다."""
+        clone = copy(self)
+        for name, value in bounds.items():
+            setattr(clone, name, value)
+        return clone
+
     def daily_series(self, window: dict[str, Any]) -> list[dict[str, Any]]:
         """일자별 (날짜, 값) 계열을 만든다. 하루에 여러 건이면 daily 규칙으로 합친다."""
         rows = (window.get(self.source) or {}).get("rows") or []
@@ -356,7 +364,9 @@ def _daily_sum(source: str, date_key: str, value: Callable[[dict[str, Any]], Any
 # 단위 환산은 화면(app.js)·프롬프트 포맷(supabase_lifestyle_context)과 같게 맞춘다.
 # lifestyle_activity.distance_m은 km로, lifestyle_exercise.distance_m은 m로 적재된다.
 #
-# 참고범위 근거(모두 일반 성인 기준):
+# 참고범위 근거. 값과 출처 전체는 docs/생활건강_AI해석_판정기준_출처와_적용.md에 있고,
+# 그 문서와 여기가 어긋나면 tests/test_reference_criteria.py가 실패한다.
+# 성별·나이로 갈리는 영양 4항목은 아래 _KDRI_2025가 따로 들고 있다.
 #   BMI            대한비만학회 아시아·태평양 기준. 정상 18.5~22.9, 과체중 23~24.9
 #   혈압           대한고혈압학회. 정상 120/80 미만, 고혈압 전단계 120~139 / 80~89
 #   혈당           대한당뇨병학회. 공복 정상 70~99, 공복혈당장애 100~125 / 식후 2시간 140 미만
@@ -388,6 +398,113 @@ def _energy_ratio(column: str, kcal_per_gram: float):
 def _macro_ratio(part: str):
     """3대 영양소 각각의 열량 몫(%)."""
     return _energy_ratio(_MACRO_COLUMNS[part], _MACRO_KCAL[part])
+
+
+# 2025 한국인 영양소 섭취기준. 성별과 연령대를 함께 보고 정해져 있다.
+#   에너지  필요추정량(EER)   단백질  권장섭취량
+#   식이섬유 충분섭취량        칼슘    권장섭취량
+# 열아홉 살 미만은 표에 담지 않는다. 성인용 서비스라 그 아래는 성별 기준을 쓰지 않는다.
+_KDRI_AGE_BANDS = ((29, "19-29"), (49, "30-49"), (64, "50-64"), (74, "65-74"), (200, "75+"))
+_KDRI_2025: dict[str, dict[str, dict[str, float]]] = {
+    "male": {
+        "19-29": {"energy": 2600, "protein": 65, "fiber": 30, "calcium": 800},
+        "30-49": {"energy": 2500, "protein": 65, "fiber": 30, "calcium": 800},
+        "50-64": {"energy": 2200, "protein": 60, "fiber": 30, "calcium": 800},
+        "65-74": {"energy": 2000, "protein": 60, "fiber": 30, "calcium": 800},
+        "75+": {"energy": 1900, "protein": 60, "fiber": 30, "calcium": 800},
+    },
+    "female": {
+        "19-29": {"energy": 2000, "protein": 55, "fiber": 20, "calcium": 650},
+        "30-49": {"energy": 1900, "protein": 50, "fiber": 20, "calcium": 650},
+        "50-64": {"energy": 1700, "protein": 50, "fiber": 25, "calcium": 750},
+        "65-74": {"energy": 1600, "protein": 50, "fiber": 25, "calcium": 750},
+        "75+": {"energy": 1500, "protein": 50, "fiber": 25, "calcium": 750},
+    },
+}
+# 에너지는 하루하루 오르내리는 값이라 필요추정량 하나로 재면 거의 매일 벗어난다.
+# 그 언저리를 양호로, 더 벗어나면 주의로 본다. 섭취기준이 정한 폭은 아니다.
+_ENERGY_GOOD_MARGIN = 0.15
+_ENERGY_CAUTION_MARGIN = 0.30
+# 채울수록 좋은 항목의 주의 문턱. 권장량의 이만큼에 못 미치면 주의로 본다.
+_INTAKE_CAUTION_RATIO = 0.8
+
+
+def normalize_sex(value: Any) -> str | None:
+    """저장소의 성별 표기를 하나로 맞춘다. 모르면 None."""
+    text = str(value or "").strip().casefold()
+    if text in {"male", "m", "남", "남성", "남자"}:
+        return "male"
+    if text in {"female", "f", "여", "여성", "여자"}:
+        return "female"
+    return None
+
+
+def age_from_birth_date(value: Any, today: date | None = None) -> int | None:
+    """생년월일에서 만 나이. 읽을 수 없으면 None."""
+    try:
+        born = date.fromisoformat(str(value or "")[:10])
+    except ValueError:
+        return None
+    today = today or date.today()
+    if born > today:
+        return None
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+
+def _kdri_bands(sex: str | None, age: int | None) -> list[dict[str, float]]:
+    """이 사람에게 맞는 섭취기준 줄들.
+
+    나이를 알면 한 줄, 모르면 그 성별의 모든 줄을 돌려준다. 여러 줄을 받은 쪽은
+    아래에서 가장 너그럽게 합친다. 기준을 채운 사람에게 모자라다고 말하지 않는
+    편이 반대보다 낫기 때문이다. 성별을 모르면 고를 수 없어 빈 목록이다.
+    """
+    bands = _KDRI_2025.get(normalize_sex(sex) or "")
+    if not bands:
+        return []
+    if age is None:
+        return list(bands.values())
+    # 열아홉 살 미만은 표에 없다. 성인용 서비스라 일반 기준으로 둔다.
+    if age < 19:
+        return []
+    return [bands[next(name for limit, name in _KDRI_AGE_BANDS if age <= limit)]]
+
+
+def _age_band_text(age: int) -> str:
+    """각주에 적을 연령 구간. 표의 이름을 사람이 읽는 말로 옮긴다."""
+    name = next(band for limit, band in _KDRI_AGE_BANDS if age <= limit)
+    return "75세 이상" if name == "75+" else f"{name.replace('-', '~')}세"
+
+
+def reference_basis(sex: str | None, age: int | None) -> str:
+    """참고범위가 누구 기준인지 한 줄로. 화면 각주가 그대로 쓴다."""
+    if not _kdri_bands(sex, age):
+        return "일반 성인 기준이며 성별·나이·활동량을 반영하지 않음"
+    who = "남성" if normalize_sex(sex) == "male" else "여성"
+    if age is None:
+        return f"{who} 성인 기준이며 나이·활동량은 반영하지 않음"
+    return f"{who} {_age_band_text(age)} 기준이며 활동량은 반영하지 않음"
+
+
+def _thresholds_for(bands: list[dict[str, float]]) -> dict[str, dict[str, float]]:
+    """섭취기준 줄들을 항목별 판정 문턱으로 옮긴다.
+
+    줄이 여럿이면(나이를 모를 때) 모두를 감싼다. 채울수록 좋은 항목은 가장 낮은
+    권장량을, 적정 범위가 있는 에너지는 가장 넓은 폭을 쓴다.
+    """
+    round50 = lambda value: round(value / 50) * 50
+    energies = [band["energy"] for band in bands]
+    lowest = lambda key: min(band[key] for band in bands)
+    return {
+        "섭취칼로리": {
+            "low": round50(min(energies) * (1 - _ENERGY_GOOD_MARGIN)),
+            "high": round50(max(energies) * (1 + _ENERGY_GOOD_MARGIN)),
+            "caution_low": round50(min(energies) * (1 - _ENERGY_CAUTION_MARGIN)),
+            "caution_high": round50(max(energies) * (1 + _ENERGY_CAUTION_MARGIN)),
+        },
+        "단백질": {"low": lowest("protein"), "caution_low": round(lowest("protein") * _INTAKE_CAUTION_RATIO)},
+        "식이섬유": {"low": lowest("fiber"), "caution_low": round(lowest("fiber") * _INTAKE_CAUTION_RATIO)},
+        "칼슘": {"low": lowest("calcium"), "caution_low": round(lowest("calcium") * _INTAKE_CAUTION_RATIO)},
+    }
 
 
 _DOMAIN_METRICS: dict[str, list[_Metric]] = {
@@ -429,8 +546,10 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
         _Metric("운동칼로리", "kcal", **_daily_sum("exercise", "record_date", lambda row: row.get("calories"))),
     ],
     "nutrition": [
+        # 성별·나이를 모를 때의 값이다. 남녀 모든 연령대의 필요추정량을 감싸야
+        # 어느 쪽에도 엄하지 않다. 여성 75세 이상 하한부터 남성 19~29세 상한까지다.
         _Metric("섭취칼로리", "kcal", **_daily_sum("food", "consumed_at", lambda row: row.get("calories")),
-                direction="range", low=1800, high=2400, caution_low=1400, caution_high=2800),
+                direction="range", low=1300, high=3000, caution_low=1050, caution_high=3400),
         # 탄수화물·지방은 총열량 대비 비율로 보는 영양소라 절대량 기준을 두지 않는다.
         _Metric("탄수화물", "g", **_daily_sum("food", "consumed_at", lambda row: row.get("carbohydrate"))),
         _Metric("단백질", "g", **_daily_sum("food", "consumed_at", lambda row: row.get("protein")),
@@ -455,16 +574,16 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
         _Metric("포화지방 비중", "%", source="food", date_key="consumed_at", daily="mean",
                 kind="measurement", value=_energy_ratio("saturated_fat", 9),
                 direction="lower", high=7, caution_high=10),
-        # 식이섬유 충분섭취량은 남자 30g, 여자 20~25g이다. 성별을 모르므로 낮은 쪽에
-        # 문턱을 두어 여성에게 모자라다고 잘못 말하지 않게 한다.
+        # 아래 값은 성별을 모를 때 쓰는 값이다. 성별을 알면 _SEX_THRESHOLDS가 덮어쓴다.
+        # 식이섬유 충분섭취량은 남자 30g, 여자 20~25g이라 낮은 쪽을 기본값으로 둔다.
         _Metric("식이섬유", "g", **_daily_sum("food", "consumed_at", lambda row: row.get("dietary_fiber")),
-                direction="higher", low=25, caution_low=20),
+                direction="higher", low=20, caution_low=16),
         # 칼륨 충분섭취량 3,500mg. 나트륨과 짝이라 함께 보면 뜻이 는다.
         _Metric("칼륨", "mg", **_daily_sum("food", "consumed_at", lambda row: row.get("potassium")),
                 direction="higher", low=3500, caution_low=2800),
-        # 칼슘 권장섭취량은 남자 800mg, 여자 650~750mg. 가운데를 문턱으로 둔다.
+        # 칼슘 권장섭취량은 남자 800mg, 여자 650~750mg. 낮은 쪽을 기본값으로 둔다.
         _Metric("칼슘", "mg", **_daily_sum("food", "consumed_at", lambda row: row.get("calcium")),
-                direction="higher", low=700, caution_low=560),
+                direction="higher", low=650, caution_low=520),
         _Metric("수분 섭취", "mL", **_daily_sum("water", "consumed_at", lambda row: row.get("water_amount")),
                 direction="higher", low=1500, caution_low=1000),
     ],
@@ -728,6 +847,80 @@ def _sleep_timing(window: dict[str, Any], target_hours: float | None = None) -> 
                 else "지금 취침 시각으로도 닿는다"
             )
     return summary if len(summary) > 1 else None
+
+
+def today_standards(
+    domain: str,
+    window: dict[str, Any],
+    sex: str | None = None,
+    age: int | None = None,
+) -> list[dict[str, Any]]:
+    """기준이 있는 항목마다 '기준을 100으로 놓았을 때 지금 몇인지'를 낸다.
+
+    화면의 접이식 목록이 이 값을 그대로 막대로 그린다. 판정도 여기서 끝낸다.
+    화면이 기준값을 들고 판정하면 분석과 어긋날 수 있기 때문이다.
+    """
+    standards = []
+    for metric in domain_metrics(domain, sex, age):
+        if not metric.reference_text:
+            continue
+        series = metric.daily_series(window)
+        if not series:
+            continue
+        latest = series[-1]
+        value = latest["value"]
+        # 기준선을 100으로 놓는다. 범위 항목은 벗어난 쪽 경계와 견주고,
+        # 범위 안이면 견줄 것이 없으므로 100으로 둔다.
+        if metric.direction == "higher" and metric.low:
+            ratio = value / metric.low * 100
+        elif metric.direction == "lower" and metric.high:
+            ratio = value / metric.high * 100
+        elif metric.direction == "range" and metric.low and metric.high:
+            if value > metric.high:
+                ratio = value / metric.high * 100
+            elif value < metric.low:
+                ratio = value / metric.low * 100
+            else:
+                ratio = 100.0
+        else:
+            continue
+        standards.append({
+            "metric": metric.label,
+            "unit": metric.unit,
+            "date": latest["date"],
+            "value": value,
+            "reference": metric.reference_text,
+            "status": metric.status(value),
+            "ratio": round(ratio),
+            # 넘쳐서 벗어난 것과 모자라서 벗어난 것은 할 일이 다르다. 다만 기준 안이면
+            # 어느 쪽도 아니다. 나트륨이 기준보다 적은 것은 모자란 것이 아니라 좋은 것이다.
+            "side": (
+                "inside" if metric.status(value) == STATUS_GOOD
+                else "over" if ratio > 100 else "under"
+            ),
+        })
+    order = {STATUS_MANAGE: 0, STATUS_CAUTION: 1, STATUS_GOOD: 2, STATUS_UNKNOWN: 3}
+    standards.sort(key=lambda item: (order.get(item["status"], 3), -abs(item["ratio"] - 100)))
+    return standards
+
+
+def domain_metrics(
+    domain: str, sex: str | None = None, age: int | None = None,
+) -> list[_Metric]:
+    """탭의 항목 목록. 성별·나이를 알면 그 사람의 섭취기준으로 갈아 끼운다.
+
+    성별을 모르면 정의에 적힌 값을 그대로 쓴다. 그 값은 남녀 가운데 낮은 쪽이라
+    기준을 채운 사람에게 모자라다고 말하지 않는다. 대신 남성에게는 느슨하다.
+    """
+    metrics = _DOMAIN_METRICS.get(domain, [])
+    bands = _kdri_bands(sex, age)
+    if not bands:
+        return metrics
+    overrides = _thresholds_for(bands)
+    return [
+        metric.with_thresholds(**overrides[metric.label]) if metric.label in overrides else metric
+        for metric in metrics
+    ]
 
 
 def _sleep_target_hours() -> float | None:
@@ -1164,6 +1357,7 @@ def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
         "data_truncated": analysis.get("data_truncated", False),
         "latest_date": analysis.get("latest_date", ""),
         "reference_basis": analysis.get("reference_basis", ""),
+        "reference_sex": analysis.get("reference_sex", ""),
         "metrics": metrics,
         "co_movements": [
             {key: item[key] for key in ("metrics", "relation", "shared_days")}
@@ -1187,10 +1381,12 @@ class LifestyleReportService:
         self,
         domain: str,
         window: dict[str, Any],
+        sex: str | None = None,
+        age: int | None = None,
     ) -> tuple[LifestyleReportContent, dict[str, Any]]:
         """탭 하나의 분석 본문과 검증용 계산 근거를 함께 반환한다."""
         started = perf_counter()
-        analysis = self.build_analysis(domain, window)
+        analysis = self.build_analysis(domain, window, sex, age)
         analysis_elapsed = perf_counter() - started
         ai_started = perf_counter()
         report = await self._llm.ainvoke(self.build_prompt(domain, analysis))
@@ -1216,10 +1412,18 @@ class LifestyleReportService:
         )
 
     @staticmethod
-    def build_analysis(domain: str, window: dict[str, Any]) -> dict[str, Any]:
-        """탭의 세부 항목마다 전체 구간과 최근 구간을 두 벌로 계산한다."""
+    def build_analysis(
+        domain: str,
+        window: dict[str, Any],
+        sex: str | None = None,
+        age: int | None = None,
+    ) -> dict[str, Any]:
+        """탭의 세부 항목마다 전체 구간과 최근 구간을 두 벌로 계산한다.
+
+        성별·나이를 주면 그 사람의 섭취기준으로 판정한다. 모르면 가장 느슨한 값을 쓴다.
+        """
         windows = analysis_window(domain)
-        metrics = _DOMAIN_METRICS.get(domain, [])
+        metrics = domain_metrics(domain, sex, age)
         series_by_metric = [(metric, metric.daily_series(window)) for metric in metrics]
         # 마지막 기록일은 항목마다 갈릴 수 있어 탭 안에서 가장 늦은 날을 당일 기준으로 삼는다.
         latest_date = max(
@@ -1239,7 +1443,10 @@ class LifestyleReportService:
             "covered_range": f"{covered[0]}~{covered[-1]}" if covered else "",
             "data_truncated": truncated,
             "latest_date": latest_date,
-            "reference_basis": "일반 성인 기준이며 성별·나이·활동량을 반영하지 않음",
+            # 사람마다 잣대가 다르므로 어느 잣대로 잰 것인지 화면에 밝혀야
+            # 사용자가 자기 수치를 견줄 수 있다.
+            "reference_basis": reference_basis(sex, age),
+            "reference_sex": normalize_sex(sex) or "",
             "metrics": [
                 _summarize_metric(metric, series, windows, latest_date)
                 for metric, series in recorded

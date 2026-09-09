@@ -258,8 +258,9 @@ class AdminWebUiTest(unittest.TestCase):
     def test_every_analysed_metric_is_shown_somewhere(self) -> None:
         """분석만 하고 화면에 없는 항목이 있으면 AI가 확인할 수 없는 말을 하게 된다.
 
-        제목은 여러 항목을 묶을 수 있으므로(칼로리 = 활동 + 운동) 제목이 아니라
-        그룹이 실제로 쓰는 항목으로 견준다.
+        보이는 자리는 셋이다. 그래프·수치표·당일 카드, 그리고 참고범위가 있는
+        항목이라면 당일 수치의 '세부항목 보기' 목록에 저절로 뜬다. 제목은 여러
+        항목을 묶을 수 있으므로(칼로리 = 활동 + 운동) 제목이 아니라 항목으로 견준다.
         """
         import re
 
@@ -275,6 +276,8 @@ class AdminWebUiTest(unittest.TestCase):
                 used = set()
                 for listed in re.findall(r'(?:metrics|columns|cards): \[([^\]]+)\]', block):
                     used.update(labels[key.strip().strip('"')] for key in listed.split(","))
+                # 참고범위가 있는 항목은 세부항목 목록이 서비스에서 받아 그대로 그린다.
+                used.update(m.label for m in _DOMAIN_METRICS[tab] if m.reference_text)
                 self.assertLessEqual({m.label for m in _DOMAIN_METRICS[tab]}, used)
 
     def test_calorie_stack_does_not_double_count_exercise(self) -> None:
@@ -338,10 +341,56 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertIn("if (parts.some((part) => !part.days.has(date)) || !numerator.has(date)) return;", script)
         # 포화지방은 지방 안에 이미 들어 있어 분모에 더하지 않는다.
         self.assertIn("_NON_MACRO_KCAL = { saturatedFat: 9 }", script)
-        # 나트륨·당은 카드에서 빠지되 그래프는 그대로 둔다.
-        for title in ("나트륨과 칼륨", "당"):
+        # 나트륨·당은 카드에도 그래프에도 두지 않는다. 세부항목 목록에서 본다.
+        for title in ("나트륨", "당", "나트륨과 칼륨"):
             with self.subTest(title=title):
-                self.assertIn(f'{{ title: "{title}", metrics:', block)
+                self.assertNotIn(f'{{ title: "{title}", metrics:', block)
+
+    def test_standards_list_is_folded_and_judged_by_the_service(self) -> None:
+        """카드 옆에 열두 줄을 펼쳐 두면 대표 값이 묻힌다. 접어 두고 눌러서 편다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        # 접이식이라 details/summary를 쓴다.
+        self.assertIn('const box = document.createElement("details");', script)
+        self.assertIn('"세부항목 보기"', script)
+        self.assertIn(".lifestyle-standards", styles)
+        # 판정과 견줌은 서비스가 보내 준 값을 그대로 쓴다. 화면이 기준을 들고 있지 않다.
+        self.assertIn('(payload.standards || {})[activeLifestyleTab]', script)
+        self.assertIn("payload.reference_basis", script)
+        # 넘치는 쪽과 모자란 쪽은 할 일이 달라 색을 가른다.
+        self.assertIn(".standard-row.over .standard-fill", styles)
+        self.assertIn(".standard-row.under .standard-fill", styles)
+
+    def test_the_screen_never_compares_values_to_a_threshold_itself(self) -> None:
+        """판정은 서비스가 한다. 화면에 기준값이 박히면 분석과 어긋날 수 있다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        # 서비스가 보낸 판정어를 색으로 옮길 뿐, 수치와 견주지 않는다.
+        self.assertIn('item.status === "관리 필요"', script)
+        for threshold in ("2000", "3500", "8000", "1500"):
+            with self.subTest(threshold=threshold):
+                self.assertNotIn(f"> {threshold}", script)
+                self.assertNotIn(f"< {threshold}", script)
+
+    def test_macros_share_one_stacked_chart_measured_in_energy(self) -> None:
+        """그램을 쌓으면 막대 높이가 '하루에 먹은 그램 수'가 되어 아무 뜻이 없다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+        block = script[script.index("  nutrition: {"):script.index("  sleep: {")]
+
+        self.assertIn('title: "탄수화물 · 단백질 · 지방", chart: "stack",', block)
+        # 셋을 따로 그리던 그래프는 없앤다.
+        for title in ("탄수화물", "단백질", "지방"):
+            with self.subTest(title=title):
+                self.assertNotIn(f'{{ title: "{title}", metrics:', block)
+        # 막대는 열량, 표는 기록한 그대로 그램이다.
+        # 쌓는 차례는 아래부터 탄수화물·지방·단백질이다.
+        self.assertIn('metrics: ["carbEnergy", "fatEnergy", "proteinEnergy"],', block)
+        self.assertIn('columns: ["carbohydrate", "protein", "totalFat"],', block)
+        self.assertIn('unit: "kcal"', block)
+        self.assertIn("point.value * factor", script)
+        self.assertIn(".data-chart.macro-parts", styles)
 
     def test_water_card_counts_cups_and_keeps_the_millilitres(self) -> None:
         """1,500mL보다 '여섯 잔'이 하루치로 가늠하기 쉽다. 실제 양은 괄호로 남긴다."""
@@ -518,8 +567,9 @@ class AdminWebUiTest(unittest.TestCase):
         for gone in ("buildReportMetricItem", "buildReportAnomalyItem", "formatReportNumber"):
             with self.subTest(removed=gone):
                 self.assertNotIn(gone, script)
-        # 참고범위 한계는 화면에서도 밝힌다.
-        self.assertIn("참고범위는 일반 성인 기준이며", script)
+        # 판정 기준의 한계는 화면에서도 밝힌다. 성별을 알면 그 성별 기준이라고 적힌다.
+        self.assertIn("state.referenceBasis", script)
+        self.assertIn("일반 성인 기준이며 성별·나이·활동량을 반영하지 않음", script)
 
     def test_lifestyle_analysis_window_is_fixed_and_separate_from_the_graph(self) -> None:
         """AI 분석은 서비스가 정한 구간을 쓰고, 기간 버튼은 그래프에만 적용된다."""

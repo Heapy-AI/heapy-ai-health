@@ -22,9 +22,11 @@ from app.services.lifestyle_report import (
     DOMAIN_LABELS,
     PROMPT_VERSION,
     LifestyleReportService,
+    age_from_birth_date,
     analysis_window,
 )
 from app.services.supabase_conversation import SupabaseConversationError
+from app.routers.auth import conversation_service
 
 
 router = APIRouter(prefix="/me/lifestyle", tags=["lifestyle-report"])
@@ -48,13 +50,24 @@ async def create_lifestyle_report(
             windows["full"],
         )
         window_seconds = perf_counter() - window_started
-        analysis = LifestyleReportService.build_analysis(domain, window)
+        # 영양 기준은 성별과 나이로 갈린다. 프로필을 못 읽으면 모르는 채로 진행한다.
+        # 판정이 조금 느슨해질 뿐이고, 어느 잣대로 쟀는지는 화면 각주가 밝힌다.
+        try:
+            profile = conversation_service.get_profile(
+                session.access_token,
+                str(session.user.get("id", "")),
+            )
+        except SupabaseConversationError:
+            profile = None
+        sex = str((profile or {}).get("sex", "")) or None
+        age = age_from_birth_date((profile or {}).get("birth_date"))
+        analysis = LifestyleReportService.build_analysis(domain, window, sex, age)
         if not analysis["metrics"]:
             raise HTTPException(
                 status_code=400,
                 detail=f"{DOMAIN_LABELS[domain]} 탭에 분석할 기록이 없습니다.",
             )
-        report, trace = await lifestyle_report_service.generate_with_trace(domain, window)
+        report, trace = await lifestyle_report_service.generate_with_trace(domain, window, sex, age)
         return LifestyleReportResponse(
             success=True,
             domain=domain,
@@ -63,6 +76,7 @@ async def create_lifestyle_report(
             covered_range=analysis["covered_range"],
             data_truncated=analysis["data_truncated"],
             latest_date=analysis["latest_date"],
+            reference_basis=analysis["reference_basis"],
             prompt_version=PROMPT_VERSION,
             report=report,
             verification={
