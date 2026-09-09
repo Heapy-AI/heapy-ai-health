@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.core.runtime import lifespan
-from app.routers import ask, auth, chat, checkup_report, conversations, intent, personal_data
+from app.routers import ask, auth, chat, checkup_report, conversations, intent, lifestyle_report, personal_data
 
 app = FastAPI(title="HEAPY RAG 서빙", version="1.0", lifespan=lifespan)
 app.include_router(auth.router)
