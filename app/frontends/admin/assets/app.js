@@ -1247,6 +1247,7 @@ const lifestyleMetrics = {
   activeCalories: { label: "활동칼로리", unit: "kcal", digits: 0, source: "activity", dateKey: "record_date", daily: "sum", value: (row) => row.active_calories },
   exerciseTime: {
     label: "운동시간", unit: "분", digits: 0,
+    pairedWith: "exerciseCalories", pairedLabel: "운동",
     source: "exercise", dateKey: "record_date", daily: "sum",
     value: (row) => (row.duration_sec === null || row.duration_sec === undefined ? null : Number(row.duration_sec) / 60),
   },
@@ -1257,6 +1258,18 @@ const lifestyleMetrics = {
     value: (row) => (row.distance_m === null || row.distance_m === undefined ? null : Number(row.distance_m) / 1000),
   },
   exerciseCalories: { label: "운동칼로리", unit: "kcal", digits: 0, source: "exercise", dateKey: "record_date", daily: "sum", value: (row) => row.calories },
+  // 운동칼로리는 활동칼로리 안에 든 값이다. 실측한 29일 모두 운동 ≤ 활동이었고
+  // 중앙값이 61%였다. 둘을 그대로 쌓으면 하루 합이 실제보다 커지므로, 겹치지 않는
+  // 나머지를 쌓아 막대 높이가 활동칼로리와 같아지게 한다.
+  otherCalories: {
+    label: "그 외 활동", unit: "kcal", digits: 0,
+    derive: (payload) => {
+      const exercise = new Map(metricDailySeries(payload, lifestyleMetrics.exerciseCalories)
+        .map((point) => [point.date, point.value]));
+      return metricDailySeries(payload, lifestyleMetrics.activeCalories)
+        .map((point) => ({ date: point.date, value: Math.max(point.value - (exercise.get(point.date) || 0), 0) }));
+    },
+  },
 
   intakeCalories: { label: "섭취칼로리", unit: "kcal", digits: 0, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.calories },
   carbohydrate: { label: "탄수화물", unit: "g", digits: 1, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.carbohydrate },
@@ -1300,15 +1313,29 @@ const lifestyleTabConfigs = {
   },
   activity: {
     chart: "bar",
+    // 걸음 수는 하루 활동량의 대표값, 활동칼로리는 그 결과, 운동은 따로 낸 시간이다.
+    // 계단·활동시간·이동거리·운동거리는 이 셋에 딸려 움직여 카드로는 내지 않는다.
+    cards: ["steps", "activeCalories", "exerciseTime"],
     groups: [
       { title: "걸음 수", metrics: ["steps"] },
-      { title: "계단", metrics: ["floors"] },
-      { title: "활동시간", metrics: ["activeTime"] },
-      { title: "이동거리", metrics: ["activeDistance"] },
-      { title: "활동칼로리", metrics: ["activeCalories"] },
-      { title: "운동시간", metrics: ["exerciseTime"] },
-      { title: "운동거리", metrics: ["exerciseDistance"] },
-      { title: "운동칼로리", metrics: ["exerciseCalories"] },
+      // 운동은 활동의 일부다. 쌓아 보면 하루에 태운 열량 중 얼마가 따로 낸
+      // 운동에서 나왔는지 보인다. 눈금은 200kcal마다 실선, 100kcal마다 점선이다.
+      {
+        title: "칼로리", chart: "stack",
+        axis: { unit: "kcal", step: 100, major: 200, min: 0, max: 600, palette: "calorie-parts" },
+        metrics: ["exerciseCalories", "otherCalories"],
+        // 표에서는 합계를 앞에 세워 두 조각과 나란히 읽게 한다.
+        columns: ["activeCalories", "exerciseCalories", "otherCalories"],
+      },
+      // 종류별로 쌓으면 막대 높이가 그날 총 운동시간이고, 무엇을 했는지가 같이 보인다.
+      // 그래서 운동시간을 따로 그리지 않는다. 표에는 총 운동시간을 앞에 세운다.
+      {
+        title: "운동시간 및 종류", chart: "stack",
+        axis: { unit: "분", step: 15, major: 30, min: 0, max: 60, palette: "exercise-kinds" },
+        deriveSeries: exerciseKindSeries,
+        metrics: ["exerciseTime"],
+        columns: ["exerciseTime", "exerciseDistance"],
+      },
     ],
   },
   nutrition: {
@@ -1345,11 +1372,67 @@ const lifestyleTabConfigs = {
   },
 };
 
+// 운동 종류 이름. lifestyle_exercise.exercise_type은 enum이 아니라 자유 문자열이라
+// 새 값이 언제든 들어온다. 아는 것만 옮기고 모르는 값은 원문을 그대로 보여 준다.
+// 서비스 쪽 _EXERCISE_KIND_NAMES와 같은 목록을 쓴다.
+const exerciseKindNames = {
+  walking: "걷기", running: "달리기", hiking: "등산", cycling: "자전거",
+  indoor_cycling: "실내 자전거", swimming: "수영", weight_machine: "웨이트",
+  yoga: "요가", pilates: "필라테스", climbing: "클라이밍", badminton: "배드민턴",
+  tennis: "테니스", golf: "골프", dancing: "댄스", treadmill: "러닝머신",
+  elliptical: "일립티컬", stair_climbing: "계단 오르기", other_workout: "기타 운동",
+};
+// 색 계열이 넷뿐이라 그보다 많으면 뒤쪽이 같은 색으로 겹친다. 적게 한 종류는 묶는다.
+const _MAX_EXERCISE_KIND_SERIES = 4;
+
+function exerciseKindSeries(payload) {
+  // 종류는 사용자마다 다르다. 항목을 미리 적을 수 없어 기록에서 직접 만든다.
+  const rows = (payload.exercise || {}).rows || [];
+  const totals = new Map();
+  const byKind = new Map();
+  rows.forEach((row) => {
+    const date = String(row.record_date || "").slice(0, 10);
+    const minutes = Number(row.duration_sec) / 60;
+    const kind = String(row.exercise_type || "").trim();
+    if (!date || !kind || !Number.isFinite(minutes)) return;
+    totals.set(kind, (totals.get(kind) || 0) + minutes);
+    if (!byKind.has(kind)) byKind.set(kind, new Map());
+    const days = byKind.get(kind);
+    days.set(date, (days.get(date) || 0) + minutes);
+  });
+  if (!totals.size) return [];
+  const ranked = [...totals.keys()].sort((left, right) => totals.get(right) - totals.get(left));
+  const kept = ranked.slice(0, _MAX_EXERCISE_KIND_SERIES);
+  const rest = ranked.slice(_MAX_EXERCISE_KIND_SERIES);
+  const toPoints = (days) => [...days.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, value]) => ({ date, value }));
+  const series = kept.map((kind) => ({
+    key: `kind:${kind}`,
+    label: exerciseKindNames[kind.toLowerCase()] || kind,
+    unit: "분",
+    digits: 0,
+    points: toPoints(byKind.get(kind)),
+  }));
+  if (rest.length) {
+    const merged = new Map();
+    rest.forEach((kind) => byKind.get(kind).forEach((value, date) => {
+      merged.set(date, (merged.get(date) || 0) + value);
+    }));
+    series.push({ key: "kind:rest", label: `그 외 ${rest.length}가지`, unit: "분", digits: 0, points: toPoints(merged) });
+  }
+  return series;
+}
+
 // 당일 카드는 그래프 그룹에 쓰인 항목을 같은 순서로 보여준다.
 function lifestyleTabMetricKeys(tab) {
-  // 카드에 넣을 항목은 그룹이 cards로 따로 고를 수 있다. 없으면 표 항목을, 그것도
-  // 없으면 그래프 항목을 쓴다. 수면 단계처럼 표에만 두고 카드에서는 뺄 때 쓴다.
-  const keys = (lifestyleTabConfigs[tab]?.groups || [])
+  const config = lifestyleTabConfigs[tab] || {};
+  // 탭이 cards를 두면 그것만 카드로 낸다. 그래프에 있는 항목을 모두 카드로 내면
+  // 활동기록처럼 여덟 장까지 늘어 무엇을 먼저 봐야 할지 알 수 없다.
+  if (config.cards) return [...new Set(config.cards)];
+  // 그 다음은 그룹이 cards로 고른 것, 표 항목, 그래프 항목 순이다.
+  // 수면 단계처럼 표에만 두고 카드에서는 뺄 때 쓴다.
+  const keys = (config.groups || [])
     .flatMap((group) => group.cards || group.columns || group.metrics);
   return [...new Set(keys)];
 }
@@ -1391,6 +1474,8 @@ function buildDataTable(columns, rows) {
 }
 
 function metricDailySeries(payload, metric) {
+  // 다른 항목에서 끌어내는 항목은 저장소 행 대신 제 계산식을 쓴다.
+  if (metric.derive) return metric.derive(payload);
   // 하루에 여러 건 들어오는 항목은 daily 규칙(합계·평균)으로 하루 한 점으로 줄인다.
   const rows = (payload[metric.source] || {}).rows || [];
   const buckets = new Map();
@@ -2130,14 +2215,23 @@ function todayCardPoint(series, latestDate) {
   return series.find((point) => point.date === latestDate);
 }
 
+// 운동시간(분)과 운동칼로리(kcal)처럼 단위가 갈리는 짝인지. 혈압은 둘 다 mmHg다.
+function pairedUnitsDiffer(item) {
+  return Boolean(item.pair) && item.unit !== item.pair.unit;
+}
+
 function todayCardText(item, pick) {
   // 짝지은 항목은 '121/79'처럼 한 칸에 둘을 적는다. 값이 없는 쪽은 —로 둔다.
-  const own = pick(item);
-  const text = own === null || own === undefined ? "—" : formatDataNumber(own, item.digits);
+  // 단위가 갈리면 숫자마다 단위를 붙인다. '35/250'만으로는 어느 쪽이 무엇인지 모른다.
+  const withUnit = pairedUnitsDiffer(item);
+  const number = (entry, value) => (
+    value === null || value === undefined ? "—" : formatDataNumber(value, entry.digits)
+  );
+  const own = number(item, pick(item));
+  const text = withUnit ? `${own}${item.unit}` : own;
   if (!item.pair) return text;
-  const other = pick(item.pair);
-  const otherText = other === null || other === undefined ? "—" : formatDataNumber(other, item.pair.digits);
-  return `${text}/${otherText}`;
+  const other = number(item.pair, pick(item.pair));
+  return `${text}/${withUnit ? `${other}${item.pair.unit}` : other}`;
 }
 
 function formatClockTime(value) {
@@ -2161,7 +2255,8 @@ function buildTodayMetricCard(item, latestDate, days) {
   const value = document.createElement("strong");
   value.className = "today-card-value";
   value.textContent = todayCardText(item, (entry) => todayCardPoint(entry.series, latestDate)?.value);
-  if (item.unit) {
+  // 단위가 갈리는 짝은 숫자마다 단위를 달고 나오므로 뒤에 또 붙이지 않는다.
+  if (item.unit && !pairedUnitsDiffer(item)) {
     const unit = document.createElement("small");
     unit.className = "today-card-unit";
     unit.textContent = item.unit;
@@ -2169,8 +2264,11 @@ function buildTodayMetricCard(item, latestDate, days) {
   }
   main.appendChild(value);
   // 카드 안에서 최근 흐름을 한눈에 보여 준다. 숫자 하나만으로는 방향을 알 수 없다.
+  // 단위가 갈리는 짝은 눈금을 같이 쓸 수 없다. 분과 kcal을 한 축에 얹으면
+  // 자릿수가 큰 쪽만 보이고 다른 쪽은 바닥에 눌린 직선이 된다. 앞의 것만 그린다.
   const spark = buildSparkline(
-    [item.series, ...(item.pair ? [item.pair.series] : [])],
+    pairedUnitsDiffer(item) ? [item.series]
+      : [item.series, ...(item.pair ? [item.pair.series] : [])],
     item.unit,
   );
   if (spark) main.appendChild(spark);
@@ -2240,7 +2338,11 @@ function renderLifestyleTrends(payload, days, latestDate) {
     .filter((item) => item.points.length);
 
   const blocks = (config.groups || []).map((group) => {
-    const series = toSeries(group.metrics);
+    // 항목을 미리 적을 수 없는 그룹(운동 종류)은 기록에서 계열을 직접 만든다.
+    const series = group.deriveSeries
+      ? group.deriveSeries(payload).map((item) => ({ ...item, points: bucketSeries(item.points, days) }))
+          .filter((item) => item.points.length)
+      : toSeries(group.metrics);
     // 표는 그래프와 다른 항목을 볼 수 있다. 없으면 그래프와 같은 항목을 쓴다.
     const tableSeries = group.columns ? toSeries(group.columns) : series;
     if (!series.length) return null;

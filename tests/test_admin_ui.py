@@ -226,12 +226,109 @@ class AdminWebUiTest(unittest.TestCase):
         script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
 
         self.assertIn('pairedWith: "diastolic", pairedLabel: "혈압"', script)
-        self.assertIn("return `${text}/${otherText}`;", script)
+        # 둘 다 mmHg라 숫자만 '/'로 잇고 단위는 카드 뒤에 한 번만 붙는다.
+        self.assertIn("const text = withUnit ? `${own}${item.unit}` : own;", script)
         # 짝을 합치고 남은 쪽은 카드 목록에서 뺀다.
         self.assertIn("merged.add(partner.key);", script)
         self.assertIn("filter((item) => !merged.has(item.key))", script)
         # 그래프와 수치표는 그대로 둘로 나눠 본다.
         self.assertIn('{ title: "혈압", metrics: ["systolic", "diastolic"] }', script)
+
+    def test_activity_tab_shows_only_three_today_cards(self) -> None:
+        """카드가 여덟 장이면 무엇을 먼저 볼지 알 수 없다. 대표 셋만 남긴다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('cards: ["steps", "activeCalories", "exerciseTime"],', script)
+        self.assertIn("if (config.cards) return [...new Set(config.cards)];", script)
+        # 운동시간과 운동칼로리는 한 장에 담는다.
+        self.assertIn('pairedWith: "exerciseCalories", pairedLabel: "운동"', script)
+
+    def test_activity_graphs_drop_the_metrics_that_track_steps(self) -> None:
+        """계단·활동시간·이동거리는 걸음 수를 따라 움직여 그래프에서 뺐다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        block = script[script.index("  activity: {"):script.index("  nutrition: {")]
+
+        for title in ("계단", "활동시간", "이동거리"):
+            with self.subTest(title=title):
+                self.assertNotIn(f'{{ title: "{title}", metrics:', block)
+        self.assertIn('{ title: "걸음 수", metrics: ["steps"] }', block)
+        # 카드에서도 빠졌다.
+        self.assertIn('cards: ["steps", "activeCalories", "exerciseTime"],', block)
+
+    def test_every_analysed_metric_is_shown_somewhere(self) -> None:
+        """분석만 하고 화면에 없는 항목이 있으면 AI가 확인할 수 없는 말을 하게 된다.
+
+        제목은 여러 항목을 묶을 수 있으므로(칼로리 = 활동 + 운동) 제목이 아니라
+        그룹이 실제로 쓰는 항목으로 견준다.
+        """
+        import re
+
+        from app.services.lifestyle_report import _DOMAIN_METRICS
+
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        pattern = r'^  (\w+): \{\s*\n?\s*label: "([^"]+)"'
+        labels = dict(re.findall(pattern, script, re.M))
+
+        for tab, end in (("activity", "  nutrition: {"), ("nutrition", "  sleep: {")):
+            with self.subTest(tab=tab):
+                block = script[script.index(f"  {tab}: {{"):script.index(end)]
+                used = set()
+                for listed in re.findall(r'(?:metrics|columns): \[([^\]]+)\]', block):
+                    used.update(labels[key.strip().strip('"')] for key in listed.split(","))
+                self.assertLessEqual({m.label for m in _DOMAIN_METRICS[tab]}, used)
+
+    def test_calorie_stack_does_not_double_count_exercise(self) -> None:
+        """운동칼로리는 활동칼로리 안에 든 값이다. 그대로 쌓으면 하루 합이 부풀려진다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('title: "칼로리", chart: "stack",', script)
+        # 막대에 쌓는 것은 운동과 '겹치지 않는 나머지'다. 합계를 쌓지 않는다.
+        self.assertIn('metrics: ["exerciseCalories", "otherCalories"],', script)
+        self.assertIn("point.value - (exercise.get(point.date) || 0), 0)", script)
+        # 표에는 합계를 앞에 세워 두 조각과 나란히 읽게 한다.
+        self.assertIn('columns: ["activeCalories", "exerciseCalories", "otherCalories"],', script)
+        # 다른 항목에서 끌어내는 계열은 저장소 행 대신 제 계산식을 쓴다.
+        self.assertIn("if (metric.derive) return metric.derive(payload);", script)
+        self.assertIn(".data-chart.calorie-parts", styles)
+
+    def test_exercise_kinds_are_built_from_the_records_not_a_fixed_list(self) -> None:
+        """exercise_type은 DB에서 자유 문자열이라 항목을 미리 적을 수 없다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('title: "운동시간 및 종류", chart: "stack",', script)
+        self.assertIn("deriveSeries: exerciseKindSeries,", script)
+        self.assertIn("const series = group.deriveSeries", script)
+        # 모르는 종류는 옮기지 않고 원문을 그대로 보여 준다.
+        self.assertIn("exerciseKindNames[kind.toLowerCase()] || kind", script)
+        # 색 계열이 넷뿐이라 그보다 많으면 묶는다.
+        self.assertIn("그 외 ${rest.length}가지", script)
+        self.assertIn(".data-chart.exercise-kinds", styles)
+
+    def test_exercise_kind_names_match_the_service(self) -> None:
+        """화면과 분석이 같은 운동을 다른 이름으로 부르면 안 된다."""
+        import re
+
+        from app.services.lifestyle_report import _EXERCISE_KIND_NAMES
+
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        block = script[script.index("const exerciseKindNames = {"):]
+        block = block[:block.index("};")]
+        names = dict(re.findall(r'(\w+): "([^"]+)"', block))
+
+        self.assertEqual(names, _EXERCISE_KIND_NAMES)
+
+    def test_paired_card_with_two_units_labels_each_number(self) -> None:
+        """'35/250'은 어느 쪽이 분이고 어느 쪽이 kcal인지 알 수 없다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("function pairedUnitsDiffer(item)", script)
+        self.assertIn("return `${text}/${withUnit ? `${other}${item.pair.unit}` : other}`;", script)
+        # 숫자마다 단위를 달았으면 카드 뒤에 또 붙이지 않는다.
+        self.assertIn("if (item.unit && !pairedUnitsDiffer(item)) {", script)
+        # 분과 kcal은 눈금을 같이 쓸 수 없어 미니 그래프는 앞의 것만 그린다.
+        self.assertIn("pairedUnitsDiffer(item) ? [item.series]", script)
 
     def test_sleep_tab_shows_every_stage(self) -> None:
         """조회만 하고 버려지던 수면 단계를 항목으로 살려 구성 막대로 본다."""

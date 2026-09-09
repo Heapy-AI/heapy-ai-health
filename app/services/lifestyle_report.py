@@ -23,7 +23,7 @@ import json
 import math
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
-from statistics import StatisticsError, correlation, fmean, pstdev
+from statistics import StatisticsError, correlation, fmean, median, pstdev
 from time import perf_counter
 from typing import Any
 
@@ -111,6 +111,46 @@ _CLOCK_STEADY_MINUTES = 30
 _CLOCK_LOOSE_MINUTES = 60
 # 주중과 주말의 시각 차이를 '다르다'고 볼 문턱(분).
 _CLOCK_WEEKEND_SHIFT_MINUTES = 45
+# WHO 성인 신체활동 권고. 하루로 나누지 않고 주 단위 그대로 쓴다.
+_EXERCISE_WEEKLY_TARGET_MINUTES = 150
+# 운동 종류 이름. lifestyle_exercise.exercise_type은 enum이 아니라 자유 문자열이라
+# 새 값이 언제든 들어온다. 아는 것만 옮기고 모르는 값은 원문을 그대로 보여 준다.
+_EXERCISE_KIND_NAMES = {
+    "walking": "걷기",
+    "running": "달리기",
+    "hiking": "등산",
+    "cycling": "자전거",
+    "indoor_cycling": "실내 자전거",
+    "swimming": "수영",
+    "weight_machine": "웨이트",
+    "yoga": "요가",
+    "pilates": "필라테스",
+    "climbing": "클라이밍",
+    "badminton": "배드민턴",
+    "tennis": "테니스",
+    "golf": "골프",
+    "dancing": "댄스",
+    "treadmill": "러닝머신",
+    "elliptical": "일립티컬",
+    "stair_climbing": "계단 오르기",
+    "other_workout": "기타 운동",
+}
+# 인사이트에 적을 종류 상한. 다 늘어놓으면 나열이 된다.
+_MAX_EXERCISE_KINDS = 3
+# 한 종류가 이 비율을 넘게 차지하면 '쏠려 있다'고 본다.
+_EXERCISE_DOMINANT_RATIO = 0.6
+# 주당 횟수가 달라졌다고 볼 문턱. 표본이 작아 둘을 모두 넘어야 변화로 본다.
+_EXERCISE_CHANGE_PER_WEEK = 0.5
+_EXERCISE_CHANGE_RATIO = 0.25
+# 과거와 견주려면 양쪽 구간에 이만큼은 기록이 있어야 한다.
+_EXERCISE_MIN_COMPARE_DAYS = 14
+# 주말 실행률이 이만큼(%p) 차이 나야 '주말에 몰린다'고 본다.
+_EXERCISE_WEEKEND_GAP = 20
+
+
+def exercise_kind_name(kind: str) -> str:
+    """모르는 종류는 옮기지 않고 원문을 그대로 돌려준다."""
+    return _EXERCISE_KIND_NAMES.get(str(kind or "").strip().lower(), str(kind or "").strip())
 # 이보다 덜 늦게 자면 굳이 취침을 당기라고 하지 않는다.
 _BEDTIME_SHIFT_MINUTES = 15
 
@@ -296,7 +336,7 @@ def _daily_sum(source: str, date_key: str, value: Callable[[dict[str, Any]], Any
 #   혈압           대한고혈압학회. 정상 120/80 미만, 고혈압 전단계 120~139 / 80~89
 #   혈당           대한당뇨병학회. 공복 정상 70~99, 공복혈당장애 100~125 / 식후 2시간 140 미만
 #   심박수         안정시 정상 60~100회
-#   걸음·활동시간  WHO 신체활동 권고(주 150분 중강도) 및 국내 걷기 권고 8,000걸음
+#   걸음·운동시간  WHO 신체활동 권고(주 150분 중강도) 및 국내 걷기 권고 8,000걸음
 #   영양소         2020 한국인 영양소 섭취기준, WHO 나트륨 2g·당류 50g 권고
 #   수면           미국수면재단 성인 권장 7~9시간
 _DOMAIN_METRICS: dict[str, list[_Metric]] = {
@@ -327,15 +367,13 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
     "activity": [
         _Metric("걸음 수", "걸음", **_daily_sum("activity", "record_date", lambda row: row.get("steps")),
                 direction="higher", low=8000, caution_low=5000),
-        _Metric("계단", "층", **_daily_sum("activity", "record_date", lambda row: row.get("floors_climbed"))),
-        _Metric("활동시간", "분", **_daily_sum("activity", "record_date", lambda row: row.get("active_time")),
-                direction="higher", low=30, caution_low=15),
-        # lifestyle_activity.distance_m은 컬럼명과 달리 km로 적재돼 환산하지 않는다.
-        _Metric("이동거리", "km", **_daily_sum("activity", "record_date", lambda row: row.get("active_distance_km"))),
+        # 계단·활동시간·이동거리는 걸음 수를 따라 움직여 새 이야기가 되지 않아 뺐다.
+        # 조회는 그대로 하므로 검증 패널과 챗봇 문맥에는 남아 있다.
         _Metric("활동칼로리", "kcal", **_daily_sum("activity", "record_date", lambda row: row.get("active_calories"))),
-        # 주 150분 권고를 하루 평균으로 환산하면 약 21분이다.
-        _Metric("운동시간", "분", **_daily_sum("exercise", "record_date", lambda row: _scaled(row.get("duration_sec"), 60)),
-                direction="higher", low=21, caution_low=10),
+        # 참고범위를 두지 않는다. 이 계열에는 운동한 날만 점이 있어서 하루 기준으로
+        # 재면 "운동한 날에 얼마나 오래 했나"를 묻게 된다. 주 150분 권고는 빈도까지
+        # 함께 봐야 뜻이 서므로 _exercise_habit이 따로 잰다.
+        _Metric("운동시간", "분", **_daily_sum("exercise", "record_date", lambda row: _scaled(row.get("duration_sec"), 60))),
         _Metric("운동거리", "km", **_daily_sum("exercise", "record_date", lambda row: _scaled(row.get("distance_m"), 1000))),
         _Metric("운동칼로리", "kcal", **_daily_sum("exercise", "record_date", lambda row: row.get("calories"))),
     ],
@@ -624,6 +662,116 @@ def _sleep_target_hours() -> float | None:
     return None
 
 
+def _exercise_rate(days: list[str], minutes_by_day: dict[str, float]) -> dict[str, float]:
+    """구간 하나의 주당 횟수와 주말 실행률. 달력 날짜로 나눠야 '얼마나 자주'가 된다."""
+    weekend = [day for day in days if date.fromisoformat(day).isoweekday() >= 6]
+    done = [day for day in days if day in minutes_by_day]
+    return {
+        "per_week": len(done) / (len(days) / 7),
+        "weekend_ratio": (
+            len([day for day in weekend if day in minutes_by_day]) / len(weekend) * 100
+            if weekend else 0.0
+        ),
+        "weekend_days": len(weekend),
+    }
+
+
+def _exercise_habit(window: dict[str, Any], recent_days: int = 30) -> dict[str, Any] | None:
+    """운동을 활동과 갈라 '얼마나 자주, 한 번에 얼마나' 하는지 정리한다.
+
+    운동은 매일 하는 것이 아니라서 하루 평균으로는 뜻이 서지 않는다. 한 번에 40분씩
+    하더라도 한 달에 두 번이면 권고에 한참 못 미친다. 그 둘을 갈라서 넘긴다.
+    """
+    days = sorted({_day(row.get("record_date")) for row in (window.get("activity") or {}).get("rows") or []})
+    days = [day for day in days if day]
+    minutes_by_day: dict[str, float] = {}
+    kinds: dict[str, int] = {}
+    for row in (window.get("exercise") or {}).get("rows") or []:
+        day = _day(row.get("record_date"))
+        value = _scaled(row.get("duration_sec"), 60)
+        if not day or value is None:
+            continue
+        minutes_by_day[day] = minutes_by_day.get(day, 0.0) + value
+        kind = str(row.get("exercise_type") or "").strip()
+        if kind:
+            kinds[kind] = kinds.get(kind, 0) + 1
+    if len(days) < _MIN_DAYS_FOR_COMPARISON or not minutes_by_day:
+        return None
+
+    summary: dict[str, Any] = {"days": len(days), "exercise_days": len(minutes_by_day)}
+    # 무엇을 하고 있는지. 종류마다 몸에 남는 것이 달라 횟수만큼이나 알 만한 값이다.
+    if kinds:
+        ranked = sorted(kinds.items(), key=lambda item: (-item[1], item[0]))
+        shown = ", ".join(f"{exercise_kind_name(kind)} {count}회"
+                          for kind, count in ranked[:_MAX_EXERCISE_KINDS])
+        rest = len(ranked) - _MAX_EXERCISE_KINDS
+        summary["kinds"] = f"{shown} 외 {rest}가지" if rest > 0 else shown
+        # 한 가지에 쏠렸는지, 골고루 하는지. 종류 수만 세면 쏠림이 안 보인다.
+        top = ranked[0][1] / sum(kinds.values())
+        summary["variety"] = (
+            f"{exercise_kind_name(ranked[0][0])} 한 가지에 쏠려 있다" if top >= _EXERCISE_DOMINANT_RATIO
+            else f"{len(ranked)}가지를 섞어서 한다"
+        )
+    # 한 달에 몇 번인지가 사용자가 가장 쉽게 헤아리는 단위다.
+    per_month = len(minutes_by_day) / len(days) * 30
+    summary["frequency"] = f"한 달에 {round(per_month)}번쯤"
+    typical = median(list(minutes_by_day.values()))
+    summary["session"] = f"한 번에 {round(typical / 5) * 5:g}분쯤"
+
+    # 권고는 주 단위다. 기록된 기간을 주로 환산해 주당 총 운동시간을 낸다.
+    weekly = sum(minutes_by_day.values()) / (len(days) / 7)
+    summary["weekly_total"] = f"주당 {round(weekly / 5) * 5:g}분쯤"
+    if weekly >= _EXERCISE_WEEKLY_TARGET_MINUTES:
+        summary["guideline"] = f"권고(주 {_EXERCISE_WEEKLY_TARGET_MINUTES}분)를 채우고 있다"
+    else:
+        summary["guideline"] = f"권고(주 {_EXERCISE_WEEKLY_TARGET_MINUTES}분)에 못 미친다"
+        # 길이가 아니라 횟수로 좁혀야 손에 잡히는 조언이 된다. 몇 번 더인지 계산해 준다.
+        if typical > 0:
+            more = math.ceil((_EXERCISE_WEEKLY_TARGET_MINUTES - weekly) / typical)
+            summary["shortfall"] = f"지금 길이 그대로 주 {more}번쯤 더 하면 닿는다"
+
+    whole = _exercise_rate(days, minutes_by_day)
+    if whole["weekend_days"] >= _MIN_DAYS_FOR_COMPARISON:
+        # 주말은 시간을 내기 쉬운 날이라, 남는 여지가 어디인지 알려 준다.
+        weekday_ratio = (
+            (len(minutes_by_day) - len([d for d in days
+                                        if d in minutes_by_day
+                                        and date.fromisoformat(d).isoweekday() >= 6]))
+            / max(len(days) - whole["weekend_days"], 1) * 100
+        )
+        gap = whole["weekend_ratio"] - weekday_ratio
+        if gap >= _EXERCISE_WEEKEND_GAP:
+            summary["weekend_habit"] = (
+                f"주말에 몰려 있다 (주말 {whole['weekend_ratio']:.0f}% · 주중 {weekday_ratio:.0f}%)"
+            )
+        elif gap <= -_EXERCISE_WEEKEND_GAP:
+            summary["weekend_habit"] = (
+                f"주중에 몰려 있다 (주중 {weekday_ratio:.0f}% · 주말 {whole['weekend_ratio']:.0f}%)"
+            )
+
+    # 과거와 견준다. 지금이 예전보다 나은지 아닌지가 가장 알고 싶은 것이다.
+    cut = str(date.fromisoformat(days[-1]) - timedelta(days=recent_days))
+    recent = [day for day in days if day > cut]
+    earlier = [day for day in days if day <= cut]
+    if min(len(recent), len(earlier)) >= _EXERCISE_MIN_COMPARE_DAYS:
+        now, before = _exercise_rate(recent, minutes_by_day), _exercise_rate(earlier, minutes_by_day)
+        gap = now["per_week"] - before["per_week"]
+        moved = (
+            abs(gap) >= _EXERCISE_CHANGE_PER_WEEK
+            and before["per_week"] > 0
+            and abs(gap) / before["per_week"] >= _EXERCISE_CHANGE_RATIO
+        )
+        if moved:
+            summary["change"] = (
+                f"예전 주 {before['per_week']:.1f}번에서 요즘 주 {now['per_week']:.1f}번으로 "
+                f"{'늘었다' if gap > 0 else '줄었다'}"
+            )
+        else:
+            # 안 변한 것도 알려야 한다. 아니면 모델이 다른 신호에서 변화를 지어낸다.
+            summary["change"] = f"주 {now['per_week']:.1f}번쯤으로 예전과 비슷하다"
+    return summary
+
+
 def _co_movements(pairs: list[tuple[_Metric, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
     """같은 탭 안에서 함께 움직인 항목 짝을 찾는다.
 
@@ -859,6 +1007,7 @@ def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
             for item in analysis.get("co_movements", [])
         ],
         "sleep_timing": analysis.get("sleep_timing"),
+        "exercise_habit": analysis.get("exercise_habit"),
     }
 
 
@@ -935,4 +1084,8 @@ class LifestyleReportService:
             "co_movements": _co_movements(recorded),
             # 잠의 길이만으로는 안 보이는 것. 수면 탭에서만 값이 생긴다.
             "sleep_timing": _sleep_timing(window, _sleep_target_hours()) if domain == "sleep" else None,
+            # 운동은 활동과 갈라 빈도로 본다. 활동 탭에서만 값이 생긴다.
+            "exercise_habit": (
+                _exercise_habit(window, windows["recent"]) if domain == "activity" else None
+            ),
         }

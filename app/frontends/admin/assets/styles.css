@@ -476,6 +476,19 @@ svg text { stroke: none; }
   --chart-s2: #b19ff7;
   --chart-s3: #ff5e8e;
 }
+/* 칼로리는 조각이 둘뿐이라 색을 갈라 쓰지 않고 같은 초록의 농담으로만 나눈다.
+   아래가 따로 낸 운동, 위가 그 외 일상 활동이다. */
+.data-chart.calorie-parts {
+  --chart-s0: #2f7d63;
+  --chart-s1: #9fd3c0;
+}
+/* 운동 종류는 서로 견주는 값이라 색을 뚜렷이 갈라 쓴다. 많이 한 종류가 아래에 온다. */
+.data-chart.exercise-kinds {
+  --chart-s0: #2f7d63;
+  --chart-s1: #4c9ad4;
+  --chart-s2: #e8a33d;
+  --chart-s3: #b07cc6;
+}
 .data-chart-segment.s0 { background: var(--chart-s0); }
 .data-chart-segment.s1 { background: var(--chart-s1); }
 .data-chart-segment.s2 { background: var(--chart-s2); }

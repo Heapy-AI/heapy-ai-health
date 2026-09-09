@@ -8,6 +8,7 @@
 """
 
 import unittest
+from datetime import date, timedelta
 
 from app.services.lifestyle_report import (
     PROMPT_VERSION,
@@ -34,6 +35,28 @@ def _bio_days(bio_type: str, values: dict[str, float], detail_key: str = "") -> 
         rows.append({"measured_at": f"{date}T07:00:00", "bio_type": bio_type,
                      "value": value, "detail_data": detail})
     return rows
+
+
+def _exercise_window(days: int = 28, plan: tuple[tuple[int, str, int], ...] = (
+    (2, "walking", 45), (5, "walking", 40), (9, "running", 30),
+    (12, "indoor_cycling", 50), (16, "walking", 45), (23, "running", 35),
+)) -> dict:
+    """활동은 매일, 운동은 드문드문 기록된 구간. 빈도를 재는 쪽을 확인하는 데 쓴다."""
+    end = date(2026, 9, 1)
+    return {
+        "window_days": days,
+        "activity": {"rows": [
+            {"record_date": str(end - timedelta(days=back)), "steps": 8000,
+             "active_calories": 320}
+            for back in range(days)
+        ]},
+        "exercise": {"rows": [
+            {"record_date": f"{end - timedelta(days=back)}T18:00:00",
+             "exercise_type": kind, "duration_sec": minutes * 60,
+             "distance_m": 4000, "calories": minutes * 6}
+            for back, kind, minutes in plan
+        ]},
+    }
 
 
 LIFESTYLE_WINDOW = {
@@ -162,9 +185,92 @@ class LifestyleAnalysisTest(unittest.TestCase):
 
         self.assertEqual(_metric(analysis, "운동시간")["latest"], 30)
         self.assertEqual(_metric(analysis, "운동거리")["latest"], 5)
-        # lifestyle_activity.distance_m은 km로 적재돼 환산하지 않는다.
-        self.assertEqual(_metric(analysis, "이동거리")["latest"], 5.9)
         self.assertEqual(_metric(analysis, "걸음 수")["latest"], 8200)
+
+    def test_exercise_is_measured_by_how_often_not_by_daily_minutes(self) -> None:
+        """운동시간 계열에는 운동한 날만 점이 있다. 하루 기준 참고범위는 뜻이 어긋난다.
+
+        한 번에 45분씩 해도 한 달에 두 번이면 권고에 한참 못 미치는데, 하루 21분
+        기준으로 재면 '늘 양호'로 나온다. 그래서 참고범위를 떼고 빈도로 따로 잰다.
+        """
+        analysis = LifestyleReportService.build_analysis("activity", _exercise_window())
+
+        self.assertEqual(_metric(analysis, "운동시간")["reference"], "")
+        habit = analysis["exercise_habit"]
+        self.assertIsNotNone(habit)
+        # 사람이 헤아리는 단위로 넘긴다. 원시 통계는 넘기지 않는다.
+        self.assertIn("한 달에", habit["frequency"])
+        self.assertIn("한 번에", habit["session"])
+        self.assertIn("150분", habit["guideline"])
+
+    def test_exercise_shortfall_is_counted_in_sessions_not_minutes(self) -> None:
+        """'운동을 늘리세요'는 조언이 아니다. 몇 번 더인지를 코드가 센다."""
+        # 28일에 6번, 한 번에 40분쯤. 주당 약 60분이라 권고(150분)에 못 미친다.
+        habit = LifestyleReportService.build_analysis(
+            "activity", _exercise_window())["exercise_habit"]
+
+        self.assertIn("못 미친다", habit["guideline"])
+        self.assertIn("번쯤 더 하면 닿는다", habit["shortfall"])
+
+        # 넉넉히 하는 사람에게는 더 하라고 하지 않는다.
+        enough = LifestyleReportService.build_analysis("activity", _exercise_window(
+            plan=tuple((back, "running", 60) for back in range(0, 28, 2)),
+        ))["exercise_habit"]
+        self.assertIn("채우고 있다", enough["guideline"])
+        self.assertNotIn("shortfall", enough)
+
+    def test_exercise_change_is_measured_per_calendar_week(self) -> None:
+        """늘고 주는 것은 달력 날짜로 나눠 잰다. 운동한 날만 이어 붙이면 빈도가 안 보인다."""
+        # 앞 두 달은 주 3번, 최근 한 달은 주 1번. 한 번의 길이는 40분으로 똑같다.
+        plan = tuple((back, "walking", 40) for back in range(30, 90, 2))
+        plan += tuple((back, "walking", 40) for back in range(0, 30, 7))
+        habit = LifestyleReportService.build_analysis(
+            "activity", _exercise_window(days=90, plan=plan))["exercise_habit"]
+
+        self.assertIn("줄었다", habit["change"])
+        # 한 번에 하는 길이는 그대로이니 길이를 두고 줄었다고 하면 안 된다.
+        self.assertIn("40분", habit["session"])
+
+    def test_exercise_change_says_so_when_nothing_changed(self) -> None:
+        """안 변한 것도 알려야 한다. 비워 두면 모델이 다른 신호에서 변화를 지어낸다."""
+        plan = tuple((back, "walking", 40) for back in range(0, 90, 3))
+        habit = LifestyleReportService.build_analysis(
+            "activity", _exercise_window(days=90, plan=plan))["exercise_habit"]
+
+        self.assertIn("예전과 비슷하다", habit["change"])
+
+    def test_exercise_weekend_habit_points_at_the_empty_side(self) -> None:
+        """주말을 이미 채운 사람에게 주말에 하라고 하면 쓸모없는 조언이 된다."""
+        from datetime import date as _date, timedelta as _delta
+
+        end = _date(2026, 9, 1)
+        weekends = [back for back in range(90)
+                    if (end - _delta(days=back)).isoweekday() >= 6]
+        habit = LifestyleReportService.build_analysis("activity", _exercise_window(
+            days=90, plan=tuple((back, "walking", 40) for back in weekends),
+        ))["exercise_habit"]
+
+        self.assertIn("주말에 몰려 있다", habit["weekend_habit"])
+
+    def test_exercise_habit_only_exists_on_the_activity_tab(self) -> None:
+        """탭마다 보는 것이 다르다. 다른 탭에 자리를 만들면 모델이 채운다."""
+        for domain in ("bio", "nutrition", "sleep"):
+            with self.subTest(domain=domain):
+                analysis = LifestyleReportService.build_analysis(domain, LIFESTYLE_WINDOW)
+                self.assertIsNone(analysis["exercise_habit"])
+
+    def test_activity_analysis_drops_what_merely_tracks_steps(self) -> None:
+        """계단·활동시간·이동거리는 걸음 수를 따라 움직여 새 이야기가 되지 않는다.
+
+        화면에서도 뺐으므로 분석에 남겨 두면 사용자가 확인할 수 없는 항목을 두고 말하게 된다.
+        """
+        analysis = LifestyleReportService.build_analysis("activity", LIFESTYLE_WINDOW)
+        labels = [metric["metric"] for metric in analysis["metrics"]]
+
+        for gone in ("계단", "활동시간", "이동거리"):
+            with self.subTest(metric=gone):
+                self.assertNotIn(gone, labels)
+        self.assertEqual(labels, ["걸음 수", "활동칼로리", "운동시간", "운동거리", "운동칼로리"])
 
     def test_nutrition_tab_sums_same_day_records(self) -> None:
         """하루에 여러 번 먹은 기록은 당일 합계로 묶는다."""
@@ -631,6 +737,21 @@ class LifestylePromptTest(unittest.TestCase):
         self.assertIn("단정하지는 마라", prompt)
         # 막연한 '일찍 자라' 대신 계산된 시각을 그대로 쓰게 한다.
         self.assertIn("bedtime_target이 있으면", prompt)
+
+    def test_activity_prompt_separates_exercise_from_daily_movement(self) -> None:
+        """한 번에 오래 하는데 모자란 것이면 '더 오래'가 아니라 '한 번 더'가 맞다."""
+        prompt = self._prompt("activity")
+
+        self.assertIn("운동은 활동과 갈라서 말하라", prompt)
+        self.assertIn("운동시간 항목의 수치가 아니라 이것을 쓰라", prompt)
+        self.assertIn('"한 번 더 나가 보세요"가 맞는 말이다', prompt)
+        self.assertIn('"운동을 늘리세요"는 조언이 아니다', prompt)
+        # 운동한 날만 이어 붙인 계열의 direction을 운동량으로 읽지 못하게 막는다.
+        self.assertIn("운동이 늘었는지 줄었는지는 **오직 이것으로만** 말하라", prompt)
+        self.assertIn('"운동량이 줄고 있다"고 쓰면 틀린 말이 된다', prompt)
+        self.assertIn("늘릴 여지는 비어 있는 쪽에 있다", prompt)
+        # 기록이 없는 것을 게으름으로 읽지 않게 막는다.
+        self.assertIn("기록을 안 했을 수도 있다", prompt)
 
     def test_prompt_teaches_how_to_connect_sentences(self) -> None:
         """'하나의 이야기로 묶어라'만으로는 한 문장에 한 항목씩 나열했다."""
