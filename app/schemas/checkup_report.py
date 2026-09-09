@@ -1,7 +1,13 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+
+class CheckupReportRequest(BaseModel):
+    persona: Literal[
+        "professional",
+        "coach",
+    ] = "professional"
 
 class CheckupReportMetric(BaseModel):
     metric: str
@@ -18,6 +24,7 @@ class CheckupReportMetric(BaseModel):
 class CheckupReportContent(BaseModel):
     headline: str
     summary: str
+
     improved: list[CheckupReportMetric] = Field(default_factory=list)
     maintained: list[CheckupReportMetric] = Field(default_factory=list)
     management_needed: list[CheckupReportMetric] = Field(default_factory=list)
