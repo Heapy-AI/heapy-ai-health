@@ -1,13 +1,14 @@
 """Spring Boot 전용 챗봇 진입점. 작성자: 김진우."""
 
 import hmac
+import json
 import os
 from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.state import state
@@ -96,27 +97,67 @@ def answer(request: InternalChatRequest):
             summary=request.summary, persona=request.persona,
             personal_context_loader=lambda question, terms: request.personalContext or None,
         )
-        citations = []
-        if result.grounded:
-            for key in result.cited_chunk_ids:
-                if not key.startswith("C") or not key[1:].isdigit():
-                    continue
-                index = int(key[1:]) - 1
-                if 0 <= index < len(result.documents):
-                    metadata = result.documents[index].metadata
-                    document_id = str(metadata.get("record_id", ""))[:200]
-                    url = str(metadata.get("source_url", metadata.get("url", "")))[:2000]
-                    if not url.startswith("https://"):
-                        url = ""
-                    if document_id or url:
-                        citations.append({"title": str(metadata.get("title", metadata.get("source", "건강정보 근거")))[:300],
-                                          "documentId": document_id or None, "sourceUrl": url or None})
-        if not result.answer.strip() or len(result.answer) > 16000:
-            raise ValueError("응답 형식 오류")
-        return {"answer": result.answer, "citations": citations[:12],
-                "summary": result.conversation_summary[:4000],
-                "metadata": {"intent": result.intent.value, "emergency": result.emergency,
-                             "personalContextUsed": result.personal_context_used}}
+        return result_response(result)
     except Exception:
         # 작성자: 김진우 — 공급자 예외의 요청 본문·키를 응답이나 로그에 남기지 않는다.
         raise HTTPException(503, "챗봇 응답을 완료하지 못했습니다.") from None
+
+
+def result_response(result):
+    citations = []
+    if result.grounded:
+        for key in result.cited_chunk_ids:
+            if not key.startswith("C") or not key[1:].isdigit():
+                continue
+            index = int(key[1:]) - 1
+            if 0 <= index < len(result.documents):
+                metadata = result.documents[index].metadata
+                document_id = str(metadata.get("record_id", ""))[:200]
+                url = str(metadata.get("source_url", metadata.get("url", "")))[:2000]
+                if not url.startswith("https://"):
+                    url = ""
+                if document_id or url:
+                    citations.append({"title": str(metadata.get("title", metadata.get("source", "건강정보 근거")))[:300],
+                                      "documentId": document_id or None, "sourceUrl": url or None})
+    if not result.answer.strip() or len(result.answer) > 16000:
+        raise ValueError("응답 형식 오류")
+    return {"answer": result.answer, "citations": citations[:12],
+            "summary": result.conversation_summary[:4000],
+            "metadata": {"intent": result.intent.value, "emergency": result.emergency,
+                             "personalContextUsed": result.personal_context_used}}
+
+
+def event(name, data):
+    return f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False, separators=(',', ':'))}\n\n"
+
+
+@app.post("/internal/chat/stream", dependencies=[Depends(authorize)])
+def stream(request: InternalChatRequest):
+    orchestrator = state.get("chat_orchestrator")
+    if not orchestrator:
+        raise HTTPException(503, "챗봇이 준비되지 않았습니다.")
+
+    def generate():
+        total = 0
+        try:
+            for item in orchestrator.stream_answer(
+                request.message, history=[turn.model_dump() for turn in request.history],
+                summary=request.summary, persona=request.persona,
+                personal_context_loader=lambda question, terms: request.personalContext or None,
+            ):
+                if item.event == "progress":
+                    yield event("status", {"stage": item.stage})
+                elif item.event == "token":
+                    total += len(item.text)
+                    if total > 16000:
+                        raise ValueError("응답 한도 초과")
+                    yield event("delta", {"content": item.text})
+                elif item.event == "complete" and item.result is not None:
+                    yield event("done", result_response(item.result))
+                    return
+            yield event("error", {"code": "CHAT_UNAVAILABLE"})
+        except Exception:
+            yield event("error", {"code": "CHAT_UNAVAILABLE"})
+
+    return StreamingResponse(generate(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})

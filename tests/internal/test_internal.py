@@ -58,6 +58,18 @@ class InternalTest(unittest.TestCase):
         response = self.client.post('/internal/chat/answer', headers=self.headers, content=b'x' * 262145)
         self.assertEqual(413, response.status_code)
 
+    def test_stream_preserves_partial_tokens_before_sanitized_error(self):
+        def events(*args, **kwargs):
+            yield SimpleNamespace(event='token', text='합성 부분 답변')
+            raise ValueError('synthetic-provider-secret')
+        state['chat_orchestrator'] = SimpleNamespace(stream_answer=events)
+        response = self.client.post('/internal/chat/stream', headers=self.headers,
+                                    json={'contractVersion':'1.0','message':'합성 질문'})
+        self.assertEqual(200, response.status_code)
+        self.assertIn('합성 부분 답변', response.text)
+        self.assertIn('event: error', response.text)
+        self.assertNotIn('synthetic-provider-secret', response.text)
+
 
 if __name__ == '__main__':
     unittest.main()
