@@ -210,6 +210,20 @@ def proxy_lifestyle_window(request: Request) -> Response:
     return _proxy_json_request("GET", "/me/lifestyle", request)
 
 
+@app.post("/me/lifestyle/report", include_in_schema=False)
+def proxy_lifestyle_report(request: Request) -> Response:
+    """생활건강 탭별 AI 분석 요청을 중계한다.
+
+    작성자: 고수연
+    """
+    return _proxy_json_request(
+        "POST",
+        "/me/lifestyle/report",
+        request,
+        timeout=(5, 180),
+    )
+
+
 @app.post("/chat/stream", include_in_schema=False)
 def proxy_chat_stream(payload: ChatRequest, request: Request) -> Response:
     """개발자 UI 질문을 메인 FastAPI 스트리밍 API로 중계한다.

@@ -148,6 +148,556 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertIn("style: `stroke: ${color}`", script)
         self.assertIn("style: `fill: ${color}`", script)
 
+    def test_lifestyle_tab_layout_is_today_then_ai_then_period_trends(self) -> None:
+        """생활건강 탭이 당일 수치 → AI 분석 → 기간 버튼 → 세부 항목 그래프 순서인지 확인한다."""
+        markup = (ADMIN_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        for block_id in ('id="lifestyleToday"', 'id="lifestyleReport"', 'id="lifestyleTrends"'):
+            self.assertIn(block_id, markup)
+        # 기간 버튼은 AI 분석 아래, 추이 그래프 위에만 있어야 한다.
+        self.assertLess(markup.index('id="lifestyleToday"'), markup.index('id="lifestyleReport"'))
+        self.assertLess(markup.index('id="lifestyleReport"'), markup.index('class="lifestyle-periods"'))
+        self.assertLess(markup.index('class="lifestyle-periods"'), markup.index('id="lifestyleTrends"'))
+        for days in ("7", "30", "90", "180", "365"):
+            self.assertIn(f'data-lifestyle-days="{days}"', markup)
+        # 처음 들어가면 1주일부터 본다. 마크업의 active와 스크립트 기본값이 같아야 한다.
+        self.assertIn('<button type="button" class="active" data-lifestyle-days="7">', markup)
+        self.assertEqual(markup.count('class="active" data-lifestyle-days='), 1)
+        self.assertIn("const LIFESTYLE_DEFAULT_DAYS = 7;", script)
+        self.assertIn("let lifestyleDays = LIFESTYLE_DEFAULT_DAYS;", script)
+        # 로그아웃 뒤 다시 들어와도 기본값에서 시작한다.
+        self.assertIn("lifestyleDays = LIFESTYLE_DEFAULT_DAYS;\n  elements.lifestylePeriods", script)
+        self.assertIn(".today-card-value", styles)
+        self.assertIn("function renderLifestyleToday", script)
+        self.assertIn("function renderLifestyleTrends", script)
+        self.assertIn("buildTrendTable(series, days)", script)
+
+    def test_lifestyle_ai_analysis_runs_only_on_button_click(self) -> None:
+        """건강검진 탭처럼 버튼을 눌러야만 AI 분석을 요청하고 결과 영역이 열린다."""
+        markup = (ADMIN_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('<button id="lifestyleReportButton" class="report-button" type="button">AI 요약분석</button>', markup)
+        self.assertIn('<div id="lifestyleReport" class="lifestyle-report" aria-live="polite" hidden></div>', markup)
+        self.assertIn("/me/lifestyle/report?domain=${encodeURIComponent(tab)}", script)
+        self.assertIn('elements.lifestyleReportButton.addEventListener("click", () => loadLifestyleReport(true));', script)
+        # 화면을 그릴 때는 분석을 부르지 않는다. 버튼 클릭만 유일한 실행 경로다.
+        self.assertEqual(script.count("loadLifestyleReport("), 2)
+        # 분석 구간은 서비스가 정한다. 화면이 기간을 실어 보내면 안 된다.
+        self.assertNotIn("report?domain=${encodeURIComponent(tab)}&window_days", script)
+        self.assertNotIn("lifestyleReportKey", script)
+        self.assertIn("""  if (!state) {
+    elements.lifestyleReport.replaceChildren();
+    elements.lifestyleReport.hidden = true;
+    return;
+  }""", script)
+        # 응답을 기다리는 사이 다른 탭으로 옮기면 그 탭 화면을 덮어쓰지 않는다.
+        self.assertIn("if (tab === activeLifestyleTab) renderLifestyleReport();", script)
+
+    def test_lifestyle_today_values_use_metric_cards(self) -> None:
+        """당일 수치를 항목별 카드로 그리고 구간 평균과의 차이를 함께 보여준다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('card.className = "today-card";', script)
+        self.assertIn('"today-card-value"', script)
+        self.assertIn('"today-card-delta"', script)
+        # 오르는 게 좋은지 나쁜지는 항목마다 달라 방향만 알린다.
+        self.assertIn('`${gap > 0 ? "▲" : "▼"}', script)
+        self.assertIn('"평균과 비슷"', script)
+        # 당일 기록이 없는 항목은 마지막 기록일을 알려준다.
+        self.assertIn('card.classList.add("is-empty");', script)
+        self.assertIn(".today-card { position: relative;", styles)
+        self.assertIn(".today-card-delta.flat", styles)
+        # 숫자 하나로는 방향을 알 수 없어 카드 안에 최근 흐름을 곁들인다.
+        self.assertIn("function buildSparkline", script)
+        self.assertIn('class: "today-card-spark"', script)
+        self.assertIn(".today-card-spark-line", styles)
+        # 기록은 UTC로 저장돼 문자열을 잘라 읽으면 새벽이 오후로 보인다.
+        self.assertIn("function formatClockTime", script)
+        self.assertIn("const moment = new Date(String(value || \"\"));", script)
+        self.assertNotIn("Number(text.slice(11, 13))", script)
+        self.assertIn(".today-card:hover", styles)
+
+    def test_blood_pressure_shares_one_today_card(self) -> None:
+        """수축기와 이완기는 따로 읽을 일이 없어 '121/79' 한 카드로 묶는다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('pairedWith: "diastolic", pairedLabel: "혈압"', script)
+        # 둘 다 mmHg라 숫자만 '/'로 잇고 단위는 카드 뒤에 한 번만 붙는다.
+        self.assertIn('return [item, ...(item.pairs || [])].map(number).join("/");', script)
+        # 짝을 합치고 남은 쪽은 카드 목록에서 뺀다. 짝은 여럿일 수 있다.
+        self.assertIn("partners.forEach((partner) => merged.add(partner.key));", script)
+        self.assertIn("filter((item) => !merged.has(item.key))", script)
+        # 그래프와 수치표는 그대로 둘로 나눠 본다.
+        self.assertIn('{ title: "혈압", metrics: ["systolic", "diastolic"] }', script)
+
+    def test_activity_tab_shows_only_three_today_cards(self) -> None:
+        """카드가 여덟 장이면 무엇을 먼저 볼지 알 수 없다. 대표 셋만 남긴다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('cards: ["steps", "activeCalories", "exerciseTime"],', script)
+        self.assertIn("if (config.cards) return [...new Set(config.cards)];", script)
+        # 운동시간과 운동칼로리는 한 장에 담는다.
+        self.assertIn('pairedWith: "exerciseCalories", pairedLabel: "운동"', script)
+
+    def test_activity_graphs_drop_the_metrics_that_track_steps(self) -> None:
+        """계단·활동시간·이동거리는 걸음 수를 따라 움직여 그래프에서 뺐다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        block = script[script.index("  activity: {"):script.index("  nutrition: {")]
+
+        for title in ("계단", "활동시간", "이동거리"):
+            with self.subTest(title=title):
+                self.assertNotIn(f'{{ title: "{title}", metrics:', block)
+        self.assertIn('{ title: "걸음 수", metrics: ["steps"] }', block)
+        # 카드에서도 빠졌다.
+        self.assertIn('cards: ["steps", "activeCalories", "exerciseTime"],', block)
+
+    def test_every_analysed_metric_is_shown_somewhere(self) -> None:
+        """분석만 하고 화면에 없는 항목이 있으면 AI가 확인할 수 없는 말을 하게 된다.
+
+        보이는 자리는 셋이다. 그래프·수치표·당일 카드, 그리고 참고범위가 있는
+        항목이라면 당일 수치의 '세부항목 보기' 목록에 저절로 뜬다. 제목은 여러
+        항목을 묶을 수 있으므로(칼로리 = 활동 + 운동) 제목이 아니라 항목으로 견준다.
+        """
+        import re
+
+        from app.services.lifestyle_report import _DOMAIN_METRICS
+
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        pattern = r'^  (\w+): \{\s*\n?\s*label: "([^"]+)"'
+        labels = dict(re.findall(pattern, script, re.M))
+
+        for tab, end in (("activity", "  nutrition: {"), ("nutrition", "  sleep: {")):
+            with self.subTest(tab=tab):
+                block = script[script.index(f"  {tab}: {{"):script.index(end)]
+                used = set()
+                for listed in re.findall(r'(?:metrics|columns|cards): \[([^\]]+)\]', block):
+                    used.update(labels[key.strip().strip('"')] for key in listed.split(","))
+                # 참고범위가 있는 항목은 세부항목 목록이 서비스에서 받아 그대로 그린다.
+                used.update(m.label for m in _DOMAIN_METRICS[tab] if m.reference_text)
+                self.assertLessEqual({m.label for m in _DOMAIN_METRICS[tab]}, used)
+
+    def test_calorie_stack_does_not_double_count_exercise(self) -> None:
+        """운동칼로리는 활동칼로리 안에 든 값이다. 그대로 쌓으면 하루 합이 부풀려진다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('title: "칼로리", chart: "stack",', script)
+        # 막대에 쌓는 것은 운동과 '겹치지 않는 나머지'다. 합계를 쌓지 않는다.
+        self.assertIn('metrics: ["exerciseCalories", "otherCalories"],', script)
+        self.assertIn("point.value - (exercise.get(point.date) || 0), 0)", script)
+        # 표에는 합계를 앞에 세워 두 조각과 나란히 읽게 한다.
+        self.assertIn('columns: ["activeCalories", "exerciseCalories", "otherCalories"],', script)
+        # 다른 항목에서 끌어내는 계열은 저장소 행 대신 제 계산식을 쓴다.
+        self.assertIn("if (metric.derive) return metric.derive(payload);", script)
+        self.assertIn(".data-chart.calorie-parts", styles)
+
+    def test_exercise_kinds_are_built_from_the_records_not_a_fixed_list(self) -> None:
+        """exercise_type은 DB에서 자유 문자열이라 항목을 미리 적을 수 없다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('title: "운동시간 및 종류", chart: "stack",', script)
+        self.assertIn("deriveSeries: exerciseKindSeries,", script)
+        self.assertIn("const series = group.deriveSeries", script)
+        # 모르는 종류는 옮기지 않고 원문을 그대로 보여 준다.
+        self.assertIn("exerciseKindNames[kind.toLowerCase()] || kind", script)
+        # 색 계열이 넷뿐이라 그보다 많으면 묶는다.
+        self.assertIn("그 외 ${rest.length}가지", script)
+        self.assertIn(".data-chart.exercise-kinds", styles)
+
+    def test_exercise_kind_names_match_the_service(self) -> None:
+        """화면과 분석이 같은 운동을 다른 이름으로 부르면 안 된다."""
+        import re
+
+        from app.services.lifestyle_report import _EXERCISE_KIND_NAMES
+
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        block = script[script.index("const exerciseKindNames = {"):]
+        block = block[:block.index("};")]
+        names = dict(re.findall(r'(\w+): "([^"]+)"', block))
+
+        self.assertEqual(names, _EXERCISE_KIND_NAMES)
+
+    def test_nutrition_cards_show_macros_as_a_share(self) -> None:
+        """탄수화물 300g은 얼마나 먹었느냐에 딸려 다녀 그 자체로 말할 수 없다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        block = script[script.index("  nutrition: {"):script.index("  sleep: {")]
+
+        # 짝은 카드 목록 안에서만 찾는다. 셋을 다 적어야 한 장으로 합쳐진다.
+        self.assertIn(
+            'cards: ["intakeCalories", "carbRatio", "proteinRatio", "fatRatio", "waterCups"],',
+            block)
+        self.assertIn('pairedWith: ["proteinRatio", "fatRatio"],', script)
+        # 세 숫자의 균형을 읽는 카드라 미니 그래프는 두지 않는다.
+        self.assertIn("spark: false,", script)
+        self.assertIn("item.spark === false ? null : buildSparkline(", script)
+        # 무게가 아니라 열량 비율이다. 지방만 9kcal/g이라 둘이 크게 다르다.
+        self.assertIn("_MACRO_KCAL = { carbohydrate: 4, protein: 4, totalFat: 9 }", script)
+        # 세 영양소가 모두 있는 날만 비율을 낸다.
+        self.assertIn("if (parts.some((part) => !part.days.has(date)) || !numerator.has(date)) return;", script)
+        # 포화지방은 지방 안에 이미 들어 있어 분모에 더하지 않는다.
+        self.assertIn("_NON_MACRO_KCAL = { saturatedFat: 9 }", script)
+        # 나트륨·당은 카드에도 그래프에도 두지 않는다. 세부항목 목록에서 본다.
+        for title in ("나트륨", "당", "나트륨과 칼륨"):
+            with self.subTest(title=title):
+                self.assertNotIn(f'{{ title: "{title}", metrics:', block)
+
+    def test_bar_chart_ticks_are_numbers_people_can_count(self) -> None:
+        """[0, 최대/2, 최대]는 값에 딸려 다닌다. 7.6잔이면 3.8잔에 선이 그어진다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        # 간격은 1·2·5를 열 배씩 키운 수 중에서 고른다.
+        self.assertIn("const _TICK_STEPS = [1, 2, 5];", script)
+        self.assertIn("const _MAX_TICK_GAPS = 4;", script)
+        self.assertIn("function niceAxisTicks(highest)", script)
+        # 축 꼭대기는 간격의 배수로 올린다. 그래야 맨 위 눈금도 정수가 된다.
+        self.assertIn("Math.ceil(highest / step) * step", script)
+        # 눈금이 모두 정수면 자릿수를 붙이지 않는다. 8잔을 8.0잔으로 적지 않는다.
+        self.assertIn("ticks.every((tick) => Number.isInteger(tick)) ? 0 : metric.digits", script)
+
+    def test_line_chart_axis_wraps_the_reference_range(self) -> None:
+        """이 탭에서 가장 알고 싶은 것은 '내 선이 기준 안인가'다.
+
+        값만 감싸면 기준선이 화면 밖으로 나가 그 물음에 답할 수 없다.
+        """
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("function niceRangeTicks(low, high)", script)
+        # 막대와 같은 간격 규칙을 쓰되 0에서 시작하지 않는다.
+        self.assertIn("_TICK_STEPS.map((unit) => unit * 10 ** power)", script)
+        self.assertIn("Math.floor(low / step) * step", script)
+        # 축은 값과 참고범위를 모두 감싼다.
+        self.assertIn("Math.min(...values, ...marks), Math.max(...values, ...marks)", script)
+        # 참고범위 경계에 선을 긋는다.
+        self.assertIn(".line-chart-reference", styles)
+        self.assertIn('class: "line-chart-reference"', script)
+
+    def test_line_chart_reference_numbers_come_from_the_service(self) -> None:
+        """화면이 기준을 들고 있으면 분석과 어긋난다. 받은 수 자리에 선만 긋는다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("(payload.standards || {})[activeLifestyleTab] || []", script)
+        self.assertIn("{ low: item.low, high: item.high }", script)
+        # 축을 나눠 쓰면 어느 축의 기준인지 알 수 없어 긋지 않는다.
+        self.assertIn("if (!dualAxis) {", script)
+
+    def test_standards_list_is_folded_and_judged_by_the_service(self) -> None:
+        """카드 옆에 열두 줄을 펼쳐 두면 대표 값이 묻힌다. 접어 두고 눌러서 편다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        # 접이식이라 details/summary를 쓴다.
+        self.assertIn('const box = document.createElement("details");', script)
+        self.assertIn('"세부항목 보기"', script)
+        self.assertIn(".lifestyle-standards", styles)
+        # 판정과 견줌은 서비스가 보내 준 값을 그대로 쓴다. 화면이 기준을 들고 있지 않다.
+        self.assertIn('(payload.standards || {})[activeLifestyleTab]', script)
+        self.assertIn("payload.reference_basis", script)
+        # 넘치는 쪽과 모자란 쪽은 할 일이 달라 색을 가른다.
+        self.assertIn(".standard-row.over .standard-fill", styles)
+        self.assertIn(".standard-row.under .standard-fill", styles)
+
+    def test_the_screen_never_compares_values_to_a_threshold_itself(self) -> None:
+        """판정은 서비스가 한다. 화면에 기준값이 박히면 분석과 어긋날 수 있다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        # 서비스가 보낸 판정어를 색으로 옮길 뿐, 수치와 견주지 않는다.
+        self.assertIn('item.status === "관리 필요"', script)
+        for threshold in ("2000", "3500", "8000", "1500"):
+            with self.subTest(threshold=threshold):
+                self.assertNotIn(f"> {threshold}", script)
+                self.assertNotIn(f"< {threshold}", script)
+
+    def test_macros_share_one_stacked_chart_measured_in_energy(self) -> None:
+        """그램을 쌓으면 막대 높이가 '하루에 먹은 그램 수'가 되어 아무 뜻이 없다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+        block = script[script.index("  nutrition: {"):script.index("  sleep: {")]
+
+        # 막대 높이는 3대 영양소가 낸 열량이지 기록된 섭취칼로리가 아니다.
+        # 제목에 총량 이름을 넣으면 막대가 그 값이라고 주장하는 셈이 된다.
+        self.assertIn('title: "영양소 구성", chart: "stack",', block)
+        self.assertIn("표의 섭취칼로리와는 조금 다릅니다", block)
+        self.assertIn("if (group.note)", script)
+        # 따로 그리던 그래프는 없앤다. 섭취칼로리도 이 한 장에 들어온다.
+        for title in ("탄수화물", "단백질", "지방", "섭취칼로리"):
+            with self.subTest(title=title):
+                self.assertNotIn(f'{{ title: "{title}", metrics:', block)
+        # 쌓는 차례는 아래부터 탄수화물·지방·단백질이다.
+        self.assertIn('metrics: ["carbEnergy", "fatEnergy", "proteinEnergy"],', block)
+        # 기록된 섭취칼로리는 세 조각의 합과 정확히 같지 않다(중앙값 2.6% 크다).
+        # 그래서 쌓지 않고, 수면시간처럼 표 앞에 세워 구성과 나란히 읽게 한다.
+        stacked = block.split('metrics: ["carbEnergy"')[1].split("]")[0]
+        self.assertNotIn("intakeCalories", stacked)
+        self.assertIn(
+            'columns: ["intakeCalories", "carbohydrate", "protein", "totalFat"],', block)
+        # 막대는 열량, 표의 영양소는 기록한 그대로 그램이다.
+        self.assertIn('unit: "kcal"', block)
+        self.assertIn("point.value * factor", script)
+        self.assertIn(".data-chart.macro-parts", styles)
+
+    def test_water_card_counts_cups_and_keeps_the_millilitres(self) -> None:
+        """1,500mL보다 '여섯 잔'이 하루치로 가늠하기 쉽다. 실제 양은 괄호로 남긴다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("const _WATER_CUP_ML = 250;", script)
+        self.assertIn('label: "수분 섭취", unit: "잔", digits: 1,', script)
+        self.assertIn('return total ? `(${formatDataNumber(total)}mL)` : "";', script)
+        # 그래프와 표는 mL 그대로 본다. 잔은 어림수라 흐름을 보기에는 거칠다.
+        block = script[script.index("  nutrition: {"):script.index("  sleep: {")]
+        # 그래프는 잔으로 그리고 표는 mL 그대로다. 환산 기준을 한 줄로 밝힌다.
+        self.assertIn('title: "수분 섭취", metrics: ["waterCups"], columns: ["water"],', block)
+        self.assertIn("250mL를 한 잔으로 세어 그립니다", block)
+        self.assertIn('palette: "water-blue",', block)
+
+    def test_paired_card_with_two_units_labels_each_number(self) -> None:
+        """'35/250'은 어느 쪽이 분이고 어느 쪽이 kcal인지 알 수 없다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("function pairedUnitsDiffer(item)", script)
+        self.assertIn("withUnit ? `${text}${entry.unit}` : text", script)
+        # 숫자마다 단위를 달았으면 카드 뒤에 또 붙이지 않는다.
+        self.assertIn("if (item.unit && !pairedUnitsDiffer(item)) {", script)
+        # 분과 kcal은 눈금을 같이 쓸 수 없어 미니 그래프는 앞의 것만 그린다.
+        self.assertIn("pairedUnitsDiffer(item) ? [item.series]", script)
+
+    def test_sleep_tab_shows_every_stage(self) -> None:
+        """조회만 하고 버려지던 수면 단계를 항목으로 살려 구성 막대로 본다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        # 저장소가 내려주는 키는 *_minutes다. 짧은 이름으로 읽으면 값이 조용히 빈다.
+        for key in ("deep_sleep_minutes", "light_sleep_minutes",
+                    "rem_sleep_minutes", "awake_minutes"):
+            with self.subTest(key=key):
+                self.assertIn(f"detail_data?.{key}", script)
+        self.assertNotIn("detail_data?.deep_sleep_min ", script)
+        self.assertNotIn("detail_data?.awake_min ", script)
+        # 단계는 서로 견줘야 뜻이 생기므로 쌓아서 보여 준다.
+        # 막대 높이는 단계를 쌓은 값이지 기록된 수면시간이 아니다.
+        # 제목에 총량 이름을 넣으면 막대가 그 값이라고 주장하는 셈이 된다.
+        self.assertIn('title: "수면 구성", chart: "stack"', script)
+        self.assertIn("표의 수면시간과는 조금 다를 수 있습니다", script)
+        self.assertIn("function buildStackedChart", script)
+        # 누적 막대가 총 수면시간까지 보여 주므로 수면시간 단독 그래프는 두지 않는다.
+        self.assertNotIn('{ title: "수면시간", metrics: ["sleepHours"] }', script)
+        # 총 수면시간은 쌓지 않고 표에만 앞세운다. 단계의 합이 아니라 견줄 값이다.
+        self.assertIn('metrics: ["deepSleep", "lightSleep", "remSleep", "awake"]', script)
+        self.assertIn('columns: ["sleepHours", "deepSleep", "lightSleep", "remSleep", "awake"]', script)
+        self.assertIn("group.columns ? toSeries(group.columns) : series", script)
+        self.assertIn("buildTrendTable(tableSeries, days)", script)
+        self.assertIn("group.cards || group.columns || group.metrics", script)
+        # 단계는 서로 견줘야 뜻이 생기므로 카드로는 두지 않고 그래프·표에서만 본다.
+        self.assertIn('cards: ["sleepHours"]', script)
+        self.assertIn(".data-chart-bar.stack", styles)
+        self.assertIn(".data-chart-segment.s3", styles)
+        # 단계 색은 이 그래프 안에서만 덮어쓴다. 전역 계열 색을 바꾸면 혈압 미니그래프까지 물든다.
+        self.assertIn('palette: "sleep-stages"', script)
+        self.assertIn(".data-chart.sleep-stages {", styles)
+        for color in ("#3816ba", "#7653f4", "#b19ff7", "#ff5e8e"):
+            with self.subTest(color=color):
+                self.assertIn(color, styles)
+
+    def test_sleep_composition_axis_reads_in_hours_within_the_data_range(self) -> None:
+        """수면 구성 축은 분이 아니라 시간으로 읽고, 값이 놓인 구간에만 눈금을 긋는다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        # 분으로 쌓되 축은 시간으로 환산해 읽는다.
+        self.assertIn('unit: "시간", divisor: 60, step: 1, major: 3, min: 3, max: 9', script)
+        self.assertIn("buildStackedChart(group.title, series, group.axis, days, gapDate)", script)
+        # 3·6·9시간을 늘 보여 주고, 값이 벗어날 때만 3시간 단위로 넓힌다.
+        self.assertIn("function stackedAxisTicks", script)
+        self.assertIn("major: 3, min: 3, max: 9", script)
+        self.assertIn("Math.min(baseLow, Math.floor(Math.min(...scaled) / major) * major)", script)
+        self.assertIn("Math.max(baseHigh, Math.ceil(Math.max(...scaled) / major) * major)", script)
+        # 3시간 배수는 실선에 숫자, 사이는 점선에 숫자 없음.
+        self.assertIn("ticks.filter((tick) => tick % major === 0)", script)
+        self.assertIn('tick % major === 0 ? "data-chart-guide solid" : "data-chart-guide"', script)
+        self.assertIn(".data-chart-guide.solid", styles)
+        # 맨 위 눈금(9시간)이 컨테이너 밖으로 나가 잘리지 않도록 위에서부터 잰다.
+        self.assertIn("function chartGuideTop", script)
+        self.assertIn("guide.style.top = `${chartGuideTop(tick, max)}px`;", script)
+        self.assertNotIn("guide.style.bottom", script)
+
+    def test_weekly_buckets_read_as_month_and_week(self) -> None:
+        """3개월 구간의 x축은 날짜가 아니라 '7월1주'처럼 읽는다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("function weekOfMonthLabel", script)
+        self.assertIn("function formatBucketDate", script)
+        # 목요일은 늘 그 주가 더 많이 걸친 달에 있다. 그 달과 주차로 이름을 붙인다.
+        self.assertIn("monday.getTime() + 3 * 24 * 60 * 60 * 1000", script)
+        self.assertIn("Math.floor((thursday.getUTCDate() - 1) / 7) + 1", script)
+        self.assertIn("`${thursday.getUTCMonth() + 1}월${week}주`", script)
+        # 그래프 셋과 표가 모두 같은 표기를 쓴다.
+        self.assertIn("buildLineChart(group.title, series, days, gapDate)", script)
+        self.assertIn("buildStackedChart(group.title, series, group.axis, days, gapDate)", script)
+        self.assertIn("days, gapDate, group.palette)", script)
+        self.assertIn("value: (row) => formatBucketDate(row.date, days)", script)
+
+    def test_sparse_buckets_are_dimmed_for_daily_totals(self) -> None:
+        """기록이 절반도 안 되는 주는 일평균이 부풀므로 흐리게 그린다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        # 묶음마다 며칠이 들어갔는지 남겨야 판단할 수 있다.
+        self.assertIn("count: values.length", script)
+        self.assertIn("span: bucketSpan(date, days)", script)
+        # 하루 누적 지표만 해당한다. 체중·혈압은 며칠 비어도 정상이다.
+        self.assertIn('metric.daily === "sum" && point.span > 1 && point.count * 2 < point.span', script)
+        self.assertIn('"data-chart-bar is-sparse"', script)
+        self.assertIn(".data-chart-bar.is-sparse", styles)
+        # 몇 일치인지 마우스로 확인할 수 있어야 한다.
+        self.assertIn("function bucketCoverageText", script)
+        self.assertIn("일 중 ${point.count}일 기록", script)
+
+    def test_late_starting_records_get_a_blank_slot_and_notice(self) -> None:
+        """고른 기간보다 기록이 늦게 시작했으면 직전 한 칸을 비우고 언제부터인지 알린다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        # 고른 기간의 시작과 첫 기록을 견줘 판단한다.
+        self.assertIn("function windowStartBucket", script)
+        self.assertIn("windowStartBucket(latestDate, days) < firstBucket", script)
+        # 직전 묶음 한 칸만 비운다.
+        self.assertIn("function previousBucket", script)
+        self.assertIn("const gapDate = startsLate ? previousBucket(firstBucket, days) : \"\";", script)
+        self.assertIn("function buildEmptyChartSlot", script)
+        self.assertIn('"data-chart-item is-blank"', script)
+        self.assertIn(".data-chart-item.is-blank", styles)
+        # 그래프 셋 모두 빈칸을 받는다.
+        self.assertIn("buildStackedChart(group.title, series, group.axis, days, gapDate)", script)
+        self.assertIn("buildLineChart(group.title, series, days, gapDate)", script)
+        self.assertIn("days, gapDate, group.palette)", script)
+        # 안내는 그래프 바로 위에 붙고 조사도 받침에 맞춘다.
+        self.assertIn("부터 기록되었습니다.", script)
+        self.assertIn("function withTopicParticle", script)
+        self.assertIn(".data-section-note", styles)
+
+    def test_bar_chart_spreads_across_the_available_width(self) -> None:
+        """막대가 몇 개든 꺾은선처럼 너비를 채워야 한다. 고정 너비면 왼쪽에 몰린다."""
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("flex: 1 1 28px; min-width: 18px", styles)
+        self.assertNotIn("flex: 0 0 28px", styles)
+        # 칸이 넓어져도 막대까지 굵어지지 않도록 너비를 묶고 가운데에 세운다.
+        self.assertIn("max-width: 34px; margin: 0 auto", styles)
+
+    def test_lifestyle_trend_metrics_match_backend_units(self) -> None:
+        """그래프 항목의 단위 환산이 백엔드 분석과 같은지 확인한다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        # lifestyle_exercise.distance_m만 미터라 km로 나눈다.
+        self.assertIn("Number(row.distance_m) / 1000", script)
+        self.assertIn("Number(row.duration_sec) / 60", script)
+        self.assertIn("value: (row) => row.active_distance_km", script)
+        # 주 시작일은 UTC로 계산해야 toISOString이 날짜를 하루 당기지 않는다.
+        self.assertIn('new Date(`${text}T00:00:00Z`)', script)
+        self.assertIn("current.getUTCDay()", script)
+
+    def test_lifestyle_report_shows_state_and_actions_only(self) -> None:
+        """사용자 화면은 '현재 상태'와 '지금 신경 쓰면 좋은 것' 두 덩어리로만 읽힌다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        # 검진 리포트와 섞이지 않도록 생활건강 렌더 함수 본문만 떼어 확인한다.
+        start = script.index("function renderLifestyleReport(")
+        body = script[start:script.index("\nfunction ", start + 1)]
+        self.assertIn("report.current_state", body)
+        self.assertIn("report.actions", body)
+        self.assertIn("지금 신경 쓰면 좋은 것", body)
+        self.assertIn(".lifestyle-report-actions", styles)
+        # 자리가 있으면 모델이 채운다. key_points는 current_state를 되풀이해 없앴다.
+        for removed in ("report.metrics", "report.patterns", "report.anomalies",
+                        "report.key_points", "lifestyle-report-points",
+                        "overall_analysis", "report.summary", "항목별 변화", "눈에 띈 날"):
+            with self.subTest(removed=removed):
+                self.assertNotIn(removed, body)
+        for gone in ("buildReportMetricItem", "buildReportAnomalyItem", "formatReportNumber"):
+            with self.subTest(removed=gone):
+                self.assertNotIn(gone, script)
+        # 판정 기준의 한계는 화면에서도 밝힌다. 성별을 알면 그 성별 기준이라고 적힌다.
+        self.assertIn("state.referenceBasis", script)
+        self.assertIn("일반 성인 기준이며 성별·나이·활동량을 반영하지 않음", script)
+
+    def test_lifestyle_analysis_window_is_fixed_and_separate_from_the_graph(self) -> None:
+        """AI 분석은 서비스가 정한 구간을 쓰고, 기간 버튼은 그래프에만 적용된다."""
+        markup = (ADMIN_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        # 그래프 조회는 여전히 사용자가 고른 기간을 따른다.
+        self.assertIn("/me/lifestyle?window_days=${lifestyleDays}", script)
+        # 안내는 추상적인 문구 대신 이 탭이 무엇을 보는지 적는다.
+        self.assertIn('<span id="lifestyleAnalysisScope" class="lifestyle-block-note"></span>', markup)
+        self.assertNotIn("최근 흐름 전체를 봅니다", markup)
+        self.assertIn("function lifestyleAnalysisScopeText", script)
+        # 지표 이름은 그래프 그룹 제목에서 가져와 한 곳에서만 관리한다.
+        self.assertIn("(lifestyleTabConfigs[activeLifestyleTab] || {}).groups || []", script)
+        self.assertIn("외 ${rest}개", script)
+        # 구간은 서비스가 정하므로 한 번 돌려 본 뒤에만 적는다.
+        self.assertIn("최근 ${state.recentDays}일과 전체 ${state.windowDays}일`", script)
+        self.assertIn("아래 기간 버튼은 그래프에만 적용됩니다.", script)
+        self.assertIn("최근 ${state.recentDays}일과 전체 ${state.windowDays}일", script)
+        # 새 기록이 들어와 기준일이 바뀌면 옛 분석은 버린다.
+        self.assertIn("cached.latestDate !== today.latestDate", script)
+        self.assertIn("lifestyleReports.delete(activeLifestyleTab);", script)
+
+    def test_verification_panel_is_shared_and_swaps_labels_per_tab(self) -> None:
+        """검증 패널은 같은 뼈대를 쓰고 단계·지표 이름만 탭에 맞춰 바뀐다."""
+        markup = (ADMIN_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        # 뼈대는 하나다. 검진 전용 id 대신 자리 표시 속성을 쓴다.
+        for step in ("latest", "history", "analysis", "result"):
+            self.assertIn(f'data-dashboard-step-label="{step}"', markup)
+            self.assertIn(f'data-dashboard-step-status="{step}"', markup)
+        for index in range(4):
+            self.assertIn(f'data-dashboard-metric-label="{index}"', markup)
+            self.assertIn(f'data-dashboard-metric-value="{index}"', markup)
+        self.assertNotIn('id="dashboardCheckupCount"', markup)
+        self.assertNotIn("elements.dashboardCheckupCount", script)
+
+        # 탭별 라벨과 교체 시점.
+        self.assertIn('title: "검진 분석 검증"', script)
+        self.assertIn('title: "생활건강 분석 검증"', script)
+        self.assertIn('metrics: ["분석 항목", "범위 이탈", "이상 지점", "관리 필요"]', script)
+        self.assertIn("applyDashboardPreset(tab);", script)
+
+    def test_lifestyle_report_logs_into_verification_panel(self) -> None:
+        """생활건강 AI 요약분석도 검진과 같은 형식으로 단계와 지표를 남긴다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("function renderLifestyleDashboard", script)
+        self.assertIn('finishDashboardRun("lifestyle"', script)
+        self.assertIn('failDashboardRun("lifestyle", message);', script)
+        # 검진과 같은 소요 시간 표기를 쓴다.
+        self.assertIn("formatElapsed(timings.window_seconds)", script)
+        self.assertIn("formatElapsed(timings.ai_seconds)", script)
+        # 지표는 서비스가 내려준 계산 결과에서 센다. 전체 구간 신호를 기준으로 한다.
+        self.assertIn("(metric.full || {}).out_of_range_days > 0", script)
+        self.assertIn("(metric.anomalies || []).length", script)
+        # 탭을 오갔다 돌아와도 그 탭의 로그가 남아야 하므로 초기화는 기록하지 않는다.
+        self.assertIn('setDashboardStep(step, "대기 중", "pending", false)', script)
+
+    def test_verification_panel_keeps_the_full_statistics(self) -> None:
+        """사용자 화면에서 뺀 통계는 개발자 검증 패널에 그대로 남아야 한다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('["항목별 계산 근거와 코드 판정", verification.analysis_input || {}]', script)
+        self.assertIn('["이상 지점으로 잡힌 날"', script)
+        self.assertIn('["함께 움직인 항목", (verification.analysis_input || {}).co_movements || []]', script)
+        # 어떤 판 프롬프트로 만든 결과인지 로그에 남긴다.
+        self.assertIn("프롬프트 v${payload.prompt_version", script)
+        self.assertIn("prompt_version: verification.prompt_version", script)
+        # 조회 상한에 걸려 오래된 기록이 잘렸다면 그 사실도 남긴다.
+        self.assertIn("payload.data_truncated", script)
+
     def test_question_audit_cards_are_wired(self) -> None:
         """질문별 접이식 감사 카드와 검색·안전 메타데이터 연결을 확인한다."""
         markup = (ADMIN_FRONTEND_ROOT / "index.html").read_text(encoding="utf-8")
@@ -295,6 +845,27 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertEqual(
             request.call_args.args[:2],
             ("GET", "http://localhost:8000/me/checkup?record_id=record-9"),
+        )
+
+
+    @patch("app.admin_frontend.requests.request")
+    def test_lifestyle_report_proxy_uses_main_api(self, request: Mock) -> None:
+        """생활건강 탭별 AI 분석 요청과 조회 조건을 메인 API로 중계한다."""
+        backend_response = Mock(
+            status_code=200,
+            content=b'{"success":true,"domain":"bio","window_days":180}',
+            headers={"content-type": "application/json"},
+            raw=Mock(headers=Mock(getlist=Mock(return_value=[]))),
+        )
+        request.return_value = backend_response
+
+        response = TestClient(app).post("/me/lifestyle/report", params={"domain": "bio"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["domain"], "bio")
+        self.assertEqual(
+            request.call_args.args[:2],
+            ("POST", "http://localhost:8000/me/lifestyle/report?domain=bio"),
         )
 
 
