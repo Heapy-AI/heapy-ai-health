@@ -53,7 +53,8 @@ _LIFESTYLE_PLAN: tuple[tuple[str, str, str, str, str], ...] = (
         "lifestyle_nutrition",
         "&nutrition_type=eq.food",
         "consumed_at",
-        "consumed_at,meal_type,title,calories,carbohydrate,protein,total_fat,sodium,sugar",
+        "consumed_at,meal_type,title,calories,carbohydrate,protein,total_fat,sodium,sugar,"
+        "saturated_fat,dietary_fiber,potassium,calcium",
     ),
     (
         "water",

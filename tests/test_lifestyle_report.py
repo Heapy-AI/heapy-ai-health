@@ -133,10 +133,14 @@ LIFESTYLE_WINDOW = {
         "since": "2026-09-01",
         "until": "2026-09-01",
         "rows": [
-            {"consumed_at": "2026-09-01T08:00:00", "calories": 420, "carbohydrate": 50,
-             "protein": 15, "total_fat": 12, "sodium": 520, "sugar": 9},
-            {"consumed_at": "2026-09-01T12:30:00", "calories": 680, "carbohydrate": 95,
-             "protein": 22, "total_fat": 18, "sodium": 980, "sugar": 11},
+            {"consumed_at": "2026-09-01T08:00:00", "meal_type": "breakfast",
+             "calories": 420, "carbohydrate": 50, "protein": 15, "total_fat": 12,
+             "sodium": 520, "sugar": 9, "saturated_fat": 4, "dietary_fiber": 3,
+             "potassium": 480, "calcium": 190},
+            {"consumed_at": "2026-09-01T12:30:00", "meal_type": "lunch",
+             "calories": 680, "carbohydrate": 95, "protein": 22, "total_fat": 18,
+             "sodium": 980, "sugar": 11, "saturated_fat": 6, "dietary_fiber": 5,
+             "potassium": 720, "calcium": 210},
         ],
     },
     "water": {
@@ -251,6 +255,130 @@ class LifestyleAnalysisTest(unittest.TestCase):
         ))["exercise_habit"]
 
         self.assertIn("주말에 몰려 있다", habit["weekend_habit"])
+
+    def test_macro_ratios_are_judged_by_energy_not_by_weight(self) -> None:
+        """탄수화물 300g이 많은지는 얼마나 먹었느냐에 딸려 다녀 그 자체로 말할 수 없다."""
+        analysis = LifestyleReportService.build_analysis("nutrition", LIFESTYLE_WINDOW)
+        labels = [metric["metric"] for metric in analysis["metrics"]]
+
+        for name in ("탄수화물 비중", "단백질 비중", "지방 비중"):
+            with self.subTest(metric=name):
+                self.assertIn(name, labels)
+        # 2025 한국인 영양소 섭취기준 에너지적정비율. 2020년 값(55~65 · 7~20)에서 바뀌었다.
+        self.assertEqual(_metric(analysis, "탄수화물 비중")["reference"], "50~65 %")
+        self.assertEqual(_metric(analysis, "단백질 비중")["reference"], "10~20 %")
+        self.assertEqual(_metric(analysis, "지방 비중")["reference"], "15~30 %")
+        # 포화지방산은 19세 이상 총에너지의 7% 미만.
+        self.assertEqual(_metric(analysis, "포화지방 비중")["reference"], "7 % 미만")
+
+        # 지방만 9kcal/g이라 무게 비율과 열량 비율이 갈린다. 열량 쪽을 쓴다.
+        window = {"food": {"rows": [
+            {"consumed_at": f"2026-09-0{day}T12:00:00", "meal_type": "lunch",
+             "calories": 1000, "carbohydrate": 100, "protein": 50, "total_fat": 50}
+            for day in range(1, 6)
+        ]}}
+        ratios = LifestyleReportService.build_analysis("nutrition", window)
+        # 열량으로는 400 / 200 / 450 → 38 / 19 / 43 %. 무게로는 50 / 25 / 25 %.
+        self.assertEqual(round(_metric(ratios, "지방 비중")["latest"]), 43)
+        self.assertEqual(round(_metric(ratios, "탄수화물 비중")["latest"]), 38)
+
+    def test_new_nutrients_follow_the_2025_korean_reference(self) -> None:
+        """2025 한국인 영양소 섭취기준. 기록에 있는데도 안 보던 값들을 살렸다."""
+        analysis = LifestyleReportService.build_analysis("nutrition", LIFESTYLE_WINDOW)
+
+        # 식이섬유 충분섭취량은 남자 30g, 여자 20~25g. 성별을 모르므로 낮은 쪽에 문턱을 둔다.
+        self.assertEqual(_metric(analysis, "식이섬유")["reference"], "25 g 이상")
+        # 칼륨 충분섭취량 3,500mg (남녀 같음).
+        self.assertEqual(_metric(analysis, "칼륨")["reference"], "3500 mg 이상")
+        # 칼슘 권장섭취량은 남자 800mg, 여자 650~750mg.
+        self.assertEqual(_metric(analysis, "칼슘")["reference"], "700 mg 이상")
+
+    def test_saturated_fat_is_not_counted_twice_in_the_denominator(self) -> None:
+        """포화지방은 지방 안에 이미 들어 있다. 분모에 더하면 같은 열량을 두 번 센다."""
+        window = {"food": {"rows": [
+            {"consumed_at": f"2026-09-0{day}T12:00:00", "calories": 1000,
+             "carbohydrate": 100, "protein": 50, "total_fat": 50, "saturated_fat": 20}
+            for day in range(1, 6)
+        ]}}
+        analysis = LifestyleReportService.build_analysis("nutrition", window)
+
+        # 총열량 400 + 200 + 450 = 1,050kcal. 포화지방 20g = 180kcal → 17%.
+        self.assertEqual(round(_metric(analysis, "포화지방 비중")["latest"]), 17)
+        # 지방 전체는 43%. 포화는 그 안에 들어 있으므로 더 작아야 한다.
+        self.assertLess(_metric(analysis, "포화지방 비중")["latest"],
+                        _metric(analysis, "지방 비중")["latest"])
+
+    def test_prompt_lists_the_urgent_metrics_first(self) -> None:
+        """항목이 열넷으로 늘었다. 넉 줄 안에 담기려면 급한 것이 앞에 와야 한다."""
+        from app.services.lifestyle_report import _prompt_view
+
+        view = _prompt_view(LifestyleReportService.build_analysis("nutrition", LIFESTYLE_WINDOW))
+        levels = [(m.get("recent") or m.get("full") or {}).get("level", "")
+                  for m in view["metrics"]]
+        rank = {"기준을 크게 벗어남": 0, "기준을 조금 벗어남": 1,
+                "기준 범위 안": 2, "기준 없음": 3}
+
+        self.assertEqual([rank[level] for level in levels],
+                         sorted(rank[level] for level in levels))
+
+    def test_macro_pairs_are_arithmetic_not_habit(self) -> None:
+        """비중 셋은 합이 100이라 하나가 오르면 다른 하나는 반드시 내려간다."""
+        from app.services.lifestyle_report import _TRIVIAL_CO_MOVEMENTS
+
+        for left, right in (
+            ("탄수화물 비중", "지방 비중"),
+            ("탄수화물", "지방 비중"),
+            ("섭취칼로리", "탄수화물"),
+            ("탄수화물", "당"),
+        ):
+            with self.subTest(pair=(left, right)):
+                self.assertIn(frozenset({left, right}), _TRIVIAL_CO_MOVEMENTS)
+
+    def test_meal_pattern_says_where_the_sodium_comes_from(self) -> None:
+        """'나트륨을 줄이세요'는 어디를 손댈지 알려 주지 않는다."""
+        window = {"food": {"rows": [
+            row
+            for day in range(1, 8)
+            for row in (
+                {"consumed_at": f"2026-09-0{day}T08:00:00", "meal_type": "breakfast",
+                 "calories": 200, "sodium": 100},
+                {"consumed_at": f"2026-09-0{day}T12:00:00", "meal_type": "lunch",
+                 "calories": 800, "sodium": 900},
+                {"consumed_at": f"2026-09-0{day}T19:00:00", "meal_type": "dinner",
+                 "calories": 1000, "sodium": 1600},
+            )
+        ]}}
+        meals = LifestyleReportService.build_analysis("nutrition", window)["meal_pattern"]
+
+        self.assertIn("저녁", meals["sodium_source"])
+        self.assertEqual(meals["heaviest"], "저녁이 가장 크다")
+        # 하루 열량의 10%뿐인 아침은 짚어 주되 거른 것으로 단정하지 않는다.
+        self.assertIn("아침", meals["light_meal"])
+
+    def test_meal_pattern_clears_snacks_when_they_add_nothing(self) -> None:
+        """간식을 먹은 날에도 하루 총량이 그대로면 간식은 범인이 아니다."""
+        rows = []
+        for day in range(1, 11):
+            date = f"2026-09-{day:02d}"
+            snack = day % 2 == 0
+            rows.append({"consumed_at": f"{date}T12:00:00", "meal_type": "lunch",
+                         "calories": 900 if snack else 1000, "sodium": 500})
+            rows.append({"consumed_at": f"{date}T19:00:00", "meal_type": "dinner",
+                         "calories": 900, "sodium": 500})
+            if snack:
+                rows.append({"consumed_at": f"{date}T16:00:00", "meal_type": "snack",
+                             "calories": 100, "sodium": 50})
+        meals = LifestyleReportService.build_analysis(
+            "nutrition", {"food": {"rows": rows}})["meal_pattern"]
+
+        self.assertEqual(meals["snack_effect"],
+                         "간식을 먹은 날과 안 먹은 날의 하루 열량이 비슷하다")
+
+    def test_meal_pattern_only_exists_on_the_nutrition_tab(self) -> None:
+        for domain in ("bio", "activity", "sleep"):
+            with self.subTest(domain=domain):
+                analysis = LifestyleReportService.build_analysis(domain, LIFESTYLE_WINDOW)
+                self.assertIsNone(analysis["meal_pattern"])
 
     def test_exercise_habit_only_exists_on_the_activity_tab(self) -> None:
         """탭마다 보는 것이 다르다. 다른 탭에 자리를 만들면 모델이 채운다."""
@@ -751,6 +879,18 @@ class LifestylePromptTest(unittest.TestCase):
         self.assertIn('"운동량이 줄고 있다"고 쓰면 틀린 말이 된다', prompt)
         self.assertIn("늘릴 여지는 비어 있는 쪽에 있다", prompt)
         # 기록이 없는 것을 게으름으로 읽지 않게 막는다.
+        self.assertIn("기록을 안 했을 수도 있다", prompt)
+
+    def test_nutrition_prompt_uses_shares_and_meals(self) -> None:
+        """그램으로 균형을 말할 수 없고, 총량만으로는 어디를 손댈지 알 수 없다."""
+        prompt = self._prompt("nutrition")
+
+        self.assertIn("균형을 말할 때는 그램이 아니라 이 비중으로 말하라", prompt)
+        # 셋은 합이 100이라 따로 세면 같은 사실을 두 번 말하게 된다.
+        self.assertIn("어느 쪽으로 치우쳤는지 한 번만 말하라", prompt)
+        self.assertIn("저녁 국물부터 줄여보세요", prompt)
+        # 간식을 애먼 범인으로 지목하지 못하게 막는다.
+        self.assertIn("간식을 문제로 지목하지 마라", prompt)
         self.assertIn("기록을 안 했을 수도 있다", prompt)
 
     def test_prompt_teaches_how_to_connect_sentences(self) -> None:

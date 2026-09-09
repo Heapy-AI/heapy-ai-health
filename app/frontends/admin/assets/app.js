@@ -1277,7 +1277,42 @@ const lifestyleMetrics = {
   totalFat: { label: "지방", unit: "g", digits: 1, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.total_fat },
   sodium: { label: "나트륨", unit: "mg", digits: 0, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.sodium },
   sugar: { label: "당", unit: "g", digits: 1, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.sugar },
+  dietaryFiber: { label: "식이섬유", unit: "g", digits: 1, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.dietary_fiber },
+  potassium: { label: "칼륨", unit: "mg", digits: 0, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.potassium },
+  calcium: { label: "칼슘", unit: "mg", digits: 0, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.calcium },
   water: { label: "수분 섭취", unit: "mL", digits: 0, source: "water", dateKey: "consumed_at", daily: "sum", value: (row) => row.water_amount },
+  // 1,500mL보다 '여섯 잔'이 하루치로 가늠하기 쉽다. 그래프와 표는 mL 그대로 둔다.
+  waterCups: {
+    label: "수분 섭취", unit: "잔", digits: 1,
+    source: "water", dateKey: "consumed_at",
+    derive: (payload) => metricDailySeries(payload, lifestyleMetrics.water)
+      .map((point) => ({ date: point.date, value: point.value / _WATER_CUP_ML })),
+    // 잔은 어림수라 실제로 얼마나 마셨는지를 괄호로 같이 보여 준다.
+    note: (rows) => {
+      const total = rows.reduce((sum, row) => sum + (Number(row.water_amount) || 0), 0);
+      return total ? `(${formatDataNumber(total)}mL)` : "";
+    },
+  },
+
+  // 3대 영양소는 총열량 대비 비율로 봐야 뜻이 선다. 열량 환산은 Atwater 계수
+  // (탄수화물·단백질 4kcal/g, 지방 9kcal/g)를 쓴다. 기록된 calories가 아니라
+  // 세 영양소로 낸 열량을 분모로 삼는다. 둘이 어긋날 때 비율의 합이 100%를 벗어난다.
+  carbRatio: {
+    label: "탄수화물 비중", unit: "%", digits: 0,
+    // 카드에는 셋을 합쳐 한 이름으로 건다. 항목 이름은 분석과 같게 둔다.
+    pairedWith: ["proteinRatio", "fatRatio"], pairedLabel: "탄수화물 · 단백질 · 지방",
+    // 세 숫자의 균형을 한눈에 보는 카드다. 셋을 겹쳐 그리면 선만 어지럽다.
+    spark: false,
+    derive: (payload) => macroRatioSeries(payload, "carbohydrate"),
+  },
+  proteinRatio: { label: "단백질 비중", unit: "%", digits: 0, derive: (payload) => macroRatioSeries(payload, "protein") },
+  fatRatio: { label: "지방 비중", unit: "%", digits: 0, derive: (payload) => macroRatioSeries(payload, "totalFat") },
+  // 포화지방은 지방의 일부라 분자만 다르다. 지방 비중과 나란히 봐야 뜻이 선다.
+  saturatedRatio: {
+    label: "포화지방 비중", unit: "%", digits: 0,
+    derive: (payload) => macroRatioSeries(payload, "saturatedFat"),
+  },
+  saturatedFat: { label: "포화지방", unit: "g", digits: 1, source: "food", dateKey: "consumed_at", daily: "sum", value: (row) => row.saturated_fat },
 
   sleepHours: {
     label: "수면시간", unit: "시간", digits: 1,
@@ -1340,13 +1375,21 @@ const lifestyleTabConfigs = {
   },
   nutrition: {
     chart: "bar",
+    // 나트륨·당은 그래프에서 본다. 카드에 일곱 장을 늘어놓으면 무엇을 먼저 볼지 모른다.
+    // 비율 셋을 모두 적어야 한 카드로 합쳐진다. 짝은 이 목록 안에서만 찾는다.
+    cards: ["intakeCalories", "carbRatio", "proteinRatio", "fatRatio", "waterCups"],
     groups: [
       { title: "섭취칼로리", metrics: ["intakeCalories"] },
       { title: "탄수화물", metrics: ["carbohydrate"] },
       { title: "단백질", metrics: ["protein"] },
       { title: "지방", metrics: ["totalFat"] },
-      { title: "나트륨", metrics: ["sodium"] },
+      // 나트륨과 칼륨은 함께 봐야 뜻이 선다. 칼륨이 나트륨을 덜어 내는 쪽이다.
+      { title: "나트륨과 칼륨", metrics: ["sodium", "potassium"] },
       { title: "당", metrics: ["sugar"] },
+      { title: "식이섬유", metrics: ["dietaryFiber"] },
+      { title: "칼슘", metrics: ["calcium"] },
+      // 지방은 총량보다 그 안에 포화지방이 얼마나 되는지가 문제가 된다.
+      { title: "지방과 포화지방 비중", metrics: ["fatRatio", "saturatedRatio"] },
       { title: "수분 섭취", metrics: ["water"] },
     ],
   },
@@ -1371,6 +1414,36 @@ const lifestyleTabConfigs = {
     ],
   },
 };
+
+// 물 한 잔. 종이컵·머그 한 잔이 대략 이만큼이다.
+const _WATER_CUP_ML = 250;
+// 열량 환산 계수(kcal/g). 지방만 9인 것이 비율을 무게 비율과 다르게 만든다.
+const _MACRO_KCAL = { carbohydrate: 4, protein: 4, totalFat: 9 };
+// 분모에는 들어가지 않고 분자로만 쓰는 항목. 포화지방은 지방 안에 이미 들어 있다.
+const _NON_MACRO_KCAL = { saturatedFat: 9 };
+
+function macroRatioSeries(payload, target) {
+  // 하루 총열량 대비 몇 %인지. 세 영양소가 모두 있는 날만 비율을 낸다.
+  // 분모는 늘 세 영양소로 낸 열량이고, 분자만 고른다. 포화지방은 지방의 일부라
+  // 분모에 더하지 않는다. 더하면 같은 열량을 두 번 세게 된다.
+  const parts = Object.keys(_MACRO_KCAL).map((key) => ({
+    key,
+    days: new Map(metricDailySeries(payload, lifestyleMetrics[key])
+      .map((point) => [point.date, point.value * _MACRO_KCAL[key]])),
+  }));
+  const numerator = _MACRO_KCAL[target]
+    ? parts.find((part) => part.key === target).days
+    : new Map(metricDailySeries(payload, lifestyleMetrics[target])
+      .map((point) => [point.date, point.value * _NON_MACRO_KCAL[target]]));
+  const series = [];
+  [...parts[0].days.keys()].sort().forEach((date) => {
+    if (parts.some((part) => !part.days.has(date)) || !numerator.has(date)) return;
+    const total = parts.reduce((sum, part) => sum + part.days.get(date), 0);
+    if (total <= 0) return;
+    series.push({ date, value: numerator.get(date) / total * 100 });
+  });
+  return series;
+}
 
 // 운동 종류 이름. lifestyle_exercise.exercise_type은 enum이 아니라 자유 문자열이라
 // 새 값이 언제든 들어온다. 아는 것만 옮기고 모르는 값은 원문을 그대로 보여 준다.
@@ -2166,10 +2239,12 @@ function lifestyleTabSeries(payload, tab) {
   const merged = new Set();
   return items
     .map((item) => {
-      const partner = item.pairedWith && byKey.get(item.pairedWith);
-      if (!partner) return item;
-      merged.add(partner.key);
-      return { ...item, label: item.pairedLabel || item.label, pair: partner };
+      const partners = [].concat(item.pairedWith || [])
+        .map((key) => byKey.get(key))
+        .filter(Boolean);
+      if (!partners.length) return item;
+      partners.forEach((partner) => merged.add(partner.key));
+      return { ...item, label: item.pairedLabel || item.label, pairs: partners };
     })
     .filter((item) => !merged.has(item.key));
 }
@@ -2217,21 +2292,19 @@ function todayCardPoint(series, latestDate) {
 
 // 운동시간(분)과 운동칼로리(kcal)처럼 단위가 갈리는 짝인지. 혈압은 둘 다 mmHg다.
 function pairedUnitsDiffer(item) {
-  return Boolean(item.pair) && item.unit !== item.pair.unit;
+  return (item.pairs || []).some((partner) => partner.unit !== item.unit);
 }
 
 function todayCardText(item, pick) {
-  // 짝지은 항목은 '121/79'처럼 한 칸에 둘을 적는다. 값이 없는 쪽은 —로 둔다.
+  // 짝지은 항목은 '121/79'처럼 한 칸에 나란히 적는다. 값이 없는 쪽은 —로 둔다.
   // 단위가 갈리면 숫자마다 단위를 붙인다. '35/250'만으로는 어느 쪽이 무엇인지 모른다.
   const withUnit = pairedUnitsDiffer(item);
-  const number = (entry, value) => (
-    value === null || value === undefined ? "—" : formatDataNumber(value, entry.digits)
-  );
-  const own = number(item, pick(item));
-  const text = withUnit ? `${own}${item.unit}` : own;
-  if (!item.pair) return text;
-  const other = number(item.pair, pick(item.pair));
-  return `${text}/${withUnit ? `${other}${item.pair.unit}` : other}`;
+  const number = (entry) => {
+    const value = pick(entry);
+    const text = value === null || value === undefined ? "—" : formatDataNumber(value, entry.digits);
+    return withUnit ? `${text}${entry.unit}` : text;
+  };
+  return [item, ...(item.pairs || [])].map(number).join("/");
 }
 
 function formatClockTime(value) {
@@ -2266,9 +2339,9 @@ function buildTodayMetricCard(item, latestDate, days) {
   // 카드 안에서 최근 흐름을 한눈에 보여 준다. 숫자 하나만으로는 방향을 알 수 없다.
   // 단위가 갈리는 짝은 눈금을 같이 쓸 수 없다. 분과 kcal을 한 축에 얹으면
   // 자릿수가 큰 쪽만 보이고 다른 쪽은 바닥에 눌린 직선이 된다. 앞의 것만 그린다.
-  const spark = buildSparkline(
+  const spark = item.spark === false ? null : buildSparkline(
     pairedUnitsDiffer(item) ? [item.series]
-      : [item.series, ...(item.pair ? [item.pair.series] : [])],
+      : [item.series, ...(item.pairs || []).map((partner) => partner.series)],
     item.unit,
   );
   if (spark) main.appendChild(spark);
@@ -2286,7 +2359,7 @@ function buildTodayMetricCard(item, latestDate, days) {
       `마지막 기록 ${last.date} · ${todayCardText(item, (entry) => todayCardPoint(entry.series, last.date)?.value)}`));
   } else if (item.series.length < 2) {
     foot.appendChild(createTextElement("span", "today-card-average", `최근 ${days}일 중 1일 기록`));
-  } else if (item.pair) {
+  } else if (item.pairs) {
     // 짝지은 항목에 화살표를 둘 붙이면 어수선하다. 방향은 위의 미니 그래프가 말한다.
     foot.appendChild(createTextElement("span", "today-card-average",
       `${days}일 평균 ${todayCardText(item, mean)}`));

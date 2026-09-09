@@ -97,6 +97,18 @@ _TRIVIAL_CO_MOVEMENTS = {
     frozenset({"REM수면", "REM수면 비중"}),
 }
 
+# 영양의 3대 영양소는 그램이든 비중이든 서로 산술로 묶여 있다. 탄수화물을 더 먹으면
+# 지방 '비중'은 반드시 내려간다. 습관이 아니라 계산의 결과라 짝으로 넘기지 않는다.
+# 당은 탄수화물의 일부이고, 섭취칼로리는 셋의 합이라 같은 집안이다.
+# 포화지방은 지방의 일부이고 식이섬유는 탄수화물의 일부라 같은 집안이다.
+_MACRO_FAMILY = ("섭취칼로리", "탄수화물", "단백질", "지방", "당", "식이섬유",
+                 "탄수화물 비중", "단백질 비중", "지방 비중", "포화지방 비중")
+_TRIVIAL_CO_MOVEMENTS |= {
+    frozenset({left, right})
+    for index, left in enumerate(_MACRO_FAMILY)
+    for right in _MACRO_FAMILY[index + 1:]
+}
+
 # 같은 탭 안에서 함께 움직인 항목으로 볼 상관계수 문턱과 보고 상한.
 _CO_MOVEMENT_THRESHOLD = 0.6
 _MAX_CO_MOVEMENTS = 6
@@ -111,6 +123,19 @@ _CLOCK_STEADY_MINUTES = 30
 _CLOCK_LOOSE_MINUTES = 60
 # 주중과 주말의 시각 차이를 '다르다'고 볼 문턱(분).
 _CLOCK_WEEKEND_SHIFT_MINUTES = 45
+# 열량 환산 계수(kcal/g). 지방만 9라서 무게 비율과 열량 비율이 크게 갈린다.
+_MACRO_KCAL = {"탄수화물": 4, "단백질": 4, "지방": 9}
+_MACRO_COLUMNS = {"탄수화물": "carbohydrate", "단백질": "protein", "지방": "total_fat"}
+# 끼니 이름. lifestyle_nutrition.meal_type이 영문이라 우리말로 옮긴다.
+_MEAL_NAMES = {"breakfast": "아침", "lunch": "점심", "dinner": "저녁", "snack": "간식"}
+_MEAL_ORDER = ("breakfast", "lunch", "dinner", "snack")
+# 한 끼가 이 몫을 넘게 차지하면 '여기서 온다'고 짚는다.
+_MEAL_DOMINANT_SHARE = 40
+# 하루 열량에서 이 몫에 못 미치는 끼니는 '거의 거르는 편'으로 본다.
+_MEAL_SKIPPED_SHARE = 15
+# 간식이 하루 총량을 이만큼도 못 바꾸면 '총량을 늘리지 않는다'고 본다.
+_SNACK_NEUTRAL_RATIO = 0.05
+
 # WHO 성인 신체활동 권고. 하루로 나누지 않고 주 단위 그대로 쓴다.
 _EXERCISE_WEEKLY_TARGET_MINUTES = 150
 # 운동 종류 이름. lifestyle_exercise.exercise_type은 enum이 아니라 자유 문자열이라
@@ -337,8 +362,34 @@ def _daily_sum(source: str, date_key: str, value: Callable[[dict[str, Any]], Any
 #   혈당           대한당뇨병학회. 공복 정상 70~99, 공복혈당장애 100~125 / 식후 2시간 140 미만
 #   심박수         안정시 정상 60~100회
 #   걸음·운동시간  WHO 신체활동 권고(주 150분 중강도) 및 국내 걷기 권고 8,000걸음
-#   영양소         2020 한국인 영양소 섭취기준, WHO 나트륨 2g·당류 50g 권고
+#   영양소         2025 한국인 영양소 섭취기준(에너지적정비율·포화지방 7%·식이섬유·
+#                  칼륨 3,500mg·칼슘), WHO 나트륨 2g·당류 50g 권고
 #   수면           미국수면재단 성인 권장 7~9시간
+def _energy_ratio(column: str, kcal_per_gram: float):
+    """하루 총열량 대비 이 영양소가 낸 열량의 몫(%).
+
+    분모는 세 영양소로 낸 열량이다. 기록된 calories와 견줘 보면 어긋나는 날이 없어
+    어느 쪽을 써도 같지만, 한 곳에서만 정의해 두는 편이 어긋날 여지가 없다.
+    """
+
+    def value(row: dict[str, Any]) -> float | None:
+        grams = {name: row.get(_MACRO_COLUMNS[name]) for name in _MACRO_KCAL}
+        part = row.get(column)
+        if part is None or any(gram is None for gram in grams.values()):
+            return None
+        total = sum(float(grams[name]) * _MACRO_KCAL[name] for name in _MACRO_KCAL)
+        if total <= 0:
+            return None
+        return float(part) * kcal_per_gram / total * 100
+
+    return value
+
+
+def _macro_ratio(part: str):
+    """3대 영양소 각각의 열량 몫(%)."""
+    return _energy_ratio(_MACRO_COLUMNS[part], _MACRO_KCAL[part])
+
+
 _DOMAIN_METRICS: dict[str, list[_Metric]] = {
     "bio": [
         # 체중은 키·체성분에 따라 적정값이 달라 절대 기준을 두지 않는다. BMI로만 판정한다.
@@ -389,6 +440,31 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
                 direction="lower", high=2000, caution_high=3000),
         _Metric("당", "g", **_daily_sum("food", "consumed_at", lambda row: row.get("sugar")),
                 direction="lower", high=50, caution_high=75),
+        # 2025 한국인 영양소 섭취기준 에너지적정비율. 절대량이 아니라 이 비율이 균형을
+        # 말한다. 하루 합계가 아니라 그날의 비율이라 평균으로 묶는다.
+        _Metric("탄수화물 비중", "%", source="food", date_key="consumed_at", daily="mean",
+                kind="measurement", value=_macro_ratio("탄수화물"),
+                direction="range", low=50, high=65, caution_low=40, caution_high=70),
+        _Metric("단백질 비중", "%", source="food", date_key="consumed_at", daily="mean",
+                kind="measurement", value=_macro_ratio("단백질"),
+                direction="range", low=10, high=20, caution_low=7, caution_high=25),
+        _Metric("지방 비중", "%", source="food", date_key="consumed_at", daily="mean",
+                kind="measurement", value=_macro_ratio("지방"),
+                direction="range", low=15, high=30, caution_low=10, caution_high=35),
+        # 포화지방산은 19세 이상 총에너지의 7% 미만. 지방 안에서도 이쪽이 문제가 된다.
+        _Metric("포화지방 비중", "%", source="food", date_key="consumed_at", daily="mean",
+                kind="measurement", value=_energy_ratio("saturated_fat", 9),
+                direction="lower", high=7, caution_high=10),
+        # 식이섬유 충분섭취량은 남자 30g, 여자 20~25g이다. 성별을 모르므로 낮은 쪽에
+        # 문턱을 두어 여성에게 모자라다고 잘못 말하지 않게 한다.
+        _Metric("식이섬유", "g", **_daily_sum("food", "consumed_at", lambda row: row.get("dietary_fiber")),
+                direction="higher", low=25, caution_low=20),
+        # 칼륨 충분섭취량 3,500mg. 나트륨과 짝이라 함께 보면 뜻이 는다.
+        _Metric("칼륨", "mg", **_daily_sum("food", "consumed_at", lambda row: row.get("potassium")),
+                direction="higher", low=3500, caution_low=2800),
+        # 칼슘 권장섭취량은 남자 800mg, 여자 650~750mg. 가운데를 문턱으로 둔다.
+        _Metric("칼슘", "mg", **_daily_sum("food", "consumed_at", lambda row: row.get("calcium")),
+                direction="higher", low=700, caution_low=560),
         _Metric("수분 섭취", "mL", **_daily_sum("water", "consumed_at", lambda row: row.get("water_amount")),
                 direction="higher", low=1500, caution_low=1000),
     ],
@@ -772,6 +848,73 @@ def _exercise_habit(window: dict[str, Any], recent_days: int = 30) -> dict[str, 
     return summary
 
 
+def _meal_pattern(window: dict[str, Any]) -> dict[str, Any] | None:
+    """하루 열량과 나트륨이 어느 끼니에서 오는지 정리한다.
+
+    "나트륨을 줄이세요"는 어디를 손대야 할지 알려 주지 않는다. 어느 끼니에서 오는지를
+    알면 "저녁 국물을 줄여보세요"가 된다.
+    """
+    rows = (window.get("food") or {}).get("rows") or []
+    totals: dict[str, dict[str, float]] = {}
+    per_day: dict[str, float] = {}
+    snack_days: set[str] = set()
+    for row in rows:
+        meal = str(row.get("meal_type") or "").strip().lower()
+        day = _day(row.get("consumed_at"))
+        if not meal or not day:
+            continue
+        bucket = totals.setdefault(meal, {"calories": 0.0, "sodium": 0.0})
+        for key in bucket:
+            value = row.get(key)
+            if value is not None:
+                bucket[key] += float(value)
+        per_day[day] = per_day.get(day, 0.0) + float(row.get("calories") or 0)
+        if meal == "snack":
+            snack_days.add(day)
+    if len(per_day) < _MIN_DAYS_FOR_COMPARISON or len(totals) < 2:
+        return None
+
+    name = lambda meal: _MEAL_NAMES.get(meal, meal)
+    order = [meal for meal in _MEAL_ORDER if meal in totals]
+    order += [meal for meal in sorted(totals) if meal not in _MEAL_ORDER]
+
+    summary: dict[str, Any] = {"days": len(per_day)}
+    calories = sum(totals[meal]["calories"] for meal in order)
+    if calories <= 0:
+        return None
+    shares = {meal: totals[meal]["calories"] / calories * 100 for meal in order}
+    summary["calorie_share"] = " · ".join(f"{name(m)} {shares[m]:.0f}%" for m in order)
+    heaviest = max(order, key=lambda meal: shares[meal])
+    summary["heaviest"] = f"{name(heaviest)}이 가장 크다"
+
+    # 기준이 있는 항목은 어디서 오는지가 곧 어디를 손댈지가 된다.
+    sodium = sum(totals[meal]["sodium"] for meal in order)
+    if sodium > 0:
+        top = max(order, key=lambda meal: totals[meal]["sodium"])
+        ratio = totals[top]["sodium"] / sodium * 100
+        if ratio >= _MEAL_DOMINANT_SHARE:
+            summary["sodium_source"] = f"나트륨의 {ratio:.0f}%가 {name(top)}에서 온다"
+
+    # 거의 안 먹는 끼니가 있으면 짚는다. 거른 것이 아니라 기록을 안 했을 수도 있다.
+    light = [m for m in order if m != "snack" and shares[m] < _MEAL_SKIPPED_SHARE]
+    if light:
+        summary["light_meal"] = " · ".join(
+            f"{name(m)}이 하루 열량의 {shares[m]:.0f}%뿐" for m in light
+        )
+
+    # 간식을 애먼 범인으로 지목하지 못하게 막는다.
+    if snack_days and len(per_day) - len(snack_days) >= _MIN_DAYS_FOR_COMPARISON:
+        with_snack = fmean([per_day[day] for day in snack_days])
+        without = fmean([per_day[day] for day in per_day if day not in snack_days])
+        if abs(with_snack - without) <= without * _SNACK_NEUTRAL_RATIO:
+            summary["snack_effect"] = "간식을 먹은 날과 안 먹은 날의 하루 열량이 비슷하다"
+        else:
+            summary["snack_effect"] = (
+                f"간식을 먹은 날 하루 열량이 {'더 높다' if with_snack > without else '오히려 더 낮다'}"
+            )
+    return summary
+
+
 def _co_movements(pairs: list[tuple[_Metric, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
     """같은 탭 안에서 함께 움직인 항목 짝을 찾는다.
 
@@ -954,6 +1097,25 @@ def _tail_since(series: list[dict[str, Any]], latest_date: str, days: int) -> li
     return [point for point in series if point["date"] >= since]
 
 
+# 프롬프트에서 항목을 늘어놓는 순서. 급한 것이 앞에 와야 넉 줄 안에 담긴다.
+# level은 판정을 사람 말로 옮긴 값이라 그 말로 짝지어 둔다.
+_PROMPT_METRIC_RANK = {
+    _level_text(STATUS_MANAGE): 0,
+    _level_text(STATUS_CAUTION): 1,
+    _level_text(STATUS_GOOD): 2,
+    _level_text(STATUS_UNKNOWN): 3,
+}
+
+
+def _metric_priority(metric: dict[str, Any]) -> tuple[int, int]:
+    """(급한 정도, 얼마나 잦았는지). 둘 다 서비스가 이미 판정해 둔 값이다."""
+    signals = metric.get("recent") or metric.get("full") or {}
+    rank = _PROMPT_METRIC_RANK.get(signals.get("level", ""), 3)
+    # 같은 등급이면 자주 벗어난 쪽을 앞에 둔다. 한 번과 반복은 뜻이 다르다.
+    frequency = -(signals.get("out_of_range_days") or 0)
+    return rank, frequency
+
+
 # 항목마다 프롬프트에 넘길 값. 나머지 통계는 검증용으로만 남기고 모델에게 주지 않는다.
 # 여기에 필드를 더할 때는 그 값이 답변에 숫자로 새어 나와도 괜찮은지 먼저 따져야 한다.
 _PROMPT_METRIC_FIELDS = ("metric", "unit", "kind", "reference", "weekly_pattern")
@@ -985,7 +1147,8 @@ def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
     한 건만 남겨 날짜 나열을 부르지 않게 한다.
     """
     metrics = []
-    for metric in analysis.get("metrics", []):
+    # 급한 것을 앞에 둔다. 모델이 무엇을 말할지 고르기 전에 서비스가 먼저 고른다.
+    for metric in sorted(analysis.get("metrics", []), key=_metric_priority):
         accumulation = metric.get("kind") == "accumulation"
         view = {key: metric[key] for key in _PROMPT_METRIC_FIELDS if key in metric}
         view["full"] = _signal_view(metric.get("full"), accumulation)
@@ -1008,6 +1171,7 @@ def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
         ],
         "sleep_timing": analysis.get("sleep_timing"),
         "exercise_habit": analysis.get("exercise_habit"),
+        "meal_pattern": analysis.get("meal_pattern"),
     }
 
 
@@ -1084,6 +1248,8 @@ class LifestyleReportService:
             "co_movements": _co_movements(recorded),
             # 잠의 길이만으로는 안 보이는 것. 수면 탭에서만 값이 생긴다.
             "sleep_timing": _sleep_timing(window, _sleep_target_hours()) if domain == "sleep" else None,
+            # 하루 총량만으로는 어디를 손댈지 알 수 없다. 영양 탭에서만 값이 생긴다.
+            "meal_pattern": _meal_pattern(window) if domain == "nutrition" else None,
             # 운동은 활동과 갈라 빈도로 본다. 활동 탭에서만 값이 생긴다.
             "exercise_habit": (
                 _exercise_habit(window, windows["recent"]) if domain == "activity" else None

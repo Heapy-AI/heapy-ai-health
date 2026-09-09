@@ -227,9 +227,9 @@ class AdminWebUiTest(unittest.TestCase):
 
         self.assertIn('pairedWith: "diastolic", pairedLabel: "혈압"', script)
         # 둘 다 mmHg라 숫자만 '/'로 잇고 단위는 카드 뒤에 한 번만 붙는다.
-        self.assertIn("const text = withUnit ? `${own}${item.unit}` : own;", script)
-        # 짝을 합치고 남은 쪽은 카드 목록에서 뺀다.
-        self.assertIn("merged.add(partner.key);", script)
+        self.assertIn('return [item, ...(item.pairs || [])].map(number).join("/");', script)
+        # 짝을 합치고 남은 쪽은 카드 목록에서 뺀다. 짝은 여럿일 수 있다.
+        self.assertIn("partners.forEach((partner) => merged.add(partner.key));", script)
         self.assertIn("filter((item) => !merged.has(item.key))", script)
         # 그래프와 수치표는 그대로 둘로 나눠 본다.
         self.assertIn('{ title: "혈압", metrics: ["systolic", "diastolic"] }', script)
@@ -273,7 +273,7 @@ class AdminWebUiTest(unittest.TestCase):
             with self.subTest(tab=tab):
                 block = script[script.index(f"  {tab}: {{"):script.index(end)]
                 used = set()
-                for listed in re.findall(r'(?:metrics|columns): \[([^\]]+)\]', block):
+                for listed in re.findall(r'(?:metrics|columns|cards): \[([^\]]+)\]', block):
                     used.update(labels[key.strip().strip('"')] for key in listed.split(","))
                 self.assertLessEqual({m.label for m in _DOMAIN_METRICS[tab]}, used)
 
@@ -319,12 +319,47 @@ class AdminWebUiTest(unittest.TestCase):
 
         self.assertEqual(names, _EXERCISE_KIND_NAMES)
 
+    def test_nutrition_cards_show_macros_as_a_share(self) -> None:
+        """탄수화물 300g은 얼마나 먹었느냐에 딸려 다녀 그 자체로 말할 수 없다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        block = script[script.index("  nutrition: {"):script.index("  sleep: {")]
+
+        # 짝은 카드 목록 안에서만 찾는다. 셋을 다 적어야 한 장으로 합쳐진다.
+        self.assertIn(
+            'cards: ["intakeCalories", "carbRatio", "proteinRatio", "fatRatio", "waterCups"],',
+            block)
+        self.assertIn('pairedWith: ["proteinRatio", "fatRatio"],', script)
+        # 세 숫자의 균형을 읽는 카드라 미니 그래프는 두지 않는다.
+        self.assertIn("spark: false,", script)
+        self.assertIn("item.spark === false ? null : buildSparkline(", script)
+        # 무게가 아니라 열량 비율이다. 지방만 9kcal/g이라 둘이 크게 다르다.
+        self.assertIn("_MACRO_KCAL = { carbohydrate: 4, protein: 4, totalFat: 9 }", script)
+        # 세 영양소가 모두 있는 날만 비율을 낸다.
+        self.assertIn("if (parts.some((part) => !part.days.has(date)) || !numerator.has(date)) return;", script)
+        # 포화지방은 지방 안에 이미 들어 있어 분모에 더하지 않는다.
+        self.assertIn("_NON_MACRO_KCAL = { saturatedFat: 9 }", script)
+        # 나트륨·당은 카드에서 빠지되 그래프는 그대로 둔다.
+        for title in ("나트륨과 칼륨", "당"):
+            with self.subTest(title=title):
+                self.assertIn(f'{{ title: "{title}", metrics:', block)
+
+    def test_water_card_counts_cups_and_keeps_the_millilitres(self) -> None:
+        """1,500mL보다 '여섯 잔'이 하루치로 가늠하기 쉽다. 실제 양은 괄호로 남긴다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("const _WATER_CUP_ML = 250;", script)
+        self.assertIn('label: "수분 섭취", unit: "잔", digits: 1,', script)
+        self.assertIn('return total ? `(${formatDataNumber(total)}mL)` : "";', script)
+        # 그래프와 표는 mL 그대로 본다. 잔은 어림수라 흐름을 보기에는 거칠다.
+        block = script[script.index("  nutrition: {"):script.index("  sleep: {")]
+        self.assertIn('{ title: "수분 섭취", metrics: ["water"] }', block)
+
     def test_paired_card_with_two_units_labels_each_number(self) -> None:
         """'35/250'은 어느 쪽이 분이고 어느 쪽이 kcal인지 알 수 없다."""
         script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
 
         self.assertIn("function pairedUnitsDiffer(item)", script)
-        self.assertIn("return `${text}/${withUnit ? `${other}${item.pair.unit}` : other}`;", script)
+        self.assertIn("withUnit ? `${text}${entry.unit}` : text", script)
         # 숫자마다 단위를 달았으면 카드 뒤에 또 붙이지 않는다.
         self.assertIn("if (item.unit && !pairedUnitsDiffer(item)) {", script)
         # 분과 kcal은 눈금을 같이 쓸 수 없어 미니 그래프는 앞의 것만 그린다.
