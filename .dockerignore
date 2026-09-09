@@ -1,0 +1,20 @@
+# 작성자: 김진우 — 실행에 필요한 코드와 모델만 빌드로 전달한다.
+**
+!requirements-deploy.txt
+!requirements.txt
+!app/
+!app/**
+app/**/__pycache__/
+app/**/*.pyc
+!model/
+model/**
+!model/classifier/
+!model/classifier/artifacts/
+!model/classifier/artifacts/intent-v7/
+!model/classifier/artifacts/intent-v7/best_model.json
+!Dockerfile
+!scripts/
+scripts/**
+!scripts/deploy/
+scripts/deploy/**
+!scripts/deploy/cache_model.py
