@@ -5,11 +5,31 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
-from app.internal import app
+from app.internal import app, result_diagnostics
 from app.core.state import state
 
 
 class InternalTest(unittest.TestCase):
+    def test_diagnostics_allowlist_excludes_original_content(self):
+        result = SimpleNamespace(answer='synthetic-secret', audit_summary='synthetic-secret',
+            intent=SimpleNamespace(value='GENERAL'), confidence=0.8, grounded=True,
+            documents=[object()], model_version='v1', failed_collections=[])
+        value = result_diagnostics(result)
+        self.assertEqual(0.8, value['confidence'])
+        self.assertEqual(1, value['documentCount'])
+        self.assertNotIn('synthetic-secret', str(value))
+
+    def test_failure_preserves_stage_without_exception_text(self):
+        def events(*args, **kwargs):
+            yield SimpleNamespace(event='progress', stage='search_evidence')
+            raise RuntimeError('synthetic-secret')
+        state['chat_orchestrator'] = SimpleNamespace(stream_answer=events)
+        response = self.client.post('/internal/chat/stream', headers=self.headers,
+            json={'contractVersion':'1.0', 'message':'합성'})
+        self.assertIn('search_evidence', response.text)
+        self.assertIn('upstream_failure', response.text)
+        self.assertNotIn('synthetic-secret', response.text)
+
     def setUp(self):
         self.env = patch.dict(os.environ, {"INTERNAL_SERVICE_TOKEN": "synthetic-" * 8})
         self.env.start()

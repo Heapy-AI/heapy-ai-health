@@ -3,6 +3,10 @@
 import hmac
 import json
 import os
+import logging
+import re
+import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -103,6 +107,30 @@ def answer(request: InternalChatRequest):
         raise HTTPException(503, "챗봇 응답을 완료하지 못했습니다.") from None
 
 
+def result_diagnostics(result):
+    """데모 결과 중 본문 없는 진단 정보만 선별한다. 작성자: 김진우."""
+    values = {}
+    for target, source in {"intent": "intent", "modelVersion": "model_version",
+                           "verificationMethod": "verification_method", "evidenceStatus": "evidence_status",
+                           "auditStatus": "audit_status"}.items():
+        value = getattr(result, source, "")
+        value = getattr(value, "value", value)
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,80}", value):
+            values[target] = value
+    for target, source in {"personalContextUsed": "personal_context_used", "grounded": "grounded",
+                           "uncertain": "uncertain", "guardTriggered": "guard_triggered", "emergency": "emergency"}.items():
+        value = getattr(result, source, None)
+        if isinstance(value, bool):
+            values[target] = value
+    confidence = getattr(result, "confidence", None)
+    if isinstance(confidence, (int, float)) and not isinstance(confidence, bool) and 0 <= confidence <= 1:
+        values["confidence"] = confidence
+    for target, source in {"documentCount": "documents", "citationCount": "cited_chunk_ids",
+                           "failedCollectionCount": "failed_collections", "searchedCollectionCount": "searched_collections"}.items():
+        values[target] = min(len(getattr(result, source, []) or []), 10000)
+    return values
+
+
 def result_response(result):
     citations = []
     if result.grounded:
@@ -123,6 +151,7 @@ def result_response(result):
         raise ValueError("응답 형식 오류")
     return {"answer": result.answer, "citations": citations[:12],
             "summary": result.conversation_summary[:4000],
+            "diagnostics": result_diagnostics(result),
             "metadata": {"intent": result.intent.value, "emergency": result.emergency,
                              "personalContextUsed": result.personal_context_used}}
 
@@ -132,13 +161,22 @@ def event(name, data):
 
 
 @app.post("/internal/chat/stream", dependencies=[Depends(authorize)])
-def stream(request: InternalChatRequest):
+def stream(request: InternalChatRequest, x_request_id: str = Header(default="")):
     orchestrator = state.get("chat_orchestrator")
     if not orchestrator:
         raise HTTPException(503, "챗봇이 준비되지 않았습니다.")
 
     def generate():
         total = 0
+        stage = "prepare_query"
+        started = time.monotonic()
+        try:
+            trace_id = str(uuid.UUID(x_request_id))
+        except ValueError:
+            trace_id = str(uuid.uuid4())
+        logger = logging.getLogger("heapy.chat.diagnostics")
+        allowed_stages = {"prepare_query", "classify_intent", "load_health_context", "search_evidence",
+                          "generate_answer", "verify_answer", "summarize_conversation"}
         try:
             for item in orchestrator.stream_answer(
                 request.message, history=[turn.model_dump() for turn in request.history],
@@ -146,7 +184,9 @@ def stream(request: InternalChatRequest):
                 personal_context_loader=lambda question, terms: request.personalContext or None,
             ):
                 if item.event == "progress":
-                    yield event("status", {"stage": item.stage})
+                    if item.stage in allowed_stages:
+                        stage = item.stage
+                    yield event("status", {"stage": stage})
                 elif item.event == "token":
                     total += len(item.text)
                     if total > 16000:
@@ -154,10 +194,14 @@ def stream(request: InternalChatRequest):
                     yield event("delta", {"content": item.text})
                 elif item.event == "complete" and item.result is not None:
                     yield event("done", result_response(item.result))
+                    logger.warning("chat_diagnostic requestId=%s status=completed stage=%s elapsedMs=%d", trace_id, stage, int((time.monotonic()-started)*1000))
                     return
-            yield event("error", {"code": "CHAT_UNAVAILABLE"})
-        except Exception:
-            yield event("error", {"code": "CHAT_UNAVAILABLE"})
+            logger.warning("chat_diagnostic requestId=%s status=failed stage=%s errorCode=incomplete_stream", trace_id, stage)
+            yield event("error", {"code": "CHAT_UNAVAILABLE", "stage": stage, "diagnosticCode": "incomplete_stream"})
+        except Exception as error:
+            code = "timeout" if isinstance(error, TimeoutError) else "invalid_response" if isinstance(error, ValueError) else "upstream_failure"
+            logger.warning("chat_diagnostic requestId=%s status=failed stage=%s errorCode=%s elapsedMs=%d", trace_id, stage, code, int((time.monotonic()-started)*1000))
+            yield event("error", {"code": "CHAT_UNAVAILABLE", "stage": stage, "diagnosticCode": code})
 
     return StreamingResponse(generate(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
