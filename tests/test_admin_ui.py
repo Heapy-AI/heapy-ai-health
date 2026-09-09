@@ -346,6 +346,46 @@ class AdminWebUiTest(unittest.TestCase):
             with self.subTest(title=title):
                 self.assertNotIn(f'{{ title: "{title}", metrics:', block)
 
+    def test_bar_chart_ticks_are_numbers_people_can_count(self) -> None:
+        """[0, 최대/2, 최대]는 값에 딸려 다닌다. 7.6잔이면 3.8잔에 선이 그어진다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        # 간격은 1·2·5를 열 배씩 키운 수 중에서 고른다.
+        self.assertIn("const _TICK_STEPS = [1, 2, 5];", script)
+        self.assertIn("const _MAX_TICK_GAPS = 4;", script)
+        self.assertIn("function niceAxisTicks(highest)", script)
+        # 축 꼭대기는 간격의 배수로 올린다. 그래야 맨 위 눈금도 정수가 된다.
+        self.assertIn("Math.ceil(highest / step) * step", script)
+        # 눈금이 모두 정수면 자릿수를 붙이지 않는다. 8잔을 8.0잔으로 적지 않는다.
+        self.assertIn("ticks.every((tick) => Number.isInteger(tick)) ? 0 : metric.digits", script)
+
+    def test_line_chart_axis_wraps_the_reference_range(self) -> None:
+        """이 탭에서 가장 알고 싶은 것은 '내 선이 기준 안인가'다.
+
+        값만 감싸면 기준선이 화면 밖으로 나가 그 물음에 답할 수 없다.
+        """
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("function niceRangeTicks(low, high)", script)
+        # 막대와 같은 간격 규칙을 쓰되 0에서 시작하지 않는다.
+        self.assertIn("_TICK_STEPS.map((unit) => unit * 10 ** power)", script)
+        self.assertIn("Math.floor(low / step) * step", script)
+        # 축은 값과 참고범위를 모두 감싼다.
+        self.assertIn("Math.min(...values, ...marks), Math.max(...values, ...marks)", script)
+        # 참고범위 경계에 선을 긋는다.
+        self.assertIn(".line-chart-reference", styles)
+        self.assertIn('class: "line-chart-reference"', script)
+
+    def test_line_chart_reference_numbers_come_from_the_service(self) -> None:
+        """화면이 기준을 들고 있으면 분석과 어긋난다. 받은 수 자리에 선만 긋는다."""
+        script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("(payload.standards || {})[activeLifestyleTab] || []", script)
+        self.assertIn("{ low: item.low, high: item.high }", script)
+        # 축을 나눠 쓰면 어느 축의 기준인지 알 수 없어 긋지 않는다.
+        self.assertIn("if (!dualAxis) {", script)
+
     def test_standards_list_is_folded_and_judged_by_the_service(self) -> None:
         """카드 옆에 열두 줄을 펼쳐 두면 대표 값이 묻힌다. 접어 두고 눌러서 편다."""
         script = (ADMIN_FRONTEND_ROOT / "assets" / "app.js").read_text(encoding="utf-8")
@@ -379,15 +419,24 @@ class AdminWebUiTest(unittest.TestCase):
         styles = (ADMIN_FRONTEND_ROOT / "assets" / "styles.css").read_text(encoding="utf-8")
         block = script[script.index("  nutrition: {"):script.index("  sleep: {")]
 
-        self.assertIn('title: "탄수화물 · 단백질 · 지방", chart: "stack",', block)
-        # 셋을 따로 그리던 그래프는 없앤다.
-        for title in ("탄수화물", "단백질", "지방"):
+        # 막대 높이는 3대 영양소가 낸 열량이지 기록된 섭취칼로리가 아니다.
+        # 제목에 총량 이름을 넣으면 막대가 그 값이라고 주장하는 셈이 된다.
+        self.assertIn('title: "영양소 구성", chart: "stack",', block)
+        self.assertIn("표의 섭취칼로리와는 조금 다릅니다", block)
+        self.assertIn("if (group.note)", script)
+        # 따로 그리던 그래프는 없앤다. 섭취칼로리도 이 한 장에 들어온다.
+        for title in ("탄수화물", "단백질", "지방", "섭취칼로리"):
             with self.subTest(title=title):
                 self.assertNotIn(f'{{ title: "{title}", metrics:', block)
-        # 막대는 열량, 표는 기록한 그대로 그램이다.
         # 쌓는 차례는 아래부터 탄수화물·지방·단백질이다.
         self.assertIn('metrics: ["carbEnergy", "fatEnergy", "proteinEnergy"],', block)
-        self.assertIn('columns: ["carbohydrate", "protein", "totalFat"],', block)
+        # 기록된 섭취칼로리는 세 조각의 합과 정확히 같지 않다(중앙값 2.6% 크다).
+        # 그래서 쌓지 않고, 수면시간처럼 표 앞에 세워 구성과 나란히 읽게 한다.
+        stacked = block.split('metrics: ["carbEnergy"')[1].split("]")[0]
+        self.assertNotIn("intakeCalories", stacked)
+        self.assertIn(
+            'columns: ["intakeCalories", "carbohydrate", "protein", "totalFat"],', block)
+        # 막대는 열량, 표의 영양소는 기록한 그대로 그램이다.
         self.assertIn('unit: "kcal"', block)
         self.assertIn("point.value * factor", script)
         self.assertIn(".data-chart.macro-parts", styles)
@@ -401,7 +450,10 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertIn('return total ? `(${formatDataNumber(total)}mL)` : "";', script)
         # 그래프와 표는 mL 그대로 본다. 잔은 어림수라 흐름을 보기에는 거칠다.
         block = script[script.index("  nutrition: {"):script.index("  sleep: {")]
-        self.assertIn('{ title: "수분 섭취", metrics: ["water"] }', block)
+        # 그래프는 잔으로 그리고 표는 mL 그대로다. 환산 기준을 한 줄로 밝힌다.
+        self.assertIn('title: "수분 섭취", metrics: ["waterCups"], columns: ["water"],', block)
+        self.assertIn("250mL를 한 잔으로 세어 그립니다", block)
+        self.assertIn('palette: "water-blue",', block)
 
     def test_paired_card_with_two_units_labels_each_number(self) -> None:
         """'35/250'은 어느 쪽이 분이고 어느 쪽이 kcal인지 알 수 없다."""
@@ -427,7 +479,10 @@ class AdminWebUiTest(unittest.TestCase):
         self.assertNotIn("detail_data?.deep_sleep_min ", script)
         self.assertNotIn("detail_data?.awake_min ", script)
         # 단계는 서로 견줘야 뜻이 생기므로 쌓아서 보여 준다.
-        self.assertIn('title: "수면시간 및 단계", chart: "stack"', script)
+        # 막대 높이는 단계를 쌓은 값이지 기록된 수면시간이 아니다.
+        # 제목에 총량 이름을 넣으면 막대가 그 값이라고 주장하는 셈이 된다.
+        self.assertIn('title: "수면 구성", chart: "stack"', script)
+        self.assertIn("표의 수면시간과는 조금 다를 수 있습니다", script)
         self.assertIn("function buildStackedChart", script)
         # 누적 막대가 총 수면시간까지 보여 주므로 수면시간 단독 그래프는 두지 않는다.
         self.assertNotIn('{ title: "수면시간", metrics: ["sleepHours"] }', script)
@@ -483,7 +538,7 @@ class AdminWebUiTest(unittest.TestCase):
         # 그래프 셋과 표가 모두 같은 표기를 쓴다.
         self.assertIn("buildLineChart(group.title, series, days, gapDate)", script)
         self.assertIn("buildStackedChart(group.title, series, group.axis, days, gapDate)", script)
-        self.assertIn("buildLifestyleBarChart(group.title, series[0], series[0].points, days, gapDate)", script)
+        self.assertIn("days, gapDate, group.palette)", script)
         self.assertIn("value: (row) => formatBucketDate(row.date, days)", script)
 
     def test_sparse_buckets_are_dimmed_for_daily_totals(self) -> None:
@@ -519,7 +574,7 @@ class AdminWebUiTest(unittest.TestCase):
         # 그래프 셋 모두 빈칸을 받는다.
         self.assertIn("buildStackedChart(group.title, series, group.axis, days, gapDate)", script)
         self.assertIn("buildLineChart(group.title, series, days, gapDate)", script)
-        self.assertIn("buildLifestyleBarChart(group.title, series[0], series[0].points, days, gapDate)", script)
+        self.assertIn("days, gapDate, group.palette)", script)
         # 안내는 그래프 바로 위에 붙고 조사도 받침에 맞춘다.
         self.assertIn("부터 기록되었습니다.", script)
         self.assertIn("function withTopicParticle", script)

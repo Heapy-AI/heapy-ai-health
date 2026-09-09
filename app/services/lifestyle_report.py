@@ -254,6 +254,7 @@ class _Metric:
         high: float | None = None,
         caution_low: float | None = None,
         caution_high: float | None = None,
+        paired_with: str | None = None,
     ) -> None:
         self.label = label
         self.unit = unit
@@ -268,6 +269,10 @@ class _Metric:
         self.high = high
         self.caution_low = caution_low
         self.caution_high = caution_high
+        # 함께 판정해야 하는 짝의 이름과, 그날 짝의 판정을 돌려주는 함수.
+        # 목록에 적어 두는 것은 이름뿐이고 함수는 분석할 때 붙인다.
+        self.paired_with = paired_with
+        self.companion_status: Callable[[str], str] | None = None
 
     def with_thresholds(self, **bounds: float | None) -> "_Metric":
         """기준만 바꾼 사본. 값 추출 방식은 그대로 둔다."""
@@ -306,6 +311,16 @@ class _Metric:
         if self.direction == "lower" and self.high is not None:
             return f"{self.high}{suffix} 미만"
         return ""
+
+    def paired_status(self, date: str, value: float | None) -> str:
+        """그날의 판정. 짝이 있으면 둘 중 나쁜 쪽으로 본다.
+
+        혈압이 그렇다. 수축기만 높아도, 이완기만 높아도 그 등급이다.
+        """
+        own = self.status(value)
+        if not self.companion_status:
+            return own
+        return _worse_status(own, self.companion_status(date))
 
     def status(self, value: float | None) -> str:
         """참고범위와 견줘 양호·주의·관리 필요를 코드가 정한다."""
@@ -513,9 +528,13 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
         _Metric("체중", "kg", **_bio("weight", lambda row: row.get("value")), direction="trend"),
         _Metric("BMI", "", **_bio("bmi", lambda row: row.get("value")),
                 direction="range", low=18.5, high=22.9, caution_low=17.0, caution_high=24.9),
-        _Metric("수축기 혈압", "mmHg", **_bio("blood_pressure", lambda row: _detail(row, "systolic")),
+        # 대한고혈압학회 기준은 수축기 '또는' 이완기 중 나쁜 쪽으로 등급을 매긴다.
+        # 따로 판정하면 124/78 같은 날에 한쪽만 주의가 되어 판정이 갈린다.
+        _Metric("수축기 혈압", "mmHg", paired_with="이완기 혈압",
+                **_bio("blood_pressure", lambda row: _detail(row, "systolic")),
                 direction="range", low=90, high=119, caution_low=80, caution_high=139),
-        _Metric("이완기 혈압", "mmHg", **_bio("blood_pressure", lambda row: _detail(row, "diastolic")),
+        _Metric("이완기 혈압", "mmHg", paired_with="수축기 혈압",
+                **_bio("blood_pressure", lambda row: _detail(row, "diastolic")),
                 direction="range", low=60, high=79, caution_low=50, caution_high=89),
         _Metric(
             "공복 혈당", "mg/dL", source="bio", date_key="measured_at", daily="mean", kind="measurement",
@@ -614,6 +633,15 @@ _DOMAIN_METRICS: dict[str, list[_Metric]] = {
                 direction="range", low=20, high=25, caution_low=15, caution_high=30),
     ],
 }
+
+
+# 나쁜 쪽이 이긴다. 혈압은 수축기·이완기 중 한쪽만 높아도 그 등급이다.
+_STATUS_SEVERITY = {STATUS_MANAGE: 3, STATUS_CAUTION: 2, STATUS_GOOD: 1, STATUS_UNKNOWN: 0}
+
+
+def _worse_status(left: str, right: str) -> str:
+    """둘 중 나쁜 쪽. 판단 보류는 가장 약하게 본다."""
+    return left if _STATUS_SEVERITY.get(left, 0) >= _STATUS_SEVERITY.get(right, 0) else right
 
 
 def _level_text(status: str) -> str:
@@ -890,6 +918,10 @@ def today_standards(
             "date": latest["date"],
             "value": value,
             "reference": metric.reference_text,
+            # 화면이 기준선을 그으려면 글자가 아니라 수가 필요하다. 판정은 여전히
+            # 여기서 끝내고, 화면은 받은 수 자리에 선만 긋는다.
+            "low": metric.low,
+            "high": metric.high,
             "status": metric.status(value),
             "ratio": round(ratio),
             # 넘쳐서 벗어난 것과 모자라서 벗어난 것은 할 일이 다르다. 다만 기준 안이면
@@ -902,6 +934,26 @@ def today_standards(
     order = {STATUS_MANAGE: 0, STATUS_CAUTION: 1, STATUS_GOOD: 2, STATUS_UNKNOWN: 3}
     standards.sort(key=lambda item: (order.get(item["status"], 3), -abs(item["ratio"] - 100)))
     return standards
+
+
+def _link_pairs(metrics: list[_Metric], window: dict[str, Any]) -> list[_Metric]:
+    """함께 판정해야 하는 항목끼리 서로의 그날 판정을 볼 수 있게 잇는다.
+
+    항목 정의는 모듈이 공유하는 값이라 그대로 두고, 이 분석에서만 쓸 사본에 붙인다.
+    """
+    by_label = {metric.label: metric for metric in metrics}
+    if not any(metric.paired_with for metric in metrics):
+        return metrics
+    linked = [metric.with_thresholds() if metric.paired_with else metric for metric in metrics]
+    for metric in linked:
+        partner = by_label.get(metric.paired_with or "")
+        if not partner:
+            continue
+        # 짝의 날짜별 판정을 미리 만들어 둔다. 계열을 다시 만들지 않기 위해서다.
+        judged = {point["date"]: partner.status(point["value"])
+                  for point in partner.daily_series(window)}
+        metric.companion_status = lambda date, judged=judged: judged.get(date, STATUS_UNKNOWN)
+    return linked
 
 
 def domain_metrics(
@@ -1160,12 +1212,14 @@ def _find_anomalies(metric: _Metric, series: list[dict[str, Any]]) -> list[dict[
     values = [point["value"] for point in series]
     average = fmean(values)
     deviation = pstdev(values) if len(values) > 1 else 0.0
-    out_of_range = sum(1 for value in values if metric.status(value) in {STATUS_CAUTION, STATUS_MANAGE})
+    out_of_range = sum(1 for point in series
+                       if metric.paired_status(point["date"], point["value"])
+                       in {STATUS_CAUTION, STATUS_MANAGE})
     is_chronic = out_of_range > len(values) * _CHRONIC_OUT_OF_RANGE_RATIO
 
     found = []
     for point in series:
-        status = metric.status(point["value"])
+        status = metric.paired_status(point["date"], point["value"])
         reasons = []
         if status in {STATUS_CAUTION, STATUS_MANAGE}:
             reasons.append(f"참고범위({metric.reference_text}) 밖")
@@ -1217,7 +1271,7 @@ def _signals(metric: _Metric, series: list[dict[str, Any]], window_days: int) ->
         earlier_range = f"{earlier[0]['date']}~{earlier[-1]['date']}"
         recent_range = f"{later[0]['date']}~{later[-1]['date']}"
 
-    statuses = [metric.status(value) for value in values]
+    statuses = [metric.paired_status(point["date"], point["value"]) for point in series]
     out_of_range_days = sum(1 for status in statuses if status in {STATUS_CAUTION, STATUS_MANAGE})
     coverage_ratio = round(len(values) / window_days, 2)
     cv = round(deviation / abs(average) * 100, 1) if average else None
@@ -1332,6 +1386,40 @@ def _signal_view(signals: dict[str, Any] | None, with_coverage: bool) -> dict[st
     return view
 
 
+# 프롬프트에서 한 항목으로 합칠 짝. 앞의 것이 대표 이름을 정한다.
+_PROMPT_MERGED_PAIRS = (("수축기 혈압", "이완기 혈압", "혈압"),)
+
+
+def _merge_paired(metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """함께 판정한 짝은 한 항목으로 합쳐서 넘긴다.
+
+    둘로 주면 둘로 말한다. 혈압은 '128에 80'처럼 한 번에 읽는 값이지
+    수축기와 이완기를 따로 평하는 값이 아니다.
+    """
+    by_label = {metric["metric"]: metric for metric in metrics}
+    merged, hidden = [], set()
+    for first, second, label in _PROMPT_MERGED_PAIRS:
+        head, tail = by_label.get(first), by_label.get(second)
+        if not head or not tail:
+            continue
+        hidden.update({first, second})
+        pair = dict(head)
+        pair["metric"] = label
+        pair["reference"] = f"{head['reference'].split()[0]}/{tail['reference']}"
+        # 판정은 이미 둘 중 나쁜 쪽으로 잡혀 있다. 수치만 둘을 나란히 적는다.
+        # 대표 수치는 뒤에서 recent_average·average로 다시 뽑으므로 그 자리에 넣는다.
+        for span in ("full", "recent"):
+            if not pair.get(span) or not tail.get(span):
+                continue
+            together = (
+                f"{round(head[span]['recent_average'] or head[span]['average'])}"
+                f"/{round(tail[span]['recent_average'] or tail[span]['average'])}"
+            )
+            pair[span] = {**pair[span], "recent_average": together, "average": together}
+        merged.append(pair)
+    return merged + [m for m in metrics if m["metric"] not in hidden]
+
+
 def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
     """모델에게 보여 줄 압축본을 만든다.
 
@@ -1341,7 +1429,7 @@ def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
     """
     metrics = []
     # 급한 것을 앞에 둔다. 모델이 무엇을 말할지 고르기 전에 서비스가 먼저 고른다.
-    for metric in sorted(analysis.get("metrics", []), key=_metric_priority):
+    for metric in sorted(_merge_paired(analysis.get("metrics", [])), key=_metric_priority):
         accumulation = metric.get("kind") == "accumulation"
         view = {key: metric[key] for key in _PROMPT_METRIC_FIELDS if key in metric}
         view["full"] = _signal_view(metric.get("full"), accumulation)
@@ -1423,7 +1511,7 @@ class LifestyleReportService:
         성별·나이를 주면 그 사람의 섭취기준으로 판정한다. 모르면 가장 느슨한 값을 쓴다.
         """
         windows = analysis_window(domain)
-        metrics = domain_metrics(domain, sex, age)
+        metrics = _link_pairs(domain_metrics(domain, sex, age), window)
         series_by_metric = [(metric, metric.daily_series(window)) for metric in metrics]
         # 마지막 기록일은 항목마다 갈릴 수 있어 탭 안에서 가장 늦은 날을 당일 기준으로 삼는다.
         latest_date = max(

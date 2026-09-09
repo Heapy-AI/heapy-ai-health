@@ -138,14 +138,14 @@ class ReferenceCriteriaDocTest(unittest.TestCase):
 
     def test_the_footnote_wording_matches_the_service(self) -> None:
         """각주는 사용자가 보는 말이다. 문서에 적힌 그대로 나가야 한다."""
-        from app.services.lifestyle_report import _reference_basis
+        from app.services.lifestyle_report import reference_basis
 
         rows = _rows(_section("### 어느 잣대로 쟀는지 화면에 밝힌다"))
         cases = ((None, None), ("Male", None), ("Male", 40))
         for (sex, age), row in zip(cases, rows):
             with self.subTest(sex=sex, age=age):
                 # 문서는 '참고범위는 ~습니다' 꼴로 적고, 서비스는 그 가운데 토막만 만든다.
-                self.assertIn(_reference_basis(sex, age).replace("않음", ""), row[1])
+                self.assertIn(reference_basis(sex, age).replace("않음", ""), row[1])
 
     def test_sources_name_where_each_number_came_from(self) -> None:
         """어느 기관의 무슨 문서인지 없으면 나중에 고칠 수가 없다."""

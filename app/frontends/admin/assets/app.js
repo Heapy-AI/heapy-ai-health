@@ -1909,6 +1909,26 @@ function svgNode(name, attributes, text = "") {
   return node;
 }
 
+function niceRangeTicks(low, high) {
+  // 값과 기준을 모두 감싸는 구간을 셈하기 쉬운 눈금으로 나눈다.
+  // 0에서 시작하지 않는다. 측정값은 좁은 폭에서 오르내리기 때문이다.
+  const spread = Math.max(high - low, Math.abs(high) * 0.02, 1);
+  let step = 1;
+  for (let power = -2; power < 12; power += 1) {
+    const found = _TICK_STEPS.map((unit) => unit * 10 ** power)
+      .find((candidate) => Math.ceil(spread / candidate) <= _MAX_TICK_GAPS);
+    if (found) { step = found; break; }
+  }
+  const bottom = Math.floor(low / step) * step;
+  const top = Math.max(Math.ceil(high / step) * step, bottom + step);
+  const ticks = [];
+  // 부동소수 오차가 쌓이지 않게 배수로 세어 나간다.
+  for (let index = 0; bottom + index * step <= top + step / 1000; index += 1) {
+    ticks.push(Number((bottom + index * step).toFixed(6)));
+  }
+  return { ticks, bottom, top };
+}
+
 function buildLineChart(title, series, days, gapDate) {
   const colors = ["#2f8f6b", "#e3924d", "#5e83c5", "#bd6c9b"];
   const plots = series.map((item) => item.points
@@ -1920,15 +1940,25 @@ function buildLineChart(title, series, days, gapDate) {
   if (!axis.length) return null;
   // 기록이 시작되기 전 한 칸을 비워 두면 언제부터 값이 생겼는지 눈에 들어온다.
   if (gapDate) axis.unshift(gapDate);
-  const scaleOf = (group) => {
+  const scaleOf = (group, bounds) => {
     const values = group.flat().map((point) => point.value);
     if (!values.length) return null;
-    const min = Math.min(...values);
-    return { min, max: Math.max(...values, min + 1) };
+    // 참고범위를 축 안에 넣어야 기준선이 화면에 들어온다. 값만 감싸면
+    // "내 선이 기준 안인가"라는 물음에 그래프가 답할 수 없다.
+    const marks = bounds.flatMap((bound) => [bound.low, bound.high])
+      .filter((value) => Number.isFinite(value));
+    const { ticks, bottom, top } = niceRangeTicks(
+      Math.min(...values, ...marks), Math.max(...values, ...marks));
+    return { min: bottom, max: top, ticks };
   };
   // 체중과 BMI처럼 단위가 다른 짝은 축을 좌우로 나눠야 각 선의 변화가 눌리지 않는다.
-  const rightScale = scaleOf(plots.filter((_, index) => series[index].axis === "right"));
-  const leftScale = scaleOf(plots.filter((_, index) => series[index].axis !== "right"));
+  const boundsOf = (side) => series
+    .filter((item) => (item.axis === "right") === (side === "right"))
+    .map((item) => item.bounds || {});
+  const rightScale = scaleOf(
+    plots.filter((_, index) => series[index].axis === "right"), boundsOf("right"));
+  const leftScale = scaleOf(
+    plots.filter((_, index) => series[index].axis !== "right"), boundsOf("left"));
   const baseScale = leftScale || rightScale;
   const dualAxis = Boolean(leftScale && rightScale);
   const scaleOfSeries = (index) => (dualAxis && series[index].axis === "right" ? rightScale : baseScale);
@@ -1951,20 +1981,47 @@ function buildLineChart(title, series, days, gapDate) {
       x1: width - padRight, x2: width - padRight, y1: yRatio(1), y2: yRatio(0), class: "line-chart-axis",
     }));
   }
-  [0, .5, 1].forEach((ratio) => {
+  // 눈금은 규칙이 정한 자리에 찍는다. 축을 나눠 쓰면 두 축의 눈금 수가 다를 수
+  // 있으므로 선은 왼쪽 축을 따르고, 오른쪽 축은 라벨만 제 눈금에 붙인다.
+  const ratioOf = (scale, value) => (value - scale.min) / (scale.max - scale.min);
+  const tickDigits = (scale) => (scale.ticks.every((tick) => Number.isInteger(tick)) ? 0 : 1);
+  baseScale.ticks.forEach((tick) => {
+    const ratio = ratioOf(baseScale, tick);
     svg.appendChild(svgNode("line", {
       x1: padLeft, x2: width - padRight, y1: yRatio(ratio), y2: yRatio(ratio), class: "line-chart-grid",
     }));
     svg.appendChild(svgNode("text", {
       x: padLeft - 6, y: yRatio(ratio), "text-anchor": "end", "dominant-baseline": "middle",
       class: "line-chart-axis-label", ...(dualAxis ? { style: `fill: ${colorOfAxis("left")}` } : {}),
-    }, formatDataNumber(baseScale.min + (baseScale.max - baseScale.min) * ratio, 1)));
-    if (!dualAxis) return;
-    svg.appendChild(svgNode("text", {
-      x: width - padRight + 6, y: yRatio(ratio), "text-anchor": "start", "dominant-baseline": "middle",
-      class: "line-chart-axis-label", style: `fill: ${colorOfAxis("right")}`,
-    }, formatDataNumber(rightScale.min + (rightScale.max - rightScale.min) * ratio, 1)));
+    }, formatDataNumber(tick, tickDigits(baseScale))));
   });
+  if (dualAxis) {
+    rightScale.ticks.forEach((tick) => {
+      svg.appendChild(svgNode("text", {
+        x: width - padRight + 6, y: yRatio(ratioOf(rightScale, tick)), "text-anchor": "start",
+        "dominant-baseline": "middle", class: "line-chart-axis-label",
+        style: `fill: ${colorOfAxis("right")}`,
+      }, formatDataNumber(tick, tickDigits(rightScale))));
+    });
+  }
+  // 참고범위 경계. 선이 이 자리 안에 있는지가 이 탭에서 가장 알고 싶은 것이다.
+  // 축을 나눠 쓰면 어느 축의 기준인지 알 수 없어 긋지 않는다.
+  if (!dualAxis) {
+    const drawn = new Set();
+    series.forEach((item, index) => {
+      const bounds = item.bounds || {};
+      [bounds.low, bounds.high].forEach((mark) => {
+        if (!Number.isFinite(mark) || mark < baseScale.min || mark > baseScale.max) return;
+        if (drawn.has(mark)) return;
+        drawn.add(mark);
+        svg.appendChild(svgNode("line", {
+          x1: padLeft, x2: width - padRight,
+          y1: yRatio(ratioOf(baseScale, mark)), y2: yRatio(ratioOf(baseScale, mark)),
+          style: `stroke: ${colors[index % colors.length]}`, class: "line-chart-reference",
+        }));
+      });
+    });
+  }
   plots.forEach((itemPoints, seriesIndex) => {
     if (!itemPoints.length) return;
     const color = colors[seriesIndex % colors.length];
@@ -2515,10 +2572,18 @@ function renderLifestyleToday(payload, days) {
 
 function renderLifestyleTrends(payload, days, latestDate) {
   const config = lifestyleTabConfigs[activeLifestyleTab] || { groups: [] };
+  // 참고범위의 수는 서비스가 보내 준다. 화면이 기준을 들고 있으면 분석과 어긋난다.
+  const bounds = new Map(((payload.standards || {})[activeLifestyleTab] || [])
+    .map((item) => [item.metric, { low: item.low, high: item.high }]));
   const toSeries = (keys) => keys
     .map((key) => {
       const metric = lifestyleMetrics[key];
-      return { key, ...metric, points: bucketSeries(metricDailySeries(payload, metric), days) };
+      return {
+        key,
+        ...metric,
+        bounds: bounds.get(metric.label) || {},
+        points: bucketSeries(metricDailySeries(payload, metric), days),
+      };
     })
     .filter((item) => item.points.length);
 

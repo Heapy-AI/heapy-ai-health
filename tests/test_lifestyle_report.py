@@ -483,6 +483,19 @@ class LifestyleAnalysisTest(unittest.TestCase):
                 self.assertIn(row["status"], {"양호", "주의", "관리 필요", "판단 보류"})
                 self.assertTrue(row["reference"])
 
+    def test_standards_carry_the_reference_numbers_for_drawing(self) -> None:
+        """화면이 기준선을 그으려면 글자가 아니라 수가 필요하다."""
+        from app.services.lifestyle_report import today_standards
+
+        rows = {row["metric"]: row for row in today_standards("bio", LIFESTYLE_WINDOW)}
+
+        self.assertEqual(rows["수축기 혈압"]["low"], 90)
+        self.assertEqual(rows["수축기 혈압"]["high"], 119)
+        # 낮을수록 좋은 항목은 위쪽 경계만 있다.
+        sleep = {row["metric"]: row for row in today_standards("sleep", LIFESTYLE_WINDOW)}
+        self.assertIsNone(sleep["뒤척임"]["low"])
+        self.assertEqual(sleep["뒤척임"]["high"], 30)
+
     def test_standards_skip_metrics_without_a_reference(self) -> None:
         """기준이 없는 항목은 견줄 것이 없어 목록에 넣지 않는다."""
         from app.services.lifestyle_report import today_standards
@@ -519,6 +532,56 @@ class LifestyleAnalysisTest(unittest.TestCase):
             with self.subTest(domain=domain):
                 analysis = LifestyleReportService.build_analysis(domain, LIFESTYLE_WINDOW)
                 self.assertIsNone(analysis["exercise_habit"])
+
+    def test_blood_pressure_is_judged_by_the_worse_of_the_two(self) -> None:
+        """대한고혈압학회 기준은 수축기 '또는' 이완기 중 나쁜 쪽으로 등급을 매긴다."""
+        from app.services.lifestyle_report import _DOMAIN_METRICS, _link_pairs
+
+        # 119/84 — 수축기만 보면 양호, 이완기를 함께 보면 주의다.
+        window = {"bio": {"rows": [
+            {"measured_at": f"2026-09-0{day}T07:00:00", "bio_type": "blood_pressure",
+             "value": 119, "detail_data": {"systolic": 119, "diastolic": 84}}
+            for day in range(1, 6)
+        ]}}
+        linked = {m.label: m for m in _link_pairs(list(_DOMAIN_METRICS["bio"]), window)}
+        systolic = linked["수축기 혈압"]
+
+        self.assertEqual(systolic.status(119), "양호")
+        self.assertEqual(systolic.paired_status("2026-09-01", 119), "주의")
+
+        # 반대로 이완기만 정상인 날도 같은 등급이 된다.
+        other = {"bio": {"rows": [
+            {"measured_at": f"2026-09-0{day}T07:00:00", "bio_type": "blood_pressure",
+             "value": 124, "detail_data": {"systolic": 124, "diastolic": 78}}
+            for day in range(1, 6)
+        ]}}
+        pair = {m.label: m for m in _link_pairs(list(_DOMAIN_METRICS["bio"]), other)}
+        self.assertEqual(pair["이완기 혈압"].status(78), "양호")
+        self.assertEqual(pair["이완기 혈압"].paired_status("2026-09-01", 78), "주의")
+
+    def test_blood_pressure_reaches_the_prompt_as_one_item(self) -> None:
+        """둘로 주면 둘로 말한다. 혈압은 한 번에 읽는 값이다."""
+        from app.services.lifestyle_report import _prompt_view
+
+        view = _prompt_view(LifestyleReportService.build_analysis("bio", LIFESTYLE_WINDOW))
+        listed = [m["metric"] for m in view["metrics"]]
+
+        self.assertIn("혈압", listed)
+        for gone in ("수축기 혈압", "이완기 혈압"):
+            with self.subTest(metric=gone):
+                self.assertNotIn(gone, listed)
+        pressure = next(m for m in view["metrics"] if m["metric"] == "혈압")
+        # 참고범위와 대표 수치를 둘 다 '수축기/이완기' 꼴로 적는다.
+        self.assertIn("/", pressure["reference"])
+        self.assertIn("/", str((pressure.get("recent") or pressure["full"])["typical"]))
+
+    def test_graphs_still_separate_the_two_pressures(self) -> None:
+        """판정만 합친다. 흐름은 따로 보는 편이 낫다."""
+        analysis = LifestyleReportService.build_analysis("bio", LIFESTYLE_WINDOW)
+        labels = [m["metric"] for m in analysis["metrics"]]
+
+        self.assertIn("수축기 혈압", labels)
+        self.assertIn("이완기 혈압", labels)
 
     def test_activity_analysis_drops_what_merely_tracks_steps(self) -> None:
         """계단·활동시간·이동거리는 걸음 수를 따라 움직여 새 이야기가 되지 않는다.
@@ -1025,6 +1088,14 @@ class LifestylePromptTest(unittest.TestCase):
         # 간식을 애먼 범인으로 지목하지 못하게 막는다.
         self.assertIn("간식을 문제로 지목하지 마라", prompt)
         self.assertIn("기록을 안 했을 수도 있다", prompt)
+
+    def test_bio_prompt_reads_blood_pressure_as_one_value(self) -> None:
+        """수축기와 이완기를 따로 평하면 한쪽만 높은 날을 놓친다."""
+        prompt = self._prompt("bio")
+
+        self.assertIn("혈압은 '혈압' 한 항목으로 넘어온다", prompt)
+        self.assertIn("수축기와 이완기를 따로 평하지 마라", prompt)
+        self.assertIn("한쪽만 높아도 그 등급이기 때문이다", prompt)
 
     def test_prompt_teaches_how_to_connect_sentences(self) -> None:
         """'하나의 이야기로 묶어라'만으로는 한 문장에 한 항목씩 나열했다."""

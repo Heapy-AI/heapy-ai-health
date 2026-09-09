@@ -538,6 +538,8 @@ svg text { stroke: none; }
 .line-chart { min-height: 190px; padding: 14px 16px 10px; border: 1px solid var(--health-green-line); border-radius: 16px; background: rgba(255,255,255,.8); }
 .line-chart-title { color: var(--health-green-dark); font-size: 11px; font-weight: 800; }
 .line-chart svg { display: block; width: 100%; height: 150px; margin-top: 8px; overflow: visible; }
+/* 참고범위 경계. 눈금선과 헷갈리지 않게 점선으로 긋고 계열 색을 따라간다. */
+.line-chart-reference { stroke-width: 1; stroke-dasharray: 5 4; opacity: .55; }
 .line-chart-grid { stroke: #a8cfc0; stroke-width: 1.2; stroke-dasharray: 4 3; }
 .line-chart-axis { stroke: #7fb8a3; stroke-width: 1.4; }
 .line-chart-line { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
