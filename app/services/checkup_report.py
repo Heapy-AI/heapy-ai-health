@@ -22,10 +22,12 @@ from app.services.checkup_persona_prompt import (
 class CheckupReportService:
     """검진 이력의 수치 변화를 계산하고 페르소나에 맞춰 설명을 생성한다."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, max_retries: int | None = None) -> None:
+        options = {} if max_retries is None else {"max_retries": max_retries}
         self._llm = ChatGoogleGenerativeAI(
             model=MODEL,
             temperature=0,
+            **options,
         ).with_structured_output(
             CheckupReportContent
         )
