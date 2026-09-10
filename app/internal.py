@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.state import state
+from app.health_analysis import build_router
 
 
 class Turn(BaseModel):
@@ -60,6 +61,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="HEAPY 내부 챗봇", lifespan=lifespan,
               docs_url=None, redoc_url=None, openapi_url=None)
+
+# 작성자: 김진우 — 데모 인증 경로를 공개하지 않고 건강 분석만 등록한다.
+app.include_router(build_router(authorize))
 
 
 @app.middleware("http")

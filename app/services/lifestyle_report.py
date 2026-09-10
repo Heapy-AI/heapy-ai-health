@@ -1460,8 +1460,9 @@ def _prompt_view(analysis: dict[str, Any]) -> dict[str, Any]:
 class LifestyleReportService:
     """탭별 수치와 판정은 직접 계산하고 설명만 Gemini에 맡긴다."""
 
-    def __init__(self) -> None:
-        self._llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0).with_structured_output(
+    def __init__(self, *, max_retries: int | None = None) -> None:
+        options = {} if max_retries is None else {"max_retries": max_retries}
+        self._llm = ChatGoogleGenerativeAI(model=MODEL, temperature=0, **options).with_structured_output(
             LifestyleReportContent
         )
 
