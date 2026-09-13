@@ -107,7 +107,8 @@ def score_response(request: AnalysisRequest) -> dict[str, Any]:
 
     window = normalize_window(request)
     result = calculate(window, request.age,
-                       (request.analysisDate - timedelta(days=1)).isoformat())
+                       (request.analysisDate - timedelta(days=1)).isoformat(),
+                       request.checkups)
     result["score_date"] = request.analysisDate.isoformat()
     status = "generated" if result["total_score"] is not None else "data_insufficient"
     return {"status": status, "score": result}

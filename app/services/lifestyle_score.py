@@ -83,6 +83,11 @@ _ACTIVITY_WINDOW_DAYS = 14
 _ACTIVITY_MIN_DAYS = 7
 # 이보다 오래된 BMI는 지금을 말해 주지 못한다. v1과 같다.
 _BMI_STALE_DAYS = 90
+# 검진 BMI는 더 오래된 것도 받는다. 국가 건강검진이 연 1회라 90일로 자르면 거의 걸리지
+# 않는데, 체중계를 쓰지 않는 사용자에게는 이것이 유일한 측정이다.
+_CHECKUP_BMI_STALE_DAYS = 365
+# 검진 결과에서 BMI 항목을 찾는 말. 검진 리포트(checkup_report)가 쓰는 것과 같다.
+_BMI_ITEM_KEYWORDS = ("bmi", "체질량")
 
 # ── 충분성 ────────────────────────────────────────────────────────────────
 # 7~9시간은 미국수면재단 성인 권장이다. 판정기준 문서의 수면시간 항목과 같은 값이다.
@@ -115,16 +120,25 @@ _STEPS_TARGET = 8000.0
 _EXERCISE_TARGET_MINUTES = 30.0
 
 # ── BMI ───────────────────────────────────────────────────────────────────
-# 18.5~25는 대한비만학회 기준이다. 벗어난 폭 1당 10점을 깎는 기울기는 v1이 정한 값이다.
-_BMI_LOW = 18.5
-_BMI_HIGH = 25.0
-_BMI_PENALTY_PER_UNIT = 10.0
+# 생활건강 생체 탭과 같은 경계를 쓴다. 같은 수치를 한 화면에서는 '주의'라 하고 점수에서는
+# 만점으로 치면 사용자가 둘을 견줄 수 없다.
+# 양호 18.5~22.9는 대한비만학회 아시아·태평양 기준의 정상 범위다. 23부터 과체중이라
+# WHO 서구 기준(25)을 쓰면 안 된다.
+_BMI_GOOD_LOW = 18.5
+_BMI_GOOD_HIGH = 22.9
+_BMI_CAUTION_LOW = 17.0
+_BMI_CAUTION_HIGH = 24.9
+# 주의 경계에서 몇 점으로 볼지. 규칙성과 같은 방식이다.
+_BMI_CAUTION_SCORE = 60.0
+# 주의 구간에서 이만큼 더 벗어나면 0점.
+_BMI_ZERO_MARGIN = 5.0
 
 
 def calculate(
     window: dict[str, Any],
     age: int | None = None,
     as_of: str = "",
+    checkups: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """하루치 관리 점수를 낸다.
 
@@ -163,7 +177,7 @@ def calculate(
     else:
         reasons.append("activity_insufficient")
 
-    bmi, bmi_reason = _bmi(window, latest)
+    bmi, bmi_reason = _bmi(window, latest, checkups)
     if bmi:
         components["bmi"] = bmi
     else:
@@ -177,13 +191,14 @@ def calculate_series(
     since: str,
     until: str,
     age: int | None = None,
+    checkups: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """기준일을 하루씩 옮겨 가며 계산한다. 배치가 최근 며칠치를 한 번에 채울 때 쓴다."""
     start, end = date.fromisoformat(since), date.fromisoformat(until)
     points = []
     day = start
     while day <= end:
-        points.append(calculate(window, age, day.isoformat()))
+        points.append(calculate(window, age, day.isoformat(), checkups))
         day += timedelta(days=1)
     return points
 
@@ -409,14 +424,78 @@ def _activity(window: dict[str, Any], latest: date) -> dict[str, Any] | None:
 
 # ── BMI ───────────────────────────────────────────────────────────────────
 
+def bmi_notice(source: str, measured_date: str) -> str:
+    """검진 BMI로 계산했을 때 화면에 그대로 내보낼 한 줄.
+
+    문구를 화면이 조립하지 않게 서비스가 만들어 준다. 판정과 표현이 따로 놀기 시작하는
+    자리가 여기다. 생활 기록으로 계산했으면 굳이 밝힐 것이 없어 빈 문자열이다.
+    """
+    if source != "checkup":
+        return ""
+    try:
+        measured = date.fromisoformat(measured_date)
+    except ValueError:
+        return "체중 기록이 없어 건강검진의 BMI로 계산되었습니다"
+    return (f"체중 기록이 없어 {measured.year}년 {measured.month}월 "
+            "건강검진의 BMI로 계산되었습니다")
+
+
 def bmi_score(value: float) -> float:
-    """참고범위를 벗어난 폭만큼 깎는다. 범위 안이면 만점이다."""
-    excess = max(_BMI_LOW - value, value - _BMI_HIGH, 0.0)
-    return _clamp(100 - excess * _BMI_PENALTY_PER_UNIT)
+    """생체 탭의 양호·주의 경계를 그대로 점수로 옮긴다.
+
+    양호 범위 안이면 만점이다. 거기서 주의 경계까지 100→60으로 떨어지고, 그보다 더
+    벗어나면 0까지 내려간다. 마른 쪽과 찐 쪽의 주의 폭이 달라 각각의 폭으로 잰다.
+    """
+    if _BMI_GOOD_LOW <= value <= _BMI_GOOD_HIGH:
+        return 100.0
+    if value < _BMI_GOOD_LOW:
+        good, caution = _BMI_GOOD_LOW, _BMI_CAUTION_LOW
+        distance, caution_width = good - value, good - caution
+    else:
+        good, caution = _BMI_GOOD_HIGH, _BMI_CAUTION_HIGH
+        distance, caution_width = value - good, caution - good
+    if distance <= caution_width:
+        return _interpolate(distance, 0.0, caution_width, 100.0, _BMI_CAUTION_SCORE)
+    return _interpolate(distance - caution_width, 0.0, _BMI_ZERO_MARGIN,
+                        _BMI_CAUTION_SCORE, 0.0)
 
 
-def _bmi(window: dict[str, Any], latest: date) -> tuple[dict[str, Any] | None, str]:
-    """기준일까지의 마지막 BMI 기록을 쓴다. 너무 오래된 값은 지금을 말해 주지 못한다."""
+def _bmi(window: dict[str, Any], latest: date,
+         checkups: list[dict[str, Any]] | None = None) -> tuple[dict[str, Any] | None, str]:
+    """기준일까지의 마지막 BMI를 쓴다. 생활 기록에 없으면 건강검진에서 가져온다.
+
+    체중계를 쓰지 않는 사용자는 `lifestyle_bio`에 BMI가 쌓이지 않는다. 그러면 수면과
+    활동을 아무리 잘해도 총점이 나오지 않는다. 검진에는 BMI가 반드시 있으므로 이것을
+    대체 출처로 쓴다. 대신 어디서 온 값인지 `source`에 남겨 화면이 밝힐 수 있게 한다.
+
+    둘 다 있으면 더 최근 것을 쓴다. 오래되어 쓸 수 없는 값만 있었다면 `bmi_stale`,
+    아예 없었다면 `bmi_missing`이다.
+    """
+    found, usable = False, []
+    for day, value in _bio_bmi(window, latest):
+        found = True
+        if date.fromisoformat(day) >= latest - timedelta(days=_BMI_STALE_DAYS - 1):
+            usable.append((day, value, "lifestyle"))
+    for day, value in _checkup_bmi(checkups, latest):
+        found = True
+        if date.fromisoformat(day) >= latest - timedelta(days=_CHECKUP_BMI_STALE_DAYS - 1):
+            usable.append((day, value, "checkup"))
+
+    if not usable:
+        return None, "bmi_stale" if found else "bmi_missing"
+    day, value, source = max(usable)
+    return {
+        "score": round(bmi_score(value), 1),
+        "measured_date": day,
+        "value": value,
+        "source": source,
+        "notice": bmi_notice(source, day),
+        "reference": f"{_BMI_GOOD_LOW:g}~{_BMI_GOOD_HIGH:g}",
+    }, ""
+
+
+def _bio_bmi(window: dict[str, Any], latest: date) -> list[tuple[str, float]]:
+    """생활 기록의 BMI. 체중계나 체성분계로 잰 값이다."""
     records = []
     for row in _rows(window, "bio"):
         if row.get("bio_type") != "bmi":
@@ -425,17 +504,26 @@ def _bmi(window: dict[str, Any], latest: date) -> tuple[dict[str, Any] | None, s
         value = _number(row.get("value"))
         if day and value and day <= latest.isoformat():
             records.append((day, value))
-    if not records:
-        return None, "bmi_missing"
-    day, value = max(records)
-    if date.fromisoformat(day) < latest - timedelta(days=_BMI_STALE_DAYS - 1):
-        return None, "bmi_stale"
-    return {
-        "score": round(bmi_score(value), 1),
-        "measured_date": day,
-        "value": value,
-        "reference": f"{_BMI_LOW}~{_BMI_HIGH}",
-    }, ""
+    return records
+
+
+def _checkup_bmi(checkups: list[dict[str, Any]] | None,
+                 latest: date) -> list[tuple[str, float]]:
+    """검진 회차에서 BMI 항목만 골라낸다. 항목 이름은 기관마다 달라 말로 찾는다."""
+    records = []
+    for checkup in checkups or []:
+        day = _day(checkup.get("date"))
+        if not day or day > latest.isoformat():
+            continue
+        for result in checkup.get("results") or []:
+            text = f"{result.get('item_code') or ''} {result.get('item_name') or ''}".casefold()
+            if not any(keyword in text for keyword in _BMI_ITEM_KEYWORDS):
+                continue
+            value = _number(result.get("value"))
+            if value:
+                records.append((day, value))
+                break
+    return records
 
 
 # ── 공통 ──────────────────────────────────────────────────────────────────

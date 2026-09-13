@@ -97,11 +97,18 @@ class ComponentCurveTest(unittest.TestCase):
         self.assertEqual(score.activity_score(16000, None), 100)
         self.assertIsNone(score.activity_score(None, None))
 
-    def test_bmi_matches_the_backend(self) -> None:
-        """18.5~25는 대한비만학회 기준, 단위당 10점은 백엔드 v1의 기울기다."""
-        for value, expected in ((22, 100), (18.5, 100), (25, 100), (28, 70), (30, 50), (35, 0)):
+    def test_bmi_follows_the_bio_tab_bands(self) -> None:
+        """생체 탭의 양호·주의 경계를 그대로 쓴다. 탭이 '주의'라 한 값이 만점이면 안 된다."""
+        for value, expected in ((18.5, 100), (21, 100), (22.9, 100),   # 양호
+                                (17, 60), (24.9, 60),                   # 주의 경계
+                                (24, 78), (25, 58.8), (27, 34.8),       # 사이
+                                (29.9, 0), (35, 0), (12, 0)):           # 바깥
             with self.subTest(bmi=value):
-                self.assertAlmostEqual(score.bmi_score(value), expected)
+                self.assertAlmostEqual(score.bmi_score(value), expected, places=1)
+
+    def test_bmi_does_not_use_the_western_cutoff(self) -> None:
+        """23부터 과체중인 아시아·태평양 기준이다. WHO 서구 기준(25)을 쓰면 탭과 어긋난다."""
+        self.assertLess(score.bmi_score(24), 100)
 
 
 class SleepCompositionTest(unittest.TestCase):
@@ -153,6 +160,82 @@ class SleepCompositionTest(unittest.TestCase):
         self.assertAlmostEqual(sleep["coverage"], 0.65)
         # 빠진 성분은 수면 안쪽 일이라 총점을 막는 reasons에는 올라가지 않는다.
         self.assertEqual(result["reasons"], [])
+
+
+def _checkup(day: str, bmi: float | None = 24.1) -> list[dict]:
+    """검진 회차 하나. BMI 항목 이름은 기관마다 다르다."""
+    results = [{"item_code": "GLU", "item_name": "공복혈당", "value": 95}]
+    if bmi is not None:
+        results.insert(0, {"item_code": "BMI", "item_name": "체질량지수",
+                           "value": bmi, "unit": "kg/m2"})
+    return [{"date": day, "results": results}]
+
+
+class CheckupBmiTest(unittest.TestCase):
+    """체중계를 쓰지 않는 사용자도 점수를 받게 하는 길이다."""
+
+    def _without_bio(self) -> dict:
+        window = _window(_steady())
+        window["bio"]["rows"] = []
+        return window
+
+    def test_checkup_fills_in_for_a_missing_bmi(self) -> None:
+        """생활 기록에 BMI가 없으면 총점이 아예 나오지 않았다. 검진이 그 자리를 채운다."""
+        blocked = score.calculate(self._without_bio(), age=35, as_of=BASE.isoformat())
+        self.assertIsNone(blocked["total_score"])
+        self.assertIn("bmi_missing", blocked["reasons"])
+
+        filled = score.calculate(self._without_bio(), age=35, as_of=BASE.isoformat(),
+                                 checkups=_checkup("2026-04-02"))
+        self.assertIsNotNone(filled["total_score"])
+        bmi = filled["components"]["bmi"]
+        self.assertEqual("checkup", bmi["source"])
+        self.assertEqual("2026-04-02", bmi["measured_date"])
+        self.assertEqual(24.1, bmi["value"])
+
+    def test_the_more_recent_measurement_wins(self) -> None:
+        """둘 다 있으면 최근 것을 쓴다. 검진이 반년 전이면 어제 잰 체중계가 낫다."""
+        result = score.calculate(_window(_steady()), age=35, as_of=BASE.isoformat(),
+                                 checkups=_checkup("2026-04-02"))
+        self.assertEqual("lifestyle", result["components"]["bmi"]["source"])
+
+    def test_a_stale_lifestyle_record_falls_back_to_the_checkup(self) -> None:
+        window = self._without_bio()
+        window["bio"]["rows"] = [{"measured_at": "2026-01-05", "bio_type": "bmi", "value": 21.0}]
+        result = score.calculate(window, age=35, as_of=BASE.isoformat(),
+                                 checkups=_checkup("2026-04-02"))
+        self.assertEqual("checkup", result["components"]["bmi"]["source"])
+
+    def test_checkups_older_than_a_year_do_not_count(self) -> None:
+        """국가 검진이 연 1회라 1년까지는 받지만 그보다 오래되면 지금을 말해 주지 못한다."""
+        result = score.calculate(self._without_bio(), age=35, as_of=BASE.isoformat(),
+                                 checkups=_checkup("2024-01-01"))
+        self.assertIsNone(result["total_score"])
+        self.assertIn("bmi_stale", result["reasons"])
+
+    def test_a_checkup_without_a_bmi_item_is_not_a_source(self) -> None:
+        result = score.calculate(self._without_bio(), age=35, as_of=BASE.isoformat(),
+                                 checkups=_checkup("2026-04-02", bmi=None))
+        self.assertIn("bmi_missing", result["reasons"])
+
+    def test_a_checkup_value_carries_a_notice_for_the_user(self) -> None:
+        """검진 BMI는 다음 검진까지 바뀌지 않는다. 왜 점수가 안 움직이는지 밝혀야 한다."""
+        result = score.calculate(self._without_bio(), age=35, as_of=BASE.isoformat(),
+                                 checkups=_checkup("2026-04-02"))
+        notice = result["components"]["bmi"]["notice"]
+        self.assertIn("2026년 4월", notice)
+        self.assertIn("건강검진", notice)
+
+    def test_a_lifestyle_value_carries_no_notice(self) -> None:
+        """체중계로 잰 값은 굳이 밝힐 것이 없다."""
+        result = score.calculate(_window(_steady()), age=35, as_of=BASE.isoformat())
+        self.assertEqual("", result["components"]["bmi"]["notice"])
+
+    def test_checkups_after_the_base_date_are_ignored(self) -> None:
+        """아직 오지 않은 날의 검진으로 과거 점수를 매기지 않는다."""
+        result = score.calculate(self._without_bio(), age=35, as_of="2026-03-01",
+                                 checkups=_checkup("2026-04-02"))
+        self.assertIn("bmi_missing", result["reasons"])
 
 
 class DisqualificationTest(unittest.TestCase):
@@ -262,8 +345,10 @@ class DocumentTest(unittest.TestCase):
             # 활동·BMI
             f"{score._STEPS_TARGET:,.0f}걸음",
             f"| 운동시간 | {score._EXERCISE_TARGET_MINUTES:g}분 |",
-            f"| {score._BMI_LOW:g}~{score._BMI_HIGH:g} | 100 |",
-            f"폭 1당 **−{score._BMI_PENALTY_PER_UNIT:g}**",
+            f"| {score._BMI_GOOD_LOW:g}~{score._BMI_GOOD_HIGH:g} | 100 |",
+            f"| {score._BMI_CAUTION_LOW:g} 이하 · {score._BMI_CAUTION_HIGH:g} 이상"
+            f" | **{score._BMI_CAUTION_SCORE:g}** ★ |",
+            f"주의 경계에서 **{score._BMI_ZERO_MARGIN:g}**만큼 더 벗어남 ★",
         ):
             with self.subTest(text=text):
                 self.assertIn(text, self.body)
@@ -278,7 +363,8 @@ class DocumentTest(unittest.TestCase):
             f" | 주중 **{score._WEEKDAY_MIN_DAYS}일** + 주말 **{score._WEEKEND_MIN_DAYS}일** ★ |",
             f"| 활동 | 최근 **{score._ACTIVITY_WINDOW_DAYS}일** ★"
             f" | **{score._ACTIVITY_MIN_DAYS}일** ★ |",
-            f"| BMI | **{score._BMI_STALE_DAYS}일** 이내 측정 ★ | 1건 |",
+            f"| BMI (생활 기록) | **{score._BMI_STALE_DAYS}일** 이내 측정 ★ | 1건 |",
+            f"| BMI (건강검진) | **{score._CHECKUP_BMI_STALE_DAYS}일** 이내 측정 ★ | 1건 |",
         ):
             with self.subTest(row=row):
                 self.assertIn(row, self.body)
@@ -294,6 +380,17 @@ class DocumentTest(unittest.TestCase):
         for reason in sorted(emitted):
             with self.subTest(reason=reason):
                 self.assertIn(f"| `{reason}` |", self.body)
+
+    def test_the_notice_wording_matches_the_service(self) -> None:
+        """고지 문구는 사용자가 보는 말이다. 문서에 적힌 그대로 나가야 한다.
+
+        문서는 날짜 자리를 `YYYY년 M월`로 비워 두므로 앞뒤 토막을 나누어 본다.
+        """
+        head, tail = score.bmi_notice("checkup", "2026-04-02").split("2026년 4월")
+        self.assertIn(head.strip(), self.body)
+        self.assertIn(tail.strip(), self.body)
+        # 생활 기록으로 계산했으면 고지하지 않는다고 문서가 말한다.
+        self.assertEqual("", score.bmi_notice("lifestyle", "2026-09-10"))
 
     def test_the_policy_version_is_named(self) -> None:
         self.assertIn(score.POLICY_VERSION, self.body)
