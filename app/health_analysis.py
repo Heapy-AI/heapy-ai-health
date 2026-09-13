@@ -10,13 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ZONE = ZoneInfo("Asia/Seoul")
-CATEGORIES = ("bio", "activity", "nutrition", "sleep", "checkup", "overall")
+CATEGORIES = ("bio", "activity", "nutrition", "sleep", "checkup", "overall", "score")
 
 
 class AnalysisRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     contractVersion: Literal["1.0"]
-    category: Literal["bio", "activity", "nutrition", "sleep", "checkup", "overall"]
+    category: Literal["bio", "activity", "nutrition", "sleep", "checkup", "overall", "score"]
     analysisDate: date
     cutoff: datetime
     records: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
@@ -97,6 +97,22 @@ def normalize_window(request: AnalysisRequest) -> dict[str, Any]:
     return output
 
 
+def score_response(request: AnalysisRequest) -> dict[str, Any]:
+    """생활습관 관리 점수. 모델을 부르지 않는 순수 계산이라 여기서 바로 끝낸다.
+
+    normalize_window가 분석일 당일 기록을 빼기 때문에, 창은 전날에 맞춰 잡아야 v1과
+    같은 일수를 본다. 점수가 가리키는 날짜는 분석일 그대로 둔다.
+    """
+    from app.services.lifestyle_score import calculate
+
+    window = normalize_window(request)
+    result = calculate(window, request.age,
+                       (request.analysisDate - timedelta(days=1)).isoformat())
+    result["score_date"] = request.analysisDate.isoformat()
+    status = "generated" if result["total_score"] is not None else "data_insufficient"
+    return {"status": status, "score": result}
+
+
 @lru_cache(maxsize=1)
 def lifestyle_service():
     from app.services.lifestyle_report import LifestyleReportService
@@ -110,6 +126,8 @@ def checkup_service():
 
 
 async def generate(request: AnalysisRequest) -> dict[str, Any]:
+    if request.category == "score":
+        return score_response(request)
     if request.category == "checkup":
         if len(request.checkups) < 2:
             return {"status": "data_insufficient"}

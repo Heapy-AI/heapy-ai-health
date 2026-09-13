@@ -23,7 +23,7 @@ import json
 import math
 from copy import copy
 from collections.abc import Callable
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from statistics import StatisticsError, correlation, fmean, median, pstdev
 from time import perf_counter
 from typing import Any
@@ -33,6 +33,16 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from app.core.config import MODEL
 from app.schemas.lifestyle_report import LifestyleReportContent
 from app.services.prompts import lifestyle_report_v4 as prompt_v4
+# 취침·기상 시각 계산은 점수 모듈과 함께 쓰므로 갈라 두었다. sleep_clock을 볼 것.
+from app.services.sleep_clock import (
+    _CLOCK_WEEKEND_SHIFT_MINUTES,
+    _clock_gap,
+    _clock_minutes,
+    _clock_regularity_text,
+    _clock_stats,
+    _clock_text,
+    _day,
+)
 
 
 # 쓰고 있는 프롬프트 판. 이전 판으로 되돌리려면 이 모듈만 바꾸면 된다.
@@ -115,15 +125,6 @@ _CO_MOVEMENT_THRESHOLD = 0.6
 _MAX_CO_MOVEMENTS = 6
 # 프롬프트에 예시로 넘기는 이상 지점 수. 날짜 나열을 부르지 않도록 최소로 준다.
 _MAX_PROMPT_ANOMALIES = 1
-# 기록은 UTC로 저장된다. 취침·기상 시각은 사용자가 사는 시간대로 읽어야 뜻이 통한다.
-# 한국 사용자 기준 서비스라 KST로 고정한다. 다른 지역을 지원하게 되면 여기를 바꾼다.
-_LOCAL_TIMEZONE = timezone(timedelta(hours=9))
-
-# 취침·기상 시각의 규칙성을 가르는 문턱(분). 원형 표준편차로 잰다.
-_CLOCK_STEADY_MINUTES = 30
-_CLOCK_LOOSE_MINUTES = 60
-# 주중과 주말의 시각 차이를 '다르다'고 볼 문턱(분).
-_CLOCK_WEEKEND_SHIFT_MINUTES = 45
 # 열량 환산 계수(kcal/g). 지방만 9라서 무게 비율과 열량 비율이 크게 갈린다.
 _MACRO_KCAL = {"탄수화물": 4, "단백질": 4, "지방": 9}
 _MACRO_COLUMNS = {"탄수화물": "carbohydrate", "단백질": "protein", "지방": "total_fat"}
@@ -190,11 +191,6 @@ def _number(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if number == number else None
-
-
-def _day(value: Any) -> str:
-    """record_date·measured_at·consumed_at을 모두 날짜 10자리로 맞춘다."""
-    return str(value or "")[:10]
 
 
 def _detail(row: dict[str, Any], key: str) -> Any:
@@ -713,63 +709,6 @@ def _confidence_text(metric: _Metric, days: int, coverage: float) -> str:
     if metric.kind == "accumulation":
         return "부족" if coverage < 0.3 else "보통" if coverage < 0.6 else "충분"
     return "보통" if days < 8 else "충분"
-
-
-def _clock_minutes(value: Any) -> float | None:
-    """timestamp에서 그날의 몇 분째인지만 꺼낸다. 날짜는 버린다.
-
-    문자열을 잘라 읽으면 안 된다. UTC로 저장된 새벽 1시 20분이 T16:20:00+00:00이라
-    그대로 읽으면 오후 4시 20분이 된다. 시각으로 파싱해 지역 시간으로 옮겨야 한다.
-    """
-    try:
-        moment = datetime.fromisoformat(str(value or ""))
-    except ValueError:
-        return None
-    # 시간대가 붙어 있지 않으면 이미 지역 시간으로 적힌 값으로 본다.
-    if moment.tzinfo is not None:
-        moment = moment.astimezone(_LOCAL_TIMEZONE)
-    return moment.hour * 60 + moment.minute
-
-
-def _clock_stats(minutes: list[float]) -> dict[str, Any] | None:
-    """시각의 대표값과 흔들림을 원형 통계로 잰다.
-
-    시각은 자정에서 되감기는 값이라 선형 평균을 쓰면 안 된다. 23시 50분과 0시 10분의
-    평균은 12시가 아니라 자정이다. 그래서 각도로 바꿔 단위벡터로 평균을 낸다.
-    """
-    if len(minutes) < 2:
-        return None
-    angles = [minute / 1440 * 2 * math.pi for minute in minutes]
-    x = fmean(math.cos(angle) for angle in angles)
-    y = fmean(math.sin(angle) for angle in angles)
-    radius = math.hypot(x, y)
-    if radius < 1e-9:
-        # 시각이 하루에 고르게 흩어져 대표값을 말할 수 없는 경우다.
-        return None
-    typical = (math.atan2(y, x) / (2 * math.pi) * 1440) % 1440
-    # 원형 표준편차. radius가 1에 가까울수록 시각이 한곳에 모여 있다.
-    deviation = 1440 / (2 * math.pi) * math.sqrt(max(-2 * math.log(radius), 0.0))
-    return {"typical_minutes": round(typical), "spread_minutes": round(deviation)}
-
-
-def _clock_text(minutes: float) -> str:
-    """분을 오전/오후 표기로 바꾼다. 화면 카드와 같은 형식이다."""
-    hour, minute = divmod(int(round(minutes)) % 1440, 60)
-    meridiem = "오전" if hour < 12 else "오후"
-    display = hour % 12 or 12
-    return f"{meridiem} {display}:{minute:02d}"
-
-
-def _clock_regularity_text(spread: float) -> str:
-    if spread <= _CLOCK_STEADY_MINUTES:
-        return "일정함"
-    return "보통" if spread <= _CLOCK_LOOSE_MINUTES else "들쭉날쭉함"
-
-
-def _clock_gap(later: float, earlier: float) -> float:
-    """두 시각 사이의 최단 거리(분). 자정을 넘어가도 어긋나지 않게 잰다."""
-    gap = (later - earlier) % 1440
-    return gap - 1440 if gap > 720 else gap
 
 
 def _weekly_pattern_text(series: list[dict[str, Any]]) -> str:

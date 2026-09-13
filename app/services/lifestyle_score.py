@@ -35,7 +35,7 @@ from datetime import date, timedelta
 from statistics import fmean, pstdev
 from typing import Any
 
-from app.services.lifestyle_report import (
+from app.services.sleep_clock import (
     _CLOCK_LOOSE_MINUTES,
     _CLOCK_STEADY_MINUTES,
     _CLOCK_WEEKEND_SHIFT_MINUTES,
