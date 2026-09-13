@@ -1,6 +1,6 @@
 """취침·기상 시각을 다루는 공용 도구.
 
-`lifestyle_report`와 `lifestyle_score`가 함께 쓴다. 원래 `lifestyle_report` 안에 있었는데
+`lifestyle_report`와 `health_score`가 함께 쓴다. 원래 `lifestyle_report` 안에 있었는데
 그 모듈이 최상단에서 langchain을 import해서, 점수 계산만 하려 해도 LLM 의존성이 통째로
 딸려왔다. CI의 `tests/internal`은 fastapi와 httpx만 깔고 도는 가벼운 구성이라 그대로는
 점수 테스트를 거기 둘 수 없었다. 그래서 표준 라이브러리만 쓰는 이 모듈로 갈라냈다.

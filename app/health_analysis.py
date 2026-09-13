@@ -98,12 +98,12 @@ def normalize_window(request: AnalysisRequest) -> dict[str, Any]:
 
 
 def score_response(request: AnalysisRequest) -> dict[str, Any]:
-    """생활습관 관리 점수. 모델을 부르지 않는 순수 계산이라 여기서 바로 끝낸다.
+    """오늘의 건강 종합 점수. 모델을 부르지 않는 순수 계산이라 여기서 바로 끝낸다.
 
-    normalize_window가 분석일 당일 기록을 빼기 때문에, 창은 전날에 맞춰 잡아야 v1과
-    같은 일수를 본다. 점수가 가리키는 날짜는 분석일 그대로 둔다.
+    normalize_window가 분석일 당일 기록을 빼기 때문에, 창은 전날에 맞춰 잡아야 의도한
+    일수를 본다. 점수가 가리키는 날짜는 분석일 그대로 둔다.
     """
-    from app.services.lifestyle_score import calculate
+    from app.services.health_score import calculate
 
     window = normalize_window(request)
     result = calculate(window, request.age,

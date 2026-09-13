@@ -14,7 +14,7 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
-from app.services import lifestyle_score as score
+from app.services import health_score as score
 
 
 BASE = date(2026, 9, 13)

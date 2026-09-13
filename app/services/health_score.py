@@ -1,4 +1,4 @@
-"""HEAPY 생활습관 관리 점수 - v2.0 수면점수를 삼성기반이 아니라 heapy 자체 점수로 계산하도록 교체
+"""HEAPY 오늘의 건강 종합 점수 - v2.0 수면점수를 삼성기반이 아니라 heapy 자체 점수로 계산하도록 교체
 
 백엔드 Java의 `heapy-lifestyle-v1`을 이 모듈로 옮긴다. 활동과 BMI는 v1의 식을 그대로
 잇고, 수면만 바꾼다.
@@ -46,7 +46,7 @@ from app.services.sleep_clock import (
     _day,
 )
 
-POLICY_VERSION = "heapy-lifestyle-v2"
+POLICY_VERSION = "heapy-health-v1"
 
 # 만 20세 미만은 성인 기준을 그대로 대기 어렵다. v1과 같은 판단이다.
 _MIN_SUPPORTED_AGE = 20
@@ -55,7 +55,15 @@ _MIN_SUPPORTED_AGE = 20
 # v1이 정한 배분을 그대로 잇는다. 원칙은 '오늘 바꿀 수 있는 것에 무게를 준다'이다.
 # 수면과 활동은 어젯밤·오늘 행동으로 움직이지만 BMI는 몇 달이 걸린다. 그래서 BMI는
 # 방향만 알려주는 10%다. 어느 문헌도 이 배분을 정해 주지 않는다. 서비스가 정한 값이다.
-_WEIGHTS = {"sleep": 0.45, "activity": 0.45, "bmi": 0.10}
+_WEIGHTS = {"sleep": 0.40, "activity": 0.40, "bmi": 0.10, "metabolic": 0.10}
+
+# 수면·활동·BMI는 없으면 총점을 내지 않는다. 대사는 혈압계·혈당계가 있어야 쌓이는 값이라
+# 선택으로 둔다. 없으면 남은 가중치를 다시 정규화한다.
+_REQUIRED_COMPONENTS = ("sleep", "activity", "bmi")
+
+# ── 대사 하위 가중치 ──────────────────────────────────────────────────────
+# 혈압과 공복혈당은 근거의 두께가 비슷해 반씩 나눈다. 한쪽만 있으면 그쪽만으로 낸다.
+_METABOLIC_WEIGHTS = {"blood_pressure": 0.50, "glucose": 0.50}
 
 # ── 수면 하위 가중치 ──────────────────────────────────────────────────────
 # 근거가 두꺼운 순서대로 준다. 충분성만 기관 권고(미국수면재단)가 있고 나머지 셋은
@@ -132,6 +140,35 @@ _BMI_CAUTION_HIGH = 24.9
 _BMI_CAUTION_SCORE = 60.0
 # 주의 구간에서 이만큼 더 벗어나면 0점.
 _BMI_ZERO_MARGIN = 5.0
+# (0점, 주의, 양호, 양호, 주의, 0점) 여섯 점으로 밴드를 적는다.
+_BMI_BAND = (_BMI_CAUTION_LOW - _BMI_ZERO_MARGIN, _BMI_CAUTION_LOW,
+             _BMI_GOOD_LOW, _BMI_GOOD_HIGH,
+             _BMI_CAUTION_HIGH, _BMI_CAUTION_HIGH + _BMI_ZERO_MARGIN)
+
+# ── 대사 (혈압·공복혈당) ──────────────────────────────────────────────────
+# 양호·주의 경계는 생활건강 생체 탭과 같다. 0점 자리는 주의 폭만큼 더 벗어난 지점으로
+# 잡았는데, 그 결과가 학회의 다음 단계와 거의 맞아떨어진다.
+#   수축기 159 · 이완기 99  → 대한고혈압학회 2기 고혈압(160/100)
+#   공복혈당 151           → 당뇨 진단 기준(126)을 한참 넘어선 자리
+_BP_SYSTOLIC_BAND = (70.0, 80.0, 90.0, 119.0, 139.0, 159.0)
+_BP_DIASTOLIC_BAND = (40.0, 50.0, 60.0, 79.0, 89.0, 99.0)
+_GLUCOSE_BAND = (50.0, 60.0, 70.0, 99.0, 125.0, 151.0)
+# 밴드 밖으로 나갈 때 주의 경계에서 몇 점인지. BMI·규칙성과 같은 60점이다.
+_BAND_CAUTION_SCORE = 60.0
+
+# 생활 기록의 대사 수치도 BMI와 같은 유효 기간을 쓴다.
+_METABOLIC_STALE_DAYS = _BMI_STALE_DAYS
+_CHECKUP_METABOLIC_STALE_DAYS = _CHECKUP_BMI_STALE_DAYS
+# 혈압·혈당은 한 번 잰 값으로 등급을 매기지 않는다. 대한고혈압학회 가정혈압 지침도
+# 아침·저녁 2회씩 5~7일을 재서 평균하라고 한다. 커피 한 잔, 계단 오르기, 측정 직전의
+# 대화로 10~20mmHg가 움직이기 때문이다. 그래서 최근 측정일에서 거슬러 이만큼을 평균한다.
+# 지침의 5~7일보다 넉넉히 잡은 것은 사용자가 매일 재지 않아서다. 서비스가 정한 값이다.
+_METABOLIC_AVERAGE_DAYS = 30
+# 검진 결과에서 항목을 찾는 말. 기관마다 표기가 달라 코드로 고정하지 않는다.
+_SYSTOLIC_ITEM_KEYWORDS = ("수축기", "systolic")
+_DIASTOLIC_ITEM_KEYWORDS = ("이완기", "diastolic")
+# 식후 혈당은 측정 시점이 지켜졌는지 알 수 없어 쓰지 않는다. 공복만 받는다.
+_GLUCOSE_ITEM_KEYWORDS = ("공복혈당", "공복 혈당", "fasting glucose")
 
 
 def calculate(
@@ -140,7 +177,7 @@ def calculate(
     as_of: str = "",
     checkups: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """하루치 관리 점수를 낸다.
+    """하루치 종합 점수를 낸다.
 
     `window`는 생활건강 분석이 쓰는 형태 그대로다. `as_of`를 주지 않으면 기록이 있는
     가장 늦은 날을 기준일로 삼는다.
@@ -182,6 +219,11 @@ def calculate(
         components["bmi"] = bmi
     else:
         reasons.append(bmi_reason)
+
+    # 선택 성분이다. 없어도 사유를 남기지 않고 가중치만 다시 나눈다.
+    metabolic = _metabolic(window, latest, checkups)
+    if metabolic:
+        components["metabolic"] = metabolic
 
     return _result(base, components, reasons)
 
@@ -440,24 +482,45 @@ def bmi_notice(source: str, measured_date: str) -> str:
             "건강검진의 BMI로 계산되었습니다")
 
 
-def bmi_score(value: float) -> float:
+def band_score(value: float, band: tuple[float, ...]) -> float:
     """생체 탭의 양호·주의 경계를 그대로 점수로 옮긴다.
 
-    양호 범위 안이면 만점이다. 거기서 주의 경계까지 100→60으로 떨어지고, 그보다 더
-    벗어나면 0까지 내려간다. 마른 쪽과 찐 쪽의 주의 폭이 달라 각각의 폭으로 잰다.
+    밴드는 (0점, 주의, 양호, 양호, 주의, 0점) 여섯 점이다. 양호 범위 안이면 만점이고,
+    거기서 주의 경계까지 100→60으로 떨어진 뒤 0점 자리까지 더 내려간다. 낮은 쪽과 높은
+    쪽의 폭이 항목마다 달라 각각의 폭으로 잰다.
     """
-    if _BMI_GOOD_LOW <= value <= _BMI_GOOD_HIGH:
+    zero_low, caution_low, good_low, good_high, caution_high, zero_high = band
+    if good_low <= value <= good_high:
         return 100.0
-    if value < _BMI_GOOD_LOW:
-        good, caution = _BMI_GOOD_LOW, _BMI_CAUTION_LOW
-        distance, caution_width = good - value, good - caution
+    if value < good_low:
+        good, caution, zero = good_low, caution_low, zero_low
+        distance, caution_width, zero_width = good - value, good - caution, caution - zero
     else:
-        good, caution = _BMI_GOOD_HIGH, _BMI_CAUTION_HIGH
-        distance, caution_width = value - good, caution - good
+        good, caution, zero = good_high, caution_high, zero_high
+        distance, caution_width, zero_width = value - good, caution - good, zero - caution
     if distance <= caution_width:
-        return _interpolate(distance, 0.0, caution_width, 100.0, _BMI_CAUTION_SCORE)
-    return _interpolate(distance - caution_width, 0.0, _BMI_ZERO_MARGIN,
-                        _BMI_CAUTION_SCORE, 0.0)
+        return _interpolate(distance, 0.0, caution_width, 100.0, _BAND_CAUTION_SCORE)
+    return _interpolate(distance - caution_width, 0.0, zero_width, _BAND_CAUTION_SCORE, 0.0)
+
+
+def bmi_score(value: float) -> float:
+    """BMI를 0~100으로 옮긴다. 양호 18.5~22.9, 주의 17·24.9."""
+    return band_score(value, _BMI_BAND)
+
+
+def blood_pressure_score(systolic: float, diastolic: float) -> float:
+    """수축기와 이완기 중 **나쁜 쪽**으로 정한다.
+
+    대한고혈압학회 기준이 수축기 '또는' 이완기 중 나쁜 쪽으로 등급을 매긴다. 따로 점수를
+    내어 평균하면 124/78인 날에 한쪽만 깎여 탭의 판정과 어긋난다.
+    """
+    return min(band_score(systolic, _BP_SYSTOLIC_BAND),
+               band_score(diastolic, _BP_DIASTOLIC_BAND))
+
+
+def glucose_score(value: float) -> float:
+    """공복 혈당을 0~100으로 옮긴다. 양호 70~99, 주의 60·125."""
+    return band_score(value, _GLUCOSE_BAND)
 
 
 def _bmi(window: dict[str, Any], latest: date,
@@ -492,6 +555,175 @@ def _bmi(window: dict[str, Any], latest: date,
         "notice": bmi_notice(source, day),
         "reference": f"{_BMI_GOOD_LOW:g}~{_BMI_GOOD_HIGH:g}",
     }, ""
+
+
+# ── 대사 ──────────────────────────────────────────────────────────────────
+
+def _metabolic(window: dict[str, Any], latest: date,
+               checkups: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """혈압과 공복혈당. 둘 다 없으면 성분 자체를 내지 않는다.
+
+    혈압계·혈당계가 없으면 생활 기록에 쌓이지 않는 값이라 선택 성분이다. 대신 검진에는
+    반드시 있으므로 BMI와 같은 방식으로 검진을 대체 출처로 쓴다. 한쪽만 있으면 그쪽만으로
+    내고 남은 가중치를 다시 정규화한다.
+    """
+    parts: dict[str, Any] = {}
+
+    pressure = _measurement_average(_bio_pressure(window, latest),
+                                    _checkup_pressure(checkups, latest), latest)
+    if pressure:
+        day, (systolic, diastolic), source, days = pressure
+        parts["blood_pressure"] = {
+            "score": round(blood_pressure_score(systolic, diastolic), 1),
+            "measured_date": day, "source": source, "recorded_days": days,
+            "systolic": round(systolic, 1), "diastolic": round(diastolic, 1),
+            "reference": f"{_BP_SYSTOLIC_BAND[2]:g}~{_BP_SYSTOLIC_BAND[3]:g}"
+                         f"/{_BP_DIASTOLIC_BAND[2]:g}~{_BP_DIASTOLIC_BAND[3]:g}",
+        }
+
+    glucose = _measurement_average(_bio_glucose(window, latest),
+                                   _checkup_glucose(checkups, latest), latest)
+    if glucose:
+        day, value, source, days = glucose
+        parts["glucose"] = {
+            "score": round(glucose_score(value), 1),
+            "measured_date": day, "source": source, "recorded_days": days,
+            "value": round(value, 1),
+            "reference": f"{_GLUCOSE_BAND[2]:g}~{_GLUCOSE_BAND[3]:g}",
+        }
+
+    if not parts:
+        return None
+    filled = sum(_METABOLIC_WEIGHTS[name] for name in parts)
+    score = sum(parts[name]["score"] * _METABOLIC_WEIGHTS[name] for name in parts) / filled
+    return {
+        "score": round(score, 1),
+        "parts": parts,
+        "weights": {name: _METABOLIC_WEIGHTS[name] for name in parts},
+        "coverage": round(filled, 2),
+        "missing_parts": [name for name in _METABOLIC_WEIGHTS if name not in parts],
+    }
+
+
+def _measurement_average(lifestyle: list[tuple[str, Any]], checkup: list[tuple[str, Any]],
+                         latest: date) -> tuple[str, Any, str, int] | None:
+    """쓸 수 있는 측정을 평균해 하나의 대표값으로 만든다.
+
+    생활 기록이 유효 기간 안에 하나라도 있으면 **생활 기록만** 쓴다. 의료기관 측정과 가정
+    측정은 조건이 달라(백의고혈압) 섞어 평균하면 둘 다 아닌 값이 된다.
+
+    돌려주는 것은 (최근 측정일, 대표값, 출처, 평균에 든 날 수)다.
+    """
+    fresh = [(day, value) for day, value in lifestyle
+             if date.fromisoformat(day) >= latest - timedelta(days=_METABOLIC_STALE_DAYS - 1)]
+    if fresh:
+        days = _daily_means(fresh)
+        newest = max(days)
+        since = (date.fromisoformat(newest)
+                 - timedelta(days=_METABOLIC_AVERAGE_DAYS - 1)).isoformat()
+        window = [value for day, value in days.items() if day >= since]
+        return newest, _mean_value(window), "lifestyle", len(window)
+
+    # 검진은 회차당 한 번이라 평균할 것이 없다. 가장 최근 회차를 그대로 쓴다.
+    usable = [(day, value) for day, value in checkup
+              if date.fromisoformat(day)
+              >= latest - timedelta(days=_CHECKUP_METABOLIC_STALE_DAYS - 1)]
+    if not usable:
+        return None
+    day, value = max(usable, key=lambda item: item[0])
+    return day, value, "checkup", 1
+
+
+def _daily_means(records: list[tuple[str, Any]]) -> dict[str, Any]:
+    """하루에 여러 번 잰 값을 그날 평균으로 묶는다.
+
+    아침에 높고 저녁에 낮은 것이 혈압이다. 한쪽만 집으면 같은 날 기록으로도 점수가
+    크게 갈린다. 생활건강 탭이 쓰는 daily='mean'과 같은 규칙이다.
+    """
+    by_day: dict[str, list[Any]] = {}
+    for day, value in records:
+        by_day.setdefault(day, []).append(value)
+    return {day: _mean_value(values) for day, values in by_day.items()}
+
+
+def _mean_value(values: list[Any]) -> Any:
+    """혈압처럼 두 수치가 한 쌍인 값도 각각 평균한다."""
+    if isinstance(values[0], tuple):
+        return tuple(fmean(value[index] for value in values)
+                     for index in range(len(values[0])))
+    return fmean(values)
+
+
+def _bio_pressure(window: dict[str, Any], latest: date) -> list[tuple[str, tuple[float, float]]]:
+    """생활 기록의 혈압. 수축기와 이완기가 한 행에 함께 들어온다."""
+    records = []
+    for row in _rows(window, "bio"):
+        if row.get("bio_type") != "blood_pressure":
+            continue
+        day = _day(row.get("measured_at"))
+        detail = row.get("detail_data") if isinstance(row.get("detail_data"), dict) else {}
+        systolic, diastolic = _number(detail.get("systolic")), _number(detail.get("diastolic"))
+        if day and systolic and diastolic and day <= latest.isoformat():
+            records.append((day, (systolic, diastolic)))
+    return records
+
+
+def _bio_glucose(window: dict[str, Any], latest: date) -> list[tuple[str, float]]:
+    """생활 기록의 공복 혈당. 식후 기록은 측정 시점을 믿을 수 없어 쓰지 않는다."""
+    records = []
+    for row in _rows(window, "bio"):
+        if row.get("bio_type") != "blood_glucose":
+            continue
+        detail = row.get("detail_data") if isinstance(row.get("detail_data"), dict) else {}
+        if detail.get("fasting") is not True:
+            continue
+        day = _day(row.get("measured_at"))
+        value = _number(row.get("value"))
+        if day and value and day <= latest.isoformat():
+            records.append((day, value))
+    return records
+
+
+def _checkup_pressure(checkups: list[dict[str, Any]] | None,
+                      latest: date) -> list[tuple[str, tuple[float, float]]]:
+    """검진의 혈압. 수축기와 이완기가 따로 적힌 회차만 쓴다."""
+    records = []
+    for day, results in _checkup_rounds(checkups, latest):
+        systolic = _checkup_value(results, _SYSTOLIC_ITEM_KEYWORDS)
+        diastolic = _checkup_value(results, _DIASTOLIC_ITEM_KEYWORDS)
+        if systolic and diastolic:
+            records.append((day, (systolic, diastolic)))
+    return records
+
+
+def _checkup_glucose(checkups: list[dict[str, Any]] | None,
+                     latest: date) -> list[tuple[str, float]]:
+    records = []
+    for day, results in _checkup_rounds(checkups, latest):
+        value = _checkup_value(results, _GLUCOSE_ITEM_KEYWORDS)
+        if value:
+            records.append((day, value))
+    return records
+
+
+def _checkup_rounds(checkups: list[dict[str, Any]] | None,
+                    latest: date) -> list[tuple[str, list[dict[str, Any]]]]:
+    """기준일까지의 검진 회차만 날짜와 함께 돌려준다."""
+    rounds = []
+    for checkup in checkups or []:
+        day = _day(checkup.get("date"))
+        if day and day <= latest.isoformat():
+            rounds.append((day, checkup.get("results") or []))
+    return rounds
+
+
+def _checkup_value(results: list[dict[str, Any]], keywords: tuple[str, ...]) -> float | None:
+    """검진 결과에서 이름에 이 말이 든 첫 항목의 수치를 꺼낸다."""
+    for result in results:
+        text = f"{result.get('item_code') or ''} {result.get('item_name') or ''}".casefold()
+        if any(keyword in text for keyword in keywords):
+            return _number(result.get("value"))
+    return None
 
 
 def _bio_bmi(window: dict[str, Any], latest: date) -> list[tuple[str, float]]:
@@ -529,18 +761,24 @@ def _checkup_bmi(checkups: list[dict[str, Any]] | None,
 # ── 공통 ──────────────────────────────────────────────────────────────────
 
 def _result(base: str, components: dict[str, Any], reasons: list[str]) -> dict[str, Any]:
-    """세 성분이 다 서고 결격이 없을 때만 총점을 낸다."""
-    complete = not reasons and set(components) == set(_WEIGHTS)
+    """필수 성분이 다 서고 결격이 없을 때 총점을 낸다.
+
+    대사는 선택이라 없어도 총점이 나온다. 그때는 남은 가중치를 다시 정규화한다.
+    `coverage`가 1.0이 아니면 일부 성분만 반영한 점수다.
+    """
+    complete = not reasons and all(name in components for name in _REQUIRED_COMPONENTS)
+    filled = sum(_WEIGHTS[name] for name in components if name in _WEIGHTS)
     total = (
-        round(sum(components[name]["score"] * _WEIGHTS[name] for name in _WEIGHTS))
-        if complete else None
+        round(sum(components[name]["score"] * _WEIGHTS[name] for name in components) / filled)
+        if complete and filled else None
     )
     return {
         "policy_version": POLICY_VERSION,
         "score_date": base,
         "total_score": total,
         "components": components,
-        "weights": dict(_WEIGHTS),
+        "weights": {name: _WEIGHTS[name] for name in components if name in _WEIGHTS},
+        "coverage": round(filled, 2),
         "reasons": reasons,
     }
 
