@@ -9,8 +9,10 @@
 작성자: 고수연
 """
 
+import re
 import unittest
 from datetime import date, timedelta
+from pathlib import Path
 
 from app.services import lifestyle_score as score
 
@@ -218,6 +220,83 @@ class TotalTest(unittest.TestCase):
         self.assertEqual(len(points), 7)
         self.assertEqual([point["score_date"] for point in points][0], since)
         self.assertEqual([point["score_date"] for point in points][-1], BASE.isoformat())
+
+
+class DocumentTest(unittest.TestCase):
+    """기준 문서가 코드의 실제 값을 그대로 적고 있는지 본다.
+
+    점수는 숫자 하나로 나가기 때문에 문서와 코드가 갈라져도 화면에서는 드러나지 않는다.
+    한쪽만 고치면 여기서 실패한다.
+    """
+
+    DOC = (Path(__file__).resolve().parents[2] / "docs" / "생활습관_관리점수_기준.md")
+
+    def setUp(self) -> None:
+        self.body = self.DOC.read_text(encoding="utf-8")
+
+    def test_the_weights_are_written_down(self) -> None:
+        weights = score._WEIGHTS
+        self.assertIn(f"수면 × {weights['sleep']:.2f} + 활동 × {weights['activity']:.2f}"
+                      f" + BMI × {weights['bmi']:.2f}", self.body)
+        parts = score._SLEEP_WEIGHTS
+        self.assertIn(f"충분성 × {parts['duration']:.2f} + 규칙성 × {parts['regularity']:.2f}"
+                      f" + 안정성 × {parts['stability']:.2f}"
+                      f" + 사회적 시차 × {parts['social_jetlag']:.2f}", self.body)
+
+    def test_every_threshold_is_written_down(self) -> None:
+        for text in (
+            # 충분성
+            f"{score._GOOD_HOURS_LOW:g}~{score._GOOD_HOURS_HIGH:g}시간",
+            f"시간당 **−{score._SHORT_PENALTY_PER_HOUR:g}**",
+            f"시간당 **−{score._LONG_PENALTY_PER_HOUR:g}**",
+            # 규칙성
+            f"| {score._CLOCK_STEADY_MINUTES}분 이하 | 100 |",
+            f"| {score._CLOCK_LOOSE_MINUTES}분 | **{score._REGULARITY_LOOSE_SCORE:g}** ★ |",
+            f"| {score._REGULARITY_ZERO_MINUTES:g}분 이상 | 0 |",
+            # 안정성
+            f"| {score._STABILITY_GOOD_MINUTES:g}분 이하 ★ | 100 |",
+            f"| {score._STABILITY_ZERO_MINUTES:g}분 이상 ★ | 0 |",
+            # 사회적 시차
+            f"| {score._CLOCK_WEEKEND_SHIFT_MINUTES}분 이하 | 100 |",
+            f"| {score._JETLAG_ZERO_MINUTES:g}분 이상 ★ | 0 |",
+            # 활동·BMI
+            f"{score._STEPS_TARGET:,.0f}걸음",
+            f"| 운동시간 | {score._EXERCISE_TARGET_MINUTES:g}분 |",
+            f"| {score._BMI_LOW:g}~{score._BMI_HIGH:g} | 100 |",
+            f"폭 1당 **−{score._BMI_PENALTY_PER_UNIT:g}**",
+        ):
+            with self.subTest(text=text):
+                self.assertIn(text, self.body)
+
+    def test_the_windows_table_matches_the_code(self) -> None:
+        for row in (
+            f"| 충분성 | 최근 **{score._DURATION_WINDOW_DAYS}일** ★"
+            f" | **{score._DURATION_MIN_DAYS}일** ★ |",
+            f"| 규칙성·안정성 | 최근 **{score._SPREAD_WINDOW_DAYS}일** ★"
+            f" | **{score._SPREAD_MIN_DAYS}일** ★ |",
+            f"| 사회적 시차 | 최근 **{score._SPREAD_WINDOW_DAYS}일** ★"
+            f" | 주중 **{score._WEEKDAY_MIN_DAYS}일** + 주말 **{score._WEEKEND_MIN_DAYS}일** ★ |",
+            f"| 활동 | 최근 **{score._ACTIVITY_WINDOW_DAYS}일** ★"
+            f" | **{score._ACTIVITY_MIN_DAYS}일** ★ |",
+            f"| BMI | **{score._BMI_STALE_DAYS}일** 이내 측정 ★ | 1건 |",
+        ):
+            with self.subTest(row=row):
+                self.assertIn(row, self.body)
+
+    def test_every_reason_the_code_emits_is_documented(self) -> None:
+        """코드가 낼 수 있는 사유가 문서 표에 빠짐없이 있어야 한다."""
+        emitted = set(re.findall(r'reasons\.append\("([a-z_]+)"\)',
+                                 Path(score.__file__).read_text(encoding="utf-8")))
+        emitted.update(re.findall(r'return None, "([a-z_]+)"',
+                                  Path(score.__file__).read_text(encoding="utf-8")))
+        emitted.add("no_record")
+        self.assertTrue(emitted, "사유를 하나도 못 찾았다면 정규식이 코드와 어긋난 것이다")
+        for reason in sorted(emitted):
+            with self.subTest(reason=reason):
+                self.assertIn(f"| `{reason}` |", self.body)
+
+    def test_the_policy_version_is_named(self) -> None:
+        self.assertIn(score.POLICY_VERSION, self.body)
 
 
 if __name__ == "__main__":
