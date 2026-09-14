@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 ZONE = ZoneInfo("Asia/Seoul")
 CATEGORIES = ("bio", "activity", "nutrition", "sleep", "checkup", "overall", "score")
@@ -27,6 +27,15 @@ class AnalysisRequest(BaseModel):
     # 하루치 점수는 최대 90일 전 기록까지 거슬러 보므로(BMI 90일, 활동 14일, 수면 8일),
     # 창 180일에서 90일치 계열까지가 온전히 계산된다. 그래서 상한을 90으로 둔다.
     scoreDays: int = Field(default=1, ge=1, le=90)
+
+    # 작성자: 고수연 — 저장소는 가입 때 'Male'·'Female'로 적는다(app/schemas/auth.py).
+    # 여기만 소문자를 고집해서 서버가 미리 걸러 null로 보내고 있었다. 오류가 나지 않아
+    # 모든 사용자의 성별이 조용히 빠졌다. 생활건강의 normalize_sex와 같은 규칙으로 받는다.
+    @field_validator("sex", mode="before")
+    @classmethod
+    def normalize_sex(cls, value: Any) -> str | None:
+        text = str(value or "").strip().casefold()
+        return text if text in {"male", "female"} else None
 
     @model_validator(mode="after")
     def validate_snapshot(self):
