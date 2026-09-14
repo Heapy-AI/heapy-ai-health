@@ -112,6 +112,16 @@ class HealthAnalysisTest(unittest.TestCase):
         self.assertEqual(1, len(payload["points"]))
         self.assertEqual("2026-09-10", payload["score"]["score_date"])
 
+    def test_reads_the_stored_sex_spelling(self):
+        """저장소는 'Male'·'Female'로 적는다. 소문자만 받으면 성별이 통째로 빠진다.
+
+        모르는 값은 거절하지 않고 비운다. 생활건강의 normalize_sex와 같은 규칙이다.
+        작성자: 고수연.
+        """
+        for given, expected in (("Female", "female"), ("male", "male"),
+                                ("여성", None), ("", None), (None, None)):
+            self.assertEqual(expected, AnalysisRequest(**{**self.body, "sex": given}).sex)
+
     def test_rejects_unknown_fields_and_naive_cutoff(self):
         for delta in ({"userId": "다른 사용자"}, {"cutoff": "2026-09-10T00:00:00"},
                       {"cutoff": "2026-09-10T01:00:00+09:00"}):
