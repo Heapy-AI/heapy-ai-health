@@ -48,8 +48,10 @@ def normalize_window(request: AnalysisRequest) -> dict[str, Any]:
     """현재 DB 단위에서 데모 입력으로 변환하며 미확인 값을 영으로 채우지 않는다."""
     days = 180 if request.category in {"bio", "overall"} else 90
     output: dict[str, Any] = {"window_days": days}
+    # 작성자: 고수연 — 수면은 '깬 날'에 귀속한다. 백엔드 HealthMetric.SLEEP 과 같은 기준이다.
+    # start_at 으로 묶으면 자정을 넘겨 잔 날이 전날로 밀려 하루가 비어 보인다.
     time_fields = {"bio": "measured_at", "activity": "record_date", "exercise": "start_at",
-                   "nutrition": "consumed_at", "water": "consumed_at", "sleep": "start_at"}
+                   "nutrition": "consumed_at", "water": "consumed_at", "sleep": "end_at"}
     for domain, time_field in time_fields.items():
         rows = []
         for raw in request.records.get(domain, []):
