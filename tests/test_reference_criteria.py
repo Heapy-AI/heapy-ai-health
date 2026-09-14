@@ -3,7 +3,7 @@
 참고범위는 값 하나를 고치면 코드·문서·화면 세 곳이 함께 움직여야 한다. 한 곳만
 고치면 화면이 사실과 다른 잣대를 말하게 되므로, 문서의 표를 읽어 코드와 대조한다.
 
-문서: docs/생활건강_AI해석_판정기준_출처와_적용.md
+문서: docs/생활건강_AI해석_판정기준_출처와적용.md
 
 작성자: 고수연
 """
@@ -23,7 +23,7 @@ from app.services.lifestyle_report import (
 
 
 DOC = (Path(__file__).resolve().parents[1] / "docs"
-       / "생활건강_AI해석_판정기준_출처와_적용.md")
+       / "생활건강_AI해석_판정기준_출처와적용.md")
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 
 

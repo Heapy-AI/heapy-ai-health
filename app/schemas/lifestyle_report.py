@@ -88,6 +88,8 @@ class LifestyleReportResponse(BaseModel):
     covered_range: str = ""
     data_truncated: bool = False
     latest_date: str = ""
+    # 어느 잣대로 판정했는지. 성별을 알면 그 성별 기준을 써서 사람마다 달라진다.
+    reference_basis: str = ""
     # 어느 판 프롬프트로 만든 결과인지. 화면과 검증 로그가 함께 참조한다.
     prompt_version: str = ""
     report: LifestyleReportContent
