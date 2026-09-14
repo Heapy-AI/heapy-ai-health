@@ -375,7 +375,7 @@ def _daily_sum(source: str, date_key: str, value: Callable[[dict[str, Any]], Any
 # 단위 환산은 화면(app.js)·프롬프트 포맷(supabase_lifestyle_context)과 같게 맞춘다.
 # lifestyle_activity.distance_m은 km로, lifestyle_exercise.distance_m은 m로 적재된다.
 #
-# 참고범위 근거. 값과 출처 전체는 docs/생활건강_AI해석_판정기준_출처와_적용.md에 있고,
+# 참고범위 근거. 값과 출처 전체는 docs/생활건강_AI해석_판정기준_출처와적용.md에 있고,
 # 그 문서와 여기가 어긋나면 tests/test_reference_criteria.py가 실패한다.
 # 성별·나이로 갈리는 영양 4항목은 아래 _KDRI_2025가 따로 들고 있다.
 #   BMI            대한비만학회 아시아·태평양 기준. 정상 18.5~22.9, 과체중 23~24.9

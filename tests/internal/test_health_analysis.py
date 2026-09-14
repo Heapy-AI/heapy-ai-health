@@ -90,6 +90,28 @@ class HealthAnalysisTest(unittest.TestCase):
         self.assertEqual("2026-09-10", payload["score"]["score_date"])
         self.assertEqual(100, payload["score"]["total_score"])
 
+    def test_score_days_returns_one_point_per_day_ending_on_the_analysis_date(self):
+        """서버가 그래프용 행을 한 번에 채울 수 있어야 한다. 작성자: 고수연.
+
+        계열의 마지막 날은 분석일이고, score는 그 마지막 날과 같은 값이다.
+        """
+        body = {**self.body, "category": "score", "records": {}, "scoreDays": 5}
+        payload = self.client.post("/internal/health/analyses", json=body,
+                                   headers=self.headers).json()
+
+        self.assertEqual(["2026-09-06", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10"],
+                         [point["score_date"] for point in payload["points"]])
+        self.assertEqual(payload["points"][-1], payload["score"])
+
+    def test_score_without_score_days_still_returns_a_single_day(self):
+        """기본값 1이면 예전 계약 그대로다. 서버가 필드를 안 보내도 깨지지 않는다."""
+        body = {**self.body, "category": "score", "records": {}}
+        payload = self.client.post("/internal/health/analyses", json=body,
+                                   headers=self.headers).json()
+
+        self.assertEqual(1, len(payload["points"]))
+        self.assertEqual("2026-09-10", payload["score"]["score_date"])
+
     def test_rejects_unknown_fields_and_naive_cutoff(self):
         for delta in ({"userId": "다른 사용자"}, {"cutoff": "2026-09-10T00:00:00"},
                       {"cutoff": "2026-09-10T01:00:00+09:00"}):

@@ -23,6 +23,10 @@ class AnalysisRequest(BaseModel):
     checkups: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     sex: Literal["male", "female"] | None = None
     age: int | None = Field(default=None, ge=0, le=130)
+    # 작성자: 고수연 — category가 "score"일 때만 쓴다. 분석일까지 며칠치를 한 번에 낼지다.
+    # 하루치 점수는 최대 90일 전 기록까지 거슬러 보므로(BMI 90일, 활동 14일, 수면 8일),
+    # 창 180일에서 90일치 계열까지가 온전히 계산된다. 그래서 상한을 90으로 둔다.
+    scoreDays: int = Field(default=1, ge=1, le=90)
 
     @model_validator(mode="after")
     def validate_snapshot(self):
@@ -46,7 +50,7 @@ def korean_date(value: Any) -> str:
 
 def normalize_window(request: AnalysisRequest) -> dict[str, Any]:
     """현재 DB 단위에서 데모 입력으로 변환하며 미확인 값을 영으로 채우지 않는다."""
-    days = 180 if request.category in {"bio", "overall"} else 90
+    days = 180 if request.category in {"bio", "overall", "score"} else 90
     output: dict[str, Any] = {"window_days": days}
     # 작성자: 고수연 — 수면은 '깬 날'에 귀속한다. 백엔드 HealthMetric.SLEEP 과 같은 기준이다.
     # start_at 으로 묶으면 자정을 넘겨 잔 날이 전날로 밀려 하루가 비어 보인다.
@@ -104,16 +108,24 @@ def score_response(request: AnalysisRequest) -> dict[str, Any]:
 
     normalize_window가 분석일 당일 기록을 빼기 때문에, 창은 전날에 맞춰 잡아야 의도한
     일수를 본다. 점수가 가리키는 날짜는 분석일 그대로 둔다.
+
+    scoreDays를 주면 분석일까지 그 일수만큼의 계열을 함께 돌려준다. 서버가 그래프용
+    행을 한 번의 호출로 채우기 위한 것이다. 기본값 1이면 예전과 같은 하루치다.
+    `score`는 언제나 계열의 마지막 날, 곧 분석일 점수다.
     """
-    from app.services.health_score import calculate
+    from app.services.health_score import calculate_series
 
     window = normalize_window(request)
-    result = calculate(window, request.age,
-                       (request.analysisDate - timedelta(days=1)).isoformat(),
-                       request.checkups)
-    result["score_date"] = request.analysisDate.isoformat()
-    status = "generated" if result["total_score"] is not None else "data_insufficient"
-    return {"status": status, "score": result}
+    # 기준일(as_of)은 점수일의 전날이다. 계열의 마지막 기준일이 분석일의 전날이 된다.
+    until = request.analysisDate - timedelta(days=1)
+    since = until - timedelta(days=request.scoreDays - 1)
+    points = calculate_series(window, since.isoformat(), until.isoformat(),
+                              request.age, request.checkups)
+    for offset, point in enumerate(points):
+        point["score_date"] = (since + timedelta(days=offset + 1)).isoformat()
+    latest = points[-1]
+    status = "generated" if latest["total_score"] is not None else "data_insufficient"
+    return {"status": status, "score": latest, "points": points}
 
 
 @lru_cache(maxsize=1)

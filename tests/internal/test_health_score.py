@@ -1,4 +1,4 @@
-"""생활습관 관리 점수 v2가 정한 대로 계산하는지 지킨다.
+"""오늘의 건강 종합 점수가 정한 대로 계산하는지 지킨다.
 
 점수는 사용자에게 숫자 하나로 나가기 때문에 식이 조용히 바뀌면 알아채기 어렵다.
 그래서 성분별 곡선의 경계값과 결격 규칙을 여기에 박아 둔다.
@@ -238,6 +238,134 @@ class CheckupBmiTest(unittest.TestCase):
         self.assertIn("bmi_missing", result["reasons"])
 
 
+class MetabolicTest(unittest.TestCase):
+    """혈압과 공복혈당. 선택 성분이라 없어도 총점이 나와야 한다."""
+
+    def _bio(self, rows: list[dict]) -> dict:
+        window = _window(_steady())
+        window["bio"]["rows"] = window["bio"]["rows"] + rows
+        return window
+
+    def _pressure(self, systolic: float, diastolic: float, days_ago: int = 5) -> dict:
+        return {"measured_at": (BASE - timedelta(days=days_ago)).isoformat(),
+                "bio_type": "blood_pressure", "value": systolic,
+                "detail_data": {"systolic": systolic, "diastolic": diastolic}}
+
+    def _glucose(self, value: float, fasting: bool = True, days_ago: int = 5) -> dict:
+        return {"measured_at": (BASE - timedelta(days=days_ago)).isoformat(),
+                "bio_type": "blood_glucose", "value": value,
+                "detail_data": {"fasting": fasting}}
+
+    def test_blood_pressure_takes_the_worse_of_the_two(self) -> None:
+        """대한고혈압학회 기준이 수축기 '또는' 이완기 중 나쁜 쪽으로 등급을 매긴다."""
+        # 수축기는 양호(110)인데 이완기가 주의 경계(89)다. 나쁜 쪽을 따라간다.
+        self.assertEqual(score.blood_pressure_score(110, 89), 60)
+        self.assertEqual(score.blood_pressure_score(139, 75), 60)
+        self.assertEqual(score.blood_pressure_score(115, 70), 100)
+        # 둘 다 나쁘면 더 나쁜 쪽이다.
+        self.assertEqual(score.blood_pressure_score(159, 99), 0)
+
+    def test_the_zero_points_land_on_the_next_clinical_stage(self) -> None:
+        """0점 자리가 학회의 다음 단계와 맞는지. 2기 고혈압 160/100, 당뇨 126."""
+        self.assertEqual(score.band_score(159, score._BP_SYSTOLIC_BAND), 0)
+        self.assertEqual(score.band_score(99, score._BP_DIASTOLIC_BAND), 0)
+        self.assertLess(score.glucose_score(126), score._BAND_CAUTION_SCORE)
+        self.assertEqual(score.glucose_score(151), 0)
+
+    def test_the_component_is_optional(self) -> None:
+        """혈압계·혈당계가 없어도 총점이 나온다. 대신 coverage가 0.9다."""
+        without = score.calculate(_window(_steady()), age=35, as_of=BASE.isoformat())
+        self.assertIsNotNone(without["total_score"])
+        self.assertNotIn("metabolic", without["components"])
+        self.assertAlmostEqual(without["coverage"], 0.9)
+        self.assertEqual(without["reasons"], [])
+
+    def test_one_side_alone_still_counts(self) -> None:
+        """혈압만 있으면 혈압만으로 낸다. 대사 안쪽에서 다시 정규화한다."""
+        result = score.calculate(self._bio([self._pressure(150, 95)]),
+                                 age=35, as_of=BASE.isoformat())
+        metabolic = result["components"]["metabolic"]
+        self.assertEqual(["glucose"], metabolic["missing_parts"])
+        self.assertAlmostEqual(metabolic["coverage"], 0.5)
+        self.assertEqual(metabolic["score"], metabolic["parts"]["blood_pressure"]["score"])
+        self.assertAlmostEqual(result["coverage"], 1.0)
+
+    def test_a_bad_reading_pulls_the_total_down(self) -> None:
+        good = score.calculate(self._bio([self._pressure(110, 70), self._glucose(90)]),
+                               age=35, as_of=BASE.isoformat())
+        bad = score.calculate(self._bio([self._pressure(155, 98), self._glucose(140)]),
+                              age=35, as_of=BASE.isoformat())
+        self.assertEqual(100, good["components"]["metabolic"]["score"])
+        self.assertLess(bad["total_score"], good["total_score"])
+
+    def test_post_meal_glucose_is_ignored(self) -> None:
+        """'식후 2시간'이 지켜졌는지 알 수 없어 공복만 받는다."""
+        result = score.calculate(self._bio([self._glucose(180, fasting=False)]),
+                                 age=35, as_of=BASE.isoformat())
+        self.assertNotIn("metabolic", result["components"])
+
+    def test_readings_on_one_day_are_averaged(self) -> None:
+        """아침에 높고 저녁에 낮은 것이 혈압이다. 한쪽만 집으면 안 된다."""
+        result = score.calculate(self._bio([self._pressure(145, 92, days_ago=1),
+                                            self._pressure(115, 72, days_ago=1)]),
+                                 age=35, as_of=BASE.isoformat())
+        pressure = result["components"]["metabolic"]["parts"]["blood_pressure"]
+        self.assertEqual(130.0, pressure["systolic"])
+        self.assertEqual(82.0, pressure["diastolic"])
+        self.assertEqual(1, pressure["recorded_days"])
+
+    def test_the_row_order_does_not_change_the_score(self) -> None:
+        """같은 데이터면 같은 점수여야 한다. 예전에는 먼저 나온 행이 집혔다."""
+        rows = [self._pressure(145, 92, days_ago=1), self._pressure(118, 74, days_ago=1),
+                self._pressure(120, 76, days_ago=3)]
+        forward = score.calculate(self._bio(rows), age=35, as_of=BASE.isoformat())
+        backward = score.calculate(self._bio(list(reversed(rows))), age=35,
+                                   as_of=BASE.isoformat())
+        self.assertEqual(forward["components"]["metabolic"]["score"],
+                         backward["components"]["metabolic"]["score"])
+
+    def test_only_the_last_thirty_days_are_averaged(self) -> None:
+        """유효 기간은 90일이지만 평균은 최근 측정일에서 30일까지만 모은다."""
+        result = score.calculate(self._bio([self._pressure(120, 76, days_ago=2),
+                                            self._pressure(180, 110, days_ago=60)]),
+                                 age=35, as_of=BASE.isoformat())
+        pressure = result["components"]["metabolic"]["parts"]["blood_pressure"]
+        self.assertEqual(1, pressure["recorded_days"])
+        self.assertEqual(120.0, pressure["systolic"])
+
+    def test_lifestyle_records_are_not_mixed_with_a_checkup(self) -> None:
+        """의료기관 측정과 가정 측정은 조건이 달라 섞어 평균하면 둘 다 아닌 값이 된다."""
+        checkups = [{"date": (BASE - timedelta(days=30)).isoformat(), "results": [
+            {"item_code": "SBP", "item_name": "수축기혈압", "value": 180},
+            {"item_code": "DBP", "item_name": "이완기혈압", "value": 110}]}]
+        result = score.calculate(self._bio([self._pressure(118, 74, days_ago=2)]),
+                                 age=35, as_of=BASE.isoformat(), checkups=checkups)
+        pressure = result["components"]["metabolic"]["parts"]["blood_pressure"]
+        self.assertEqual("lifestyle", pressure["source"])
+        self.assertEqual(118.0, pressure["systolic"])
+
+    def test_the_checkup_fills_in_metabolic_too(self) -> None:
+        """연 1회 검진만 받아도 대사 성분이 채워진다."""
+        checkups = [{"date": "2026-04-02", "results": [
+            {"item_code": "SBP", "item_name": "수축기혈압", "value": 118},
+            {"item_code": "DBP", "item_name": "이완기혈압", "value": 76},
+            {"item_code": "FBS", "item_name": "공복혈당", "value": 92}]}]
+        result = score.calculate(_window(_steady()), age=35, as_of=BASE.isoformat(),
+                                 checkups=checkups)
+        parts = result["components"]["metabolic"]["parts"]
+        self.assertEqual("checkup", parts["blood_pressure"]["source"])
+        self.assertEqual("checkup", parts["glucose"]["source"])
+        self.assertEqual(100, result["components"]["metabolic"]["score"])
+
+    def test_a_combined_blood_pressure_item_is_skipped(self) -> None:
+        """수축기와 이완기가 '120/80'처럼 한 칸에 붙어 있으면 읽지 않는다."""
+        checkups = [{"date": "2026-04-02", "results": [
+            {"item_code": "BP", "item_name": "혈압", "value": "120/80"}]}]
+        result = score.calculate(_window(_steady()), age=35, as_of=BASE.isoformat(),
+                                 checkups=checkups)
+        self.assertNotIn("metabolic", result["components"])
+
+
 class DisqualificationTest(unittest.TestCase):
     """총점을 내지 않아야 할 때. lifestyle_daily_scores 테이블의 제약과 같은 규칙이다."""
 
@@ -284,17 +412,20 @@ class DisqualificationTest(unittest.TestCase):
 
 
 class TotalTest(unittest.TestCase):
-    def test_total_uses_the_backend_weights(self) -> None:
-        """수면 .45 + 활동 .45 + BMI .10. 백엔드 v1의 배분을 그대로 잇는다."""
-        self.assertEqual(score._WEIGHTS, {"sleep": 0.45, "activity": 0.45, "bmi": 0.10})
-        self.assertAlmostEqual(sum(score._WEIGHTS.values()), 1.0)
-        self.assertAlmostEqual(sum(score._SLEEP_WEIGHTS.values()), 1.0)
+    def test_the_weights_add_up(self) -> None:
+        """행동(수면·활동) 0.80, 상태(BMI·대사) 0.20. 셋 다 합이 1이어야 한다."""
+        self.assertEqual(score._WEIGHTS,
+                         {"sleep": 0.40, "activity": 0.40, "bmi": 0.10, "metabolic": 0.10})
+        behaviour = score._WEIGHTS["sleep"] + score._WEIGHTS["activity"]
+        self.assertAlmostEqual(behaviour, 0.80)
+        for weights in (score._WEIGHTS, score._SLEEP_WEIGHTS, score._METABOLIC_WEIGHTS):
+            self.assertAlmostEqual(sum(weights.values()), 1.0)
 
     def test_perfect_record_scores_one_hundred(self) -> None:
         result = score.calculate(_window(_steady()), age=35, as_of=BASE.isoformat())
         self.assertEqual(result["total_score"], 100)
         self.assertEqual(result["reasons"], [])
-        self.assertEqual(result["policy_version"], "heapy-lifestyle-v2")
+        self.assertEqual(result["policy_version"], score.POLICY_VERSION)
 
     def test_series_covers_every_day_in_the_range(self) -> None:
         window = _window(_steady())
@@ -312,7 +443,7 @@ class DocumentTest(unittest.TestCase):
     한쪽만 고치면 여기서 실패한다.
     """
 
-    DOC = (Path(__file__).resolve().parents[2] / "docs" / "생활습관_관리점수_기준.md")
+    DOC = (Path(__file__).resolve().parents[2] / "docs" / "오늘의_건강_종합점수_기준.md")
 
     def setUp(self) -> None:
         self.body = self.DOC.read_text(encoding="utf-8")
@@ -320,11 +451,15 @@ class DocumentTest(unittest.TestCase):
     def test_the_weights_are_written_down(self) -> None:
         weights = score._WEIGHTS
         self.assertIn(f"수면 × {weights['sleep']:.2f} + 활동 × {weights['activity']:.2f}"
-                      f" + BMI × {weights['bmi']:.2f}", self.body)
+                      f" + BMI × {weights['bmi']:.2f}"
+                      f" + 대사 × {weights['metabolic']:.2f}", self.body)
         parts = score._SLEEP_WEIGHTS
         self.assertIn(f"충분성 × {parts['duration']:.2f} + 규칙성 × {parts['regularity']:.2f}"
                       f" + 안정성 × {parts['stability']:.2f}"
                       f" + 사회적 시차 × {parts['social_jetlag']:.2f}", self.body)
+        metabolic = score._METABOLIC_WEIGHTS
+        self.assertIn(f"혈압 × {metabolic['blood_pressure']:.2f}"
+                      f" + 공복혈당 × {metabolic['glucose']:.2f}", self.body)
 
     def test_every_threshold_is_written_down(self) -> None:
         for text in (
@@ -349,6 +484,16 @@ class DocumentTest(unittest.TestCase):
             f"| {score._BMI_CAUTION_LOW:g} 이하 · {score._BMI_CAUTION_HIGH:g} 이상"
             f" | **{score._BMI_CAUTION_SCORE:g}** ★ |",
             f"주의 경계에서 **{score._BMI_ZERO_MARGIN:g}**만큼 더 벗어남 ★",
+            # 대사 — (0점, 주의, 양호, 양호, 주의, 0점) 여섯 점을 표에서 확인한다.
+            f"| 수축기 혈압 | {score._BP_SYSTOLIC_BAND[2]:g}~{score._BP_SYSTOLIC_BAND[3]:g}"
+            f" | {score._BP_SYSTOLIC_BAND[1]:g} · {score._BP_SYSTOLIC_BAND[4]:g}"
+            f" | {score._BP_SYSTOLIC_BAND[0]:g} · **{score._BP_SYSTOLIC_BAND[5]:g}** ★ |",
+            f"| 이완기 혈압 | {score._BP_DIASTOLIC_BAND[2]:g}~{score._BP_DIASTOLIC_BAND[3]:g}"
+            f" | {score._BP_DIASTOLIC_BAND[1]:g} · {score._BP_DIASTOLIC_BAND[4]:g}"
+            f" | {score._BP_DIASTOLIC_BAND[0]:g} · **{score._BP_DIASTOLIC_BAND[5]:g}** ★ |",
+            f"| 공복 혈당 | {score._GLUCOSE_BAND[2]:g}~{score._GLUCOSE_BAND[3]:g}"
+            f" | {score._GLUCOSE_BAND[1]:g} · {score._GLUCOSE_BAND[4]:g}"
+            f" | {score._GLUCOSE_BAND[0]:g} · **{score._GLUCOSE_BAND[5]:g}** ★ |",
         ):
             with self.subTest(text=text):
                 self.assertIn(text, self.body)
@@ -365,6 +510,9 @@ class DocumentTest(unittest.TestCase):
             f" | **{score._ACTIVITY_MIN_DAYS}일** ★ |",
             f"| BMI (생활 기록) | **{score._BMI_STALE_DAYS}일** 이내 측정 ★ | 1건 |",
             f"| BMI (건강검진) | **{score._CHECKUP_BMI_STALE_DAYS}일** 이내 측정 ★ | 1건 |",
+            f"| 대사 (생활 기록) | **{score._METABOLIC_STALE_DAYS}일** 이내 측정 ★"
+            f" · 최근 측정일 기준 **{score._METABOLIC_AVERAGE_DAYS}일** 평균 ★ | 1건 |",
+            f"| 대사 (건강검진) | **{score._CHECKUP_METABOLIC_STALE_DAYS}일** 이내 측정 ★ | 1건 |",
         ):
             with self.subTest(row=row):
                 self.assertIn(row, self.body)
