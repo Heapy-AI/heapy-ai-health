@@ -65,14 +65,21 @@ app = FastAPI(title="HEAPY 내부 챗봇", lifespan=lifespan,
 # 작성자: 김진우 — 데모 인증 경로를 공개하지 않고 건강 분석만 등록한다.
 app.include_router(build_router(authorize))
 
+# 작성자: 김진우 — 건강 기록 요청은 Spring 백엔드와 동일한 4 MiB를 허용한다.
+DEFAULT_BODY_LIMIT = 256 * 1024
+HEALTH_ANALYSIS_BODY_LIMIT = 4 * 1024 * 1024
+
 
 @app.middleware("http")
 async def limit_body(request, call_next):
+    body_limit = (HEALTH_ANALYSIS_BODY_LIMIT
+                  if request.url.path == "/internal/health/analyses"
+                  else DEFAULT_BODY_LIMIT)
     size = 0
     chunks = []
     async for chunk in request.stream():
         size += len(chunk)
-        if size > 262144:
+        if size > body_limit:
             return JSONResponse(status_code=413, content={"code": "PAYLOAD_TOO_LARGE"})
         chunks.append(chunk)
     request._body = b"".join(chunks)
