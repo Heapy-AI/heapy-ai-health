@@ -1,0 +1,66 @@
+name: FastAPI 검증 및 개발 배포
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: 내부 계약 및 배포 도구 검증
+        run: |
+          python3 -m venv .ci-venv
+          .ci-venv/bin/pip install fastapi==0.139.2 httpx==0.28.1
+          .ci-venv/bin/python -m unittest discover -s tests/internal -v
+          bash -n scripts/deploy/deploy.sh
+      - name: CPU 컨테이너 빌드
+        run: docker build --platform linux/amd64 -t heapy-fastapi:verify .
+
+  deploy:
+    needs: verify
+    if: github.repository == 'Heapy-AI/heapy-ai-health' && github.ref == 'refs/heads/dev' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: heapy-fastapi-dev-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: 검증 커밋의 이미지 빌드
+        run: docker build --platform linux/amd64 -t "heapy-fastapi:$IMAGE_TAG" .
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
+        with:
+          role-to-assume: arn:aws:iam::577638373354:role/heapy-fastapi-github-role
+          aws-region: ap-northeast-2
+          allowed-account-ids: '577638373354'
+      - name: ECR 업로드 및 다이제스트 확정
+        shell: bash
+        run: |
+          set -euo pipefail
+          registry=577638373354.dkr.ecr.ap-northeast-2.amazonaws.com
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          docker tag "heapy-fastapi:$IMAGE_TAG" "$registry/heapy-fastapi:$IMAGE_TAG"
+          docker push "$registry/heapy-fastapi:$IMAGE_TAG"
+          digest=$(aws ecr describe-images --repository-name heapy-fastapi --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "DEPLOY_DIGEST=$digest" >> "$GITHUB_ENV"
+      - name: 고정된 SSM 배포 문서 실행
+        run: python3 scripts/deploy/send_command.py

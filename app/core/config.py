@@ -1,4 +1,4 @@
-# 설정을 한 곳에 모은다(바꾸면 전체 반영) - 03·04강 '설정 주도'
+# 설정을 한 곳에 모은다(바꾸면 전체 반영)
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -162,3 +162,29 @@ AUTH_COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "0").strip().lower() i
     "1",
     "true",
 }
+
+# 생활습관 컨텍스트는 날짜 필터 없이 최신순 건수 제한으로만 조회한다.
+# 기기 연동이 끊겨 데이터가 낡아도 최근 기록은 계속 조회되도록 하기 위함이다.
+LIFESTYLE_CONTEXT_ENABLED = os.environ.get(
+    "LIFESTYLE_CONTEXT_ENABLED",
+    "1",
+).strip().lower() not in {"0", "false"}
+LIFESTYLE_CONTEXT_MAX_ROWS = _positive_int_env("LIFESTYLE_CONTEXT_MAX_ROWS", 10)
+LIFESTYLE_CONTEXT_TREND_MAX_ROWS = _positive_int_env(
+    "LIFESTYLE_CONTEXT_TREND_MAX_ROWS",
+    30,
+)
+
+# 내건강 화면의 개인 검진·생활 데이터 조회 기준.
+PERSONAL_DATA_WINDOW_DAYS = _positive_int_env("PERSONAL_DATA_WINDOW_DAYS", 7)
+# 영역 하나를 조회할 때의 행 상한. 최신순으로 자르므로 넘치면 오래된 기록이 빠진다.
+#
+# AI 요약분석이 생체 180일·나머지 90일을 보므로(services/lifestyle_report.ANALYSIS_WINDOWS)
+# 기록이 촘촘한 사용자는 500행으로 부족하다. 생체 5개 지표를 매일 재면 900행, 수분을
+# 하루 여덟 번 남기면 90일에 720행이다. 상한에 걸리면 실제로 받아 온 범위를 since로
+# 되돌려 주고 truncated로 알리므로 없는 기간을 분석하지는 않지만, 그만큼 분석 구간이
+# 짧아진다. 그래서 흔한 기록량은 다 담기도록 올려 잡는다.
+#
+# 이보다 더 촘촘한 사용자까지 담으려면 행을 다 받아 오는 대신 날짜별 집계를 DB에
+# 맡기는 편이 낫다. 지금 구조에서 필요한 것은 일별 합계·평균뿐이다.
+PERSONAL_DATA_MAX_ROWS = _positive_int_env("PERSONAL_DATA_MAX_ROWS", 1200)
