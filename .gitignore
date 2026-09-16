@@ -231,7 +231,7 @@ classifier/artifacts/intent-v7/*
 /.local-dev/
 /Reference/
 /docs/
-/README.md
+!/README.md
 /model/classifier/*.md
 /model/classifier/*.mdx
 /tests/
