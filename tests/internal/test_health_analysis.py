@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from app.internal import app
-from app.health_analysis import AnalysisRequest, normalize_window
+from app.health_analysis import AnalysisRequest, checkup_service, normalize_window
+from app.core.state import state
 
 
 class HealthAnalysisTest(unittest.TestCase):
@@ -19,7 +20,19 @@ class HealthAnalysisTest(unittest.TestCase):
                      "cutoff": "2026-09-09T15:00:00Z", "records": {}}
 
     def tearDown(self):
+        checkup_service.cache_clear()
+        state.pop("vector_search", None)
         self.env.stop()
+
+    def test_checkup_service_uses_the_shared_vector_search(self):
+        shared = object()
+        state["vector_search"] = shared
+        checkup_service.cache_clear()
+
+        with patch("app.services.checkup_report.CheckupReportService") as service:
+            checkup_service()
+
+        service.assert_called_once_with(max_retries=0, vector_search=shared)
 
     def test_requires_internal_auth(self):
         self.assertEqual(401, self.client.post("/internal/health/analyses", json=self.body).status_code)

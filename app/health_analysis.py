@@ -10,6 +10,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.state import state
+
 ZONE = ZoneInfo("Asia/Seoul")
 CATEGORIES = ("bio", "activity", "nutrition", "sleep", "checkup", "overall", "score", "briefing")
 
