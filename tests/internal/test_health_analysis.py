@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.internal import app
 from app.health_analysis import AnalysisRequest, checkup_service, normalize_window
 from app.core.state import state
+from app.services import checkup_report
 
 
 class HealthAnalysisTest(unittest.TestCase):
@@ -29,7 +30,7 @@ class HealthAnalysisTest(unittest.TestCase):
         state["vector_search"] = shared
         checkup_service.cache_clear()
 
-        with patch("app.services.checkup_report.CheckupReportService") as service:
+        with patch.object(checkup_report, "CheckupReportService") as service:
             checkup_service()
 
         service.assert_called_once_with(max_retries=0, vector_search=shared)
