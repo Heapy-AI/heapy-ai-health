@@ -48,6 +48,26 @@ class CheckupEvidenceTest(unittest.TestCase):
             CheckupReportService._evidence_priority(normal),
         )
 
+    def test_prompt_analysis_limits_metrics_and_reports_omissions(self):
+        metrics = [
+            {
+                "metric_id": f"M{index}",
+                "reference_status": "정상",
+                "status": "변화 확인",
+                "change": index,
+            }
+            for index in range(12)
+        ]
+
+        result = CheckupReportService._build_prompt_analysis(
+            {"checkup_count": 4, "metrics": metrics}
+        )
+
+        self.assertEqual(8, len(result["metrics"]))
+        self.assertEqual(12, result["metric_count"])
+        self.assertEqual(4, result["omitted_metric_count"])
+        self.assertEqual("M11", result["metrics"][0]["metric_id"])
+
     def test_prompt_forbids_internal_db_wording_and_requires_evidence(self):
         prompt = get_checkup_persona_prompt("coach").format(
             analysis_data="[]",

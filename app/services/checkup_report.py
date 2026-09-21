@@ -22,6 +22,7 @@ from app.services.vector_search import PineconeSearchService
 
 CHECKUP_KNOWLEDGE_NAMESPACE = "health_checkup_info"
 MAX_EVIDENCE_METRICS = 8
+MAX_INSIGHT_METRICS = 8
 
 
 class CheckupReportService:
@@ -66,7 +67,9 @@ class CheckupReportService:
 
         analysis = self._build_analysis(history)
 
-        evidence, evidence_error = self._load_evidence(analysis)
+        prompt_analysis = self._build_prompt_analysis(analysis)
+
+        evidence, evidence_error = self._load_evidence(prompt_analysis)
 
         analysis_elapsed = (
             perf_counter() - started
@@ -78,7 +81,7 @@ class CheckupReportService:
 
         prompt = prompt_template.format(
             analysis_data=json.dumps(
-                analysis,
+                prompt_analysis,
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -116,6 +119,25 @@ class CheckupReportService:
                     3,
                 ),
             },
+        }
+
+    @classmethod
+    def _build_prompt_analysis(
+        cls,
+        analysis: dict[str, Any],
+    ) -> dict[str, Any]:
+        """전체 이력에서 사용자에게 설명할 핵심 항목만 모델 입력으로 제한한다."""
+        metrics = analysis.get("metrics", [])
+        selected = sorted(
+            metrics,
+            key=cls._evidence_priority,
+            reverse=True,
+        )[:MAX_INSIGHT_METRICS]
+        return {
+            "checkup_count": analysis.get("checkup_count", 0),
+            "metric_count": len(metrics),
+            "omitted_metric_count": max(0, len(metrics) - len(selected)),
+            "metrics": selected,
         }
 
     def _load_evidence(

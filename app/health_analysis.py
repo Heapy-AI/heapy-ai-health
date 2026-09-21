@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -258,7 +259,12 @@ def build_router(authorize) -> APIRouter:
     async def analyse(request: AnalysisRequest):
         try:
             return await generate(request)
-        except Exception:
+        except Exception as error:
+            logging.getLogger("heapy.health.analysis").warning(
+                "health_analysis_failed category=%s error=%s",
+                request.category,
+                type(error).__name__,
+            )
             raise HTTPException(503, "건강 분석을 완료하지 못했습니다.") from None
 
     return router
