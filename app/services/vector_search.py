@@ -131,6 +131,32 @@ class PineconeSearchService:
         query_vector = self.embed_query(question)
         return self.search_by_vector(collection, query_vector, top_k)
 
+    def fetch_by_ids(
+        self,
+        collection: str,
+        record_ids: list[str] | tuple[str, ...],
+    ) -> list[Document]:
+        """지정 namespace에서 canonical ID가 일치하는 문서를 가져온다."""
+        unique_ids = [record_id for record_id in dict.fromkeys(record_ids) if record_id]
+        if not unique_ids:
+            return []
+
+        response = self._index.fetch(ids=unique_ids, namespace=collection)
+        vectors = _read_value(response, "vectors", {}) or {}
+        documents: list[Document] = []
+        for record_id in unique_ids:
+            vector = vectors.get(record_id) if isinstance(vectors, Mapping) else None
+            if vector is None:
+                continue
+            metadata = dict(_read_value(vector, "metadata", {}) or {})
+            page_content = str(metadata.pop("chunk_text", "")).strip()
+            if not page_content:
+                continue
+            metadata["record_id"] = record_id
+            metadata["collection"] = collection
+            documents.append(Document(page_content=page_content, metadata=metadata))
+        return documents
+
     def search_many_by_vector(
         self,
         collections: tuple[str, ...] | list[str],

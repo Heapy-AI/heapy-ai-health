@@ -209,7 +209,10 @@ def lifestyle_service():
 @lru_cache(maxsize=1)
 def checkup_service():
     from app.services.checkup_report import CheckupReportService
-    return CheckupReportService(max_retries=0)
+    return CheckupReportService(
+        max_retries=0,
+        vector_search=state.get("vector_search"),
+    )
 
 
 async def generate(request: AnalysisRequest) -> dict[str, Any]:

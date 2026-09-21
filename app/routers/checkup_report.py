@@ -7,10 +7,10 @@ from app.schemas.checkup_report import CheckupReportRequest, CheckupReportRespon
 from app.services.checkup_report import CheckupReportService
 from app.services.supabase_conversation import SupabaseConversationError
 from app.routers.personal_data import personal_data_service
+from app.core.state import state
 
 
 router = APIRouter(prefix="/me/checkup", tags=["checkup-report"])
-report_service = CheckupReportService()
 
 
 @router.post("/report", response_model=CheckupReportResponse)
@@ -33,7 +33,11 @@ async def create_checkup_report(
                 detail="AI 요약분석에는 최소 2회의 건강검진 이력이 필요합니다.",
             )
 
-        report, trace = await report_service.generate_with_trace(history,persona=request.persona)
+        report_service = CheckupReportService(vector_search=state.get("vector_search"))
+        report, trace = await report_service.generate_with_trace(
+            history,
+            persona=request.persona,
+        )
         total_seconds = perf_counter() - started
 
         return CheckupReportResponse(
@@ -51,6 +55,8 @@ async def create_checkup_report(
                     "total_seconds": round(total_seconds, 3),
                 },
                 "analysis_input": trace["analysis_input"],
+                "evidence": trace["evidence"],
+                "evidence_error": trace["evidence_error"],
             },
         )
 

@@ -17,12 +17,22 @@ from app.schemas.checkup_report import CheckupReportContent
 from app.services.checkup_persona_prompt import (
     get_checkup_persona_prompt,
 )
+from app.services.vector_search import PineconeSearchService
+
+
+CHECKUP_KNOWLEDGE_NAMESPACE = "health_checkup_info"
+MAX_EVIDENCE_METRICS = 8
 
 
 class CheckupReportService:
     """검진 이력의 수치 변화를 계산하고 페르소나에 맞춰 설명을 생성한다."""
 
-    def __init__(self, *, max_retries: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        max_retries: int | None = None,
+        vector_search: PineconeSearchService | None = None,
+    ) -> None:
         options = {} if max_retries is None else {"max_retries": max_retries}
         self._llm = ChatGoogleGenerativeAI(
             model=MODEL,
@@ -31,6 +41,7 @@ class CheckupReportService:
         ).with_structured_output(
             CheckupReportContent
         )
+        self._vector_search = vector_search
 
     async def generate(
         self,
@@ -55,6 +66,8 @@ class CheckupReportService:
 
         analysis = self._build_analysis(history)
 
+        evidence, evidence_error = self._load_evidence(analysis)
+
         analysis_elapsed = (
             perf_counter() - started
         )
@@ -68,7 +81,12 @@ class CheckupReportService:
                 analysis,
                 ensure_ascii=False,
                 indent=2,
-            )
+            ),
+            evidence_data=json.dumps(
+                evidence,
+                ensure_ascii=False,
+                indent=2,
+            ),
         )
 
         ai_started = perf_counter()
@@ -82,6 +100,8 @@ class CheckupReportService:
         return report, {
             "persona": persona,
             "analysis_input": analysis,
+            "evidence": evidence,
+            "evidence_error": evidence_error,
             "timings": {
                 "analysis_seconds": round(
                     analysis_elapsed,
@@ -97,6 +117,64 @@ class CheckupReportService:
                 ),
             },
         }
+
+    def _load_evidence(
+        self,
+        analysis: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """중요 검진 항목의 검증된 설명을 canonical ID로 조회한다."""
+        if self._vector_search is None:
+            return [], "vector_search_unavailable"
+
+        metrics = sorted(
+            analysis["metrics"],
+            key=self._evidence_priority,
+            reverse=True,
+        )[:MAX_EVIDENCE_METRICS]
+        metric_ids = [
+            str(metric["metric_id"]).strip().upper()
+            for metric in metrics
+            if str(metric["metric_id"]).strip()
+        ]
+        try:
+            documents = self._vector_search.fetch_by_ids(
+                CHECKUP_KNOWLEDGE_NAMESPACE,
+                metric_ids,
+            )
+        except Exception as error:
+            return [], type(error).__name__
+
+        evidence = []
+        for document in documents:
+            metadata = document.metadata
+            if metadata.get("review_status") != "SOURCE_VERIFIED":
+                continue
+            evidence.append(
+                {
+                    "metric_id": metadata.get("record_id", ""),
+                    "domain": metadata.get("domain", ""),
+                    "heading": metadata.get("heading", ""),
+                    "knowledge": document.page_content,
+                    "source": metadata.get("source_label", ""),
+                    "source_url": metadata.get("source_url", ""),
+                    "review_status": metadata.get("review_status", ""),
+                    "corpus_version": metadata.get("corpus_version", ""),
+                }
+            )
+        return evidence, None
+
+    @staticmethod
+    def _evidence_priority(metric: dict[str, Any]) -> tuple[int, int, float]:
+        reference = str(metric.get("reference_status", "")).casefold()
+        concerning = any(
+            word in reference
+            for word in ("위험", "질환", "의심", "경계", "이상", "관리")
+        )
+        return (
+            int(concerning),
+            int(metric.get("status") == "관리 필요"),
+            abs(float(metric.get("change", 0) or 0)),
+        )
 
     @staticmethod
     def _build_analysis(
