@@ -1,14 +1,15 @@
 """합성 데이터로 내부 건강 계약과 정규화를 검증한다. 작성자: 김진우."""
 import os
+import sys
 import unittest
 from datetime import date, timedelta
-from unittest.mock import AsyncMock, patch
+from types import ModuleType
+from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi.testclient import TestClient
 from app.internal import app
 from app.health_analysis import AnalysisRequest, checkup_service, normalize_window
 from app.core.state import state
-from app.services import checkup_report
 
 
 class HealthAnalysisTest(unittest.TestCase):
@@ -30,7 +31,10 @@ class HealthAnalysisTest(unittest.TestCase):
         state["vector_search"] = shared
         checkup_service.cache_clear()
 
-        with patch.object(checkup_report, "CheckupReportService") as service:
+        service = Mock()
+        checkup_report = ModuleType("app.services.checkup_report")
+        checkup_report.CheckupReportService = service
+        with patch.dict(sys.modules, {"app.services.checkup_report": checkup_report}):
             checkup_service()
 
         service.assert_called_once_with(max_retries=0, vector_search=shared)
